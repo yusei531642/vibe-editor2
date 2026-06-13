@@ -67,6 +67,51 @@ function clampZoom(zoom: number): number {
   return Math.min(Math.max(zoom, VIEWPORT_MIN_ZOOM), VIEWPORT_MAX_ZOOM);
 }
 
+function cardDataForType(
+  type: CardType,
+  data: Record<string, unknown>,
+  title: string
+): CardData {
+  switch (type) {
+    case 'terminal':
+      return {
+        cardType: type,
+        title,
+        payload: data.payload as Extract<CardData, { cardType: 'terminal' }>['payload']
+      };
+    case 'agent':
+      return {
+        cardType: type,
+        title,
+        payload: data.payload as Extract<CardData, { cardType: 'agent' }>['payload']
+      };
+    case 'editor':
+      return {
+        cardType: type,
+        title,
+        payload: data.payload as Extract<CardData, { cardType: 'editor' }>['payload']
+      };
+    case 'diff':
+      return {
+        cardType: type,
+        title,
+        payload: data.payload as Extract<CardData, { cardType: 'diff' }>['payload']
+      };
+    case 'fileTree':
+      return {
+        cardType: type,
+        title,
+        payload: data.payload as Extract<CardData, { cardType: 'fileTree' }>['payload']
+      };
+    case 'changes':
+      return {
+        cardType: type,
+        title,
+        payload: data.payload as Extract<CardData, { cardType: 'changes' }>['payload']
+      };
+  }
+}
+
 // Issue #938: 旧 `stripTransientNodeState` (raw を丸ごと spread して dragging/selected/
 // resizing を delete する除外方式) は撤廃。normalize は下の明示構築 (pick 方式) で
 // 「列挙したフィールドしか復元されない」形にし、ランタイムフィールドの取りこぼし
@@ -141,11 +186,7 @@ export function normalizeCanvasState(input: unknown): NormalizedCanvasState {
             id: typeof raw.id === 'string' && raw.id ? raw.id : newId(type),
             type,
             position: { x: safeX, y: safeY },
-            data: {
-              cardType: type,
-              title,
-              payload: data.payload
-            } as CardData,
+            data: cardDataForType(type, data, title),
             style: {
               width: finiteOr(styleRaw.width, NODE_W),
               height: finiteOr(styleRaw.height, NODE_H)
@@ -180,9 +221,11 @@ export function normalizeCanvasState(input: unknown): NormalizedCanvasState {
     vpX = 0;
     vpY = 0;
   }
-  const teamLocks = isRecord(p.teamLocks)
+  const teamLocks: Record<string, boolean> = isRecord(p.teamLocks)
     ? Object.fromEntries(
-        Object.entries(p.teamLocks).filter(([, v]) => typeof v === 'boolean')
+        Object.entries(p.teamLocks).filter(
+          (entry): entry is [string, boolean] => typeof entry[1] === 'boolean'
+        )
       )
     : {};
   const stageView = STAGE_VIEWS.includes(p.stageView as StageView)

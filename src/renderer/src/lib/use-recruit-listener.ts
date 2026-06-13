@@ -220,8 +220,9 @@ export function useRecruitListener(): void {
             label: p.dynamicRole.label,
             description: p.dynamicRole.description,
             instructions: p.dynamicRole.instructions,
-            instructionsJa: p.dynamicRole.instructionsJa,
-            teamId: p.teamId
+            instructionsJa: p.dynamicRole.instructionsJa ?? undefined,
+            teamId: p.teamId,
+            createdByRole: p.requesterRole
           });
         }
         const store = useCanvasStore.getState();
@@ -229,7 +230,7 @@ export function useRecruitListener(): void {
         // payload (AgentPayload) を取り出し、organization を継承させる
         // (旧 `payload as { organization?: unknown }` の置き換え)。
         const requesterOrganization = agentPayloadOf(requester.data)?.organization;
-        const requesterTeamName = cardTeamName(requester.data);
+        const requesterTeamName = cardTeamName(requester.data) ?? undefined;
         const teamNodes = store.nodes.filter(
           (n) => cardTeamId(n.data) === p.teamId
         );

@@ -3,7 +3,7 @@
 import { invokeCommand } from './command-error';
 import type { TeamHistoryEntry } from '../../../../types/shared';
 
-interface MutationResult {
+export interface MutationResult {
   ok: boolean;
   error?: string;
   /**

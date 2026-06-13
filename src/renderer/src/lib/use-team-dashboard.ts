@@ -26,7 +26,7 @@ import { agentPayloadOf, type CardData } from '../stores/canvas';
 import type {
   TeamOrchestrationState,
   TeamTaskSnapshot
-} from '../../../../types/shared';
+} from '../../../types/shared';
 import type {
   AgentPayload,
   AgentStatus
@@ -192,10 +192,12 @@ export function useTeamDashboard(input: {
 
       const alert = (() => {
         if (computed === 'blocked') {
+          const humanGateReason =
+            state && state.humanGate.blocked ? state.humanGate.reason : null;
           return (
             task?.blockedReason ??
             task?.requiredHumanDecision ??
-            (state?.humanGate.blocked ? state.humanGate.reason ?? null : null) ??
+            humanGateReason ??
             t('dashboard.alert.leaderInput')
           );
         }
@@ -377,10 +379,12 @@ export function useTeamDashboardMulti(input: {
 
         const alert = (() => {
           if (computed === 'blocked') {
+            const humanGateReason =
+              state && state.humanGate.blocked ? state.humanGate.reason : null;
             return (
               task?.blockedReason ??
               task?.requiredHumanDecision ??
-              (state?.humanGate.blocked ? state.humanGate.reason ?? null : null) ??
+              humanGateReason ??
               t('dashboard.alert.leaderInput')
             );
           }

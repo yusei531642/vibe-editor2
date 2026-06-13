@@ -123,7 +123,7 @@ export function CanvasSidebar({
   );
 
   const handleOpenDiff = useCallback(
-    (file: { path: string }): void => {
+    (file: { path: string; originalPath?: string }): void => {
       addCard({
         type: 'diff',
         title: `Δ ${file.path.split(/[\\/]/).pop() ?? file.path}`,
@@ -176,7 +176,7 @@ export function CanvasSidebar({
           savedX !== null && savedY !== null ? { x: savedX, y: savedY } : { x: 0, y: 0 };
         return {
           role: m.role,
-          agent: m.agent,
+          agent: m.agent === 'codex' ? 'codex' : 'claude',
           position,
           // Issue #69: 未知 role (旧バージョン / 手編集の team-history) でもクラッシュさせない
           title: ROLE_META[m.role]?.label ?? m.role ?? 'Agent',
@@ -294,6 +294,7 @@ export function CanvasSidebar({
       activeFilePath={null}
       onOpenFile={handleOpenFile}
       gitStatus={gitStatus}
+      recentFiles={[]}
       gitLoading={gitLoading}
       onRefreshGit={() => void refreshGit()}
       onOpenDiff={handleOpenDiff}

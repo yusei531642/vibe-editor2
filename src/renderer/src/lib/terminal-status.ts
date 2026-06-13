@@ -10,7 +10,7 @@ export interface TerminalRuntimeStatus {
   kind: TerminalRuntimeStatusKind;
   command?: string;
   exitCode?: number | null;
-  signal?: string | null;
+  signal?: number | null;
   error?: string;
   restored?: boolean;
 }

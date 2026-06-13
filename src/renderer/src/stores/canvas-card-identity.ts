@@ -21,9 +21,18 @@
  * 同一 agentId のカード複製 → 同 agent_id 再 spawn → registry の旧 PTY kill (#893)
  * という事故経路が構造的に再生産されない。
  */
-import type { Node } from '@xyflow/react';
+import type { Node, Viewport } from '@xyflow/react';
+import type { ArrangeGap } from '../lib/canvas-arrange';
 import { NODE_W, NODE_H } from '../lib/canvas-migrations';
-import type { CardData, CardPayloadMap, CardType } from './canvas';
+import type { CardData, CardPayloadMap, CardType, StageView } from './canvas';
+
+type CardPayload = CardData['payload'];
+
+function payloadAgentId(payload: CardPayload | undefined): string | undefined {
+  if (!payload || typeof payload !== 'object') return undefined;
+  const value = (payload as { agentId?: unknown }).agentId;
+  return typeof value === 'string' ? value : undefined;
+}
 
 /** agentId を持ちうるカード (agent / terminal) からそれを取り出す。 */
 function nodeAgentId(data: CardData | undefined): string | undefined {
@@ -47,10 +56,10 @@ function nodeAgentId(data: CardData | undefined): string | undefined {
 export function findReconcileTarget(
   nodes: Node<CardData>[],
   type: CardType,
-  payload: { agentId?: string } | undefined
+  payload: CardPayload | undefined
 ): Node<CardData> | undefined {
   if (type !== 'agent' && type !== 'terminal') return undefined;
-  const agentId = payload?.agentId;
+  const agentId = payloadAgentId(payload);
   if (!agentId) return undefined;
   return nodes.find((n) => n.type === type && nodeAgentId(n.data) === agentId);
 }
@@ -162,4 +171,26 @@ export function toPersistedCardNode(n: Node<CardData>): PersistedCardNode {
     out.style = s;
   }
   return out;
+}
+
+export function toPersistedCanvasState(state: {
+  nodes: Node<CardData>[];
+  viewport: Viewport;
+  stageView: StageView;
+  teamLocks: Record<string, boolean>;
+  arrangeGap: ArrangeGap;
+}): {
+  nodes: PersistedCardNode[];
+  viewport: Viewport;
+  stageView: StageView;
+  teamLocks: Record<string, boolean>;
+  arrangeGap: ArrangeGap;
+} {
+  return {
+    nodes: state.nodes.map(toPersistedCardNode),
+    viewport: state.viewport,
+    stageView: state.stageView,
+    teamLocks: state.teamLocks,
+    arrangeGap: state.arrangeGap
+  };
 }
