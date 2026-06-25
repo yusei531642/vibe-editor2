@@ -74,6 +74,36 @@ pub(crate) fn bundled_vibe_team_skill_text() -> String {
     current_skill_text()
 }
 
+/// SKILL.md 先頭の `<!-- vibe-team-skill-version: X.Y.Z -->` 行から
+/// (major, minor, patch) を抽出する。ヘッダが無い / 数値 3 連でない場合は None。
+///
+/// Issue #1108: バンドル版より新しい on-disk 版を縮退上書きしないための版比較に使う。
+fn parse_skill_version(text: &str) -> Option<(u64, u64, u64)> {
+    // ヘッダは先頭行にある想定だが、空行等を許容して先頭数行だけ走査する。
+    for line in text.lines().take(8) {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix("<!-- vibe-team-skill-version:") {
+            let ver = rest.trim_end_matches("-->").trim();
+            return parse_semver(ver);
+        }
+    }
+    None
+}
+
+/// `X.Y.Z` 形式の文字列を (major, minor, patch) に parse する。
+/// 3 連の数値でない (要素数違い / 非数値) 場合は None を返し、呼び出し側は保守的に扱う。
+fn parse_semver(s: &str) -> Option<(u64, u64, u64)> {
+    let mut parts = s.split('.');
+    let major = parts.next()?.trim().parse().ok()?;
+    let minor = parts.next()?.trim().parse().ok()?;
+    let patch = parts.next()?.trim().parse().ok()?;
+    if parts.next().is_some() {
+        // 4 要素以上は想定外の書式 → 不正とみなす。
+        return None;
+    }
+    Some((major, minor, patch))
+}
+
 /// 実際の書き出し処理。境界チェックを通過した後の root を渡すこと。
 /// renderer から直接呼ばせない (state を経由した command 経由でのみ呼ばれる)。
 async fn install_skill_at(root: &Path, force: bool) -> InstallSkillResult {
@@ -104,6 +134,37 @@ async fn install_skill_at(root: &Path, force: bool) -> InstallSkillResult {
                 skipped: true,
                 ..Default::default()
             };
+        }
+        // Issue #1108: on-disk が bundled より「新しい」版なら、force=true でも縮退上書き
+        // しない。on-disk ヘッダの版を parse して bundled SKILL_VERSION と semver 比較し、
+        // disk が厳密に新しい場合だけ skip する。版が無い / 同等以下の場合は guard を
+        // 素通りさせ、従来挙動 (下の force / ユーザー編集判定) を保守的に維持する。
+        if let (Some(disk_ver), Some(bundled_ver)) =
+            (parse_skill_version(&existing), parse_semver(SKILL_VERSION))
+        {
+            if disk_ver > bundled_ver {
+                // Issue #1108 / PR #1111: 縮退 skip を可観測化する。force=true は明示的な
+                // reinstall (self-heal) が newer on-disk により抑止されたケース = 潜在的な
+                // tamper / downgrade-skip なので WARN で監査可能にする。force=false は
+                // best-effort の通常スキップなので INFO に留める。skip 判定の挙動は不変。
+                let disk = format!("{}.{}.{}", disk_ver.0, disk_ver.1, disk_ver.2);
+                let bundled = format!("{}.{}.{}", bundled_ver.0, bundled_ver.1, bundled_ver.2);
+                if force {
+                    tracing::warn!(
+                        "[skill] vibe-team SKILL.md force install skipped: on-disk version {disk} is newer than bundled {bundled}; preserving to avoid downgrade (verify on-disk file if unexpected)"
+                    );
+                } else {
+                    tracing::info!(
+                        "[skill] vibe-team SKILL.md install skipped: on-disk version {disk} is newer than bundled {bundled}; preserving to avoid downgrade"
+                    );
+                }
+                return InstallSkillResult {
+                    ok: true,
+                    path: Some(path.to_string_lossy().into_owned()),
+                    skipped: true,
+                    ..Default::default()
+                };
+            }
         }
         if !force && !starts_with_current_header {
             // ユーザー編集を上書きしない
@@ -226,5 +287,135 @@ pub async fn install_skill_best_effort(project_root: &str) {
         if let Some(e) = result.error {
             tracing::warn!("[skill] install failed (best-effort): {e}");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 指定の本文を temp dir 配下の `.claude/skills/vibe-team/SKILL.md` に書き出す。
+    async fn write_skill(root: &Path, body: &str) {
+        let dir = skill_dir(root);
+        fs::create_dir_all(&dir).await.unwrap();
+        atomic_write(&skill_path(root), body.as_bytes())
+            .await
+            .unwrap();
+    }
+
+    /// `<!-- vibe-team-skill-version: VER -->` ヘッダ付きの本文を組み立てる。
+    fn versioned(ver: &str, extra_body: &str) -> String {
+        format!("<!-- vibe-team-skill-version: {ver} -->\n{extra_body}\n")
+    }
+
+    #[test]
+    fn parse_skill_version_reads_header() {
+        assert_eq!(
+            parse_skill_version("<!-- vibe-team-skill-version: 1.6.4 -->\nbody"),
+            Some((1, 6, 4))
+        );
+        // ヘッダ無しは None。
+        assert_eq!(parse_skill_version("just a user note\nbody"), None);
+        // 非数値 / 桁数違いは None (保守的に従来挙動へ)。
+        assert_eq!(
+            parse_skill_version("<!-- vibe-team-skill-version: 1.x.0 -->"),
+            None
+        );
+        assert_eq!(
+            parse_skill_version("<!-- vibe-team-skill-version: 1.6 -->"),
+            None
+        );
+    }
+
+    /// (1) on-disk が bundled より新しい場合、force=true でも縮退上書きせず skip する。
+    #[tokio::test]
+    async fn newer_on_disk_is_not_downgraded_even_with_force() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // bundled SKILL_VERSION より確実に新しい版を on-disk に置く。
+        let newer = versioned("99.0.0", "DISK NEWER BODY — must be preserved");
+        write_skill(root, &newer).await;
+
+        let result = install_skill_at(root, true).await;
+
+        assert!(result.ok, "install should report ok");
+        assert!(result.skipped, "newer on-disk must be skipped");
+        assert!(
+            !result.overwritten,
+            "newer on-disk must NOT be overwritten (downgrade guard)"
+        );
+        let after = fs::read_to_string(skill_path(root)).await.unwrap();
+        assert_eq!(after, newer, "on-disk content must be left untouched");
+    }
+
+    /// (2) on-disk が同等以下の版なら force で bundled 本文が配置される (従来挙動)。
+    #[tokio::test]
+    async fn older_on_disk_is_replaced_with_force() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let older = versioned("0.0.1", "OLD DISK BODY");
+        write_skill(root, &older).await;
+
+        let result = install_skill_at(root, true).await;
+
+        assert!(result.ok, "install should report ok");
+        assert!(result.overwritten, "older on-disk must be overwritten");
+        assert!(!result.skipped, "older on-disk must not be skipped");
+        let after = fs::read_to_string(skill_path(root)).await.unwrap();
+        assert_eq!(after, current_skill_text(), "bundled text must be written");
+    }
+
+    /// (3) ヘッダ無し + force=false なら従来通りユーザー編集として保護 (skip) する。
+    #[tokio::test]
+    async fn headerless_on_disk_is_protected_without_force() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let user_edited = "ユーザーが手で書いた SKILL.md\nバージョンヘッダ無し\n";
+        write_skill(root, user_edited).await;
+
+        let result = install_skill_at(root, false).await;
+
+        assert!(result.ok, "install should report ok");
+        assert!(result.skipped, "headerless user edit must be skipped");
+        assert!(
+            !result.overwritten,
+            "headerless user edit must not be overwritten"
+        );
+        let after = fs::read_to_string(skill_path(root)).await.unwrap();
+        assert_eq!(after, user_edited, "user-edited content must be preserved");
+    }
+
+    /// (4) 同一バージョン境界: disk_ver == bundled SKILL_VERSION のとき、#1108 ガードは
+    /// strict `>` のため不発。現行版ヘッダを持つファイルは従来の refresh 経路に入り、
+    /// 縮退は起きず bundled 本文へ揃う (版は同一のまま = ダウングレードしない)。
+    #[tokio::test]
+    async fn same_version_on_disk_is_refreshed_not_downgraded() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // 現行版ヘッダ付きだが body が bundled と異なる on-disk (本文だけ微編集された状態)。
+        let same_version = versioned(SKILL_VERSION, "SAME VERSION header, slightly edited body");
+        write_skill(root, &same_version).await;
+
+        let result = install_skill_at(root, false).await;
+
+        assert!(result.ok, "install should report ok");
+        // strict `>` 比較なので #1108 ガードは発火せず、skip 経路には入らない。
+        assert!(
+            !result.skipped,
+            "same-version must not hit the downgrade-skip path"
+        );
+        // 現行版ヘッダ持ち → 従来通り bundled で refresh される。
+        assert!(
+            result.overwritten,
+            "same-version is refreshed to bundled (not a downgrade)"
+        );
+        let after = fs::read_to_string(skill_path(root)).await.unwrap();
+        assert_eq!(
+            after,
+            current_skill_text(),
+            "content must match bundled (same version → refresh, no downgrade)"
+        );
+        // 書き込まれた版が bundled と同一であること (= 縮退していない) を明示的に確認。
+        assert_eq!(parse_skill_version(&after), parse_semver(SKILL_VERSION));
     }
 }
