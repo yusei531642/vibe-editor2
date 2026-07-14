@@ -1,5 +1,26 @@
 # vibe-editor Tauri ハイブリッド移行 + 無限キャンバス UI 革新 TODO
 
+## Issue #1154 - session watcherへspawn cwdを渡す (2026-07-14 / Codex)
+
+Issue: https://github.com/yusei531642/vibe-editor/issues/1154
+
+### 計画
+
+- [x] watcher rootと実spawn cwdの乖離を確認する。
+- [x] SessionHandleのcwdをClaude/Codex watcherへ渡す。
+- [x] watcher・terminal関連テストとRust品質ゲートを実行する。
+
+### Next Steps
+
+- [x] 検証結果を記録する。
+- [ ] コミットして feature branch をpushする。
+- [x] Claude watcher tests: PASS（6 passed / 0 failed）
+- [x] Codex watcher tests: PASS（11 passed / 0 failed）
+- [x] terminal tests: PASS（117 passed / 0 failed）
+- [x] `cargo check --locked --manifest-path src-tauri\\Cargo.toml --all-targets`: PASS
+- [x] `cargo clippy --locked --manifest-path src-tauri\\Cargo.toml --all-targets -- -D warnings`: PASS
+- [x] `git diff --check`: PASS
+
 ## #736 team_hub/state.rs god-file 分割 + team_send 段階関数化 (完了)
 
 方針: 振る舞いを一切変えない純粋なリファクタ。lock の取得/解放タイミング・
