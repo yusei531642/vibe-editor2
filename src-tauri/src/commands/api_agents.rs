@@ -138,8 +138,14 @@ pub async fn api_agent_session_load(session_id: String) -> CommandResult<Option<
 pub async fn api_agent_session_delete(session_id: String) -> CommandResult<()> {
     validate_id("sessionId", &session_id)?;
     let path = session_path(&session_id)?;
-    match tokio::fs::remove_file(path).await {
-        Ok(()) | Err(_) => Ok(()),
+    map_session_delete_result(tokio::fs::remove_file(path).await)
+}
+
+fn map_session_delete_result(result: std::io::Result<()>) -> CommandResult<()> {
+    match result {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(CommandError::Io(error.to_string())),
     }
 }
 
