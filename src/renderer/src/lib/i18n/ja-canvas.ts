@@ -7,7 +7,7 @@ import type { Dict } from './types';
  */
 export const jaCanvas: Dict = {
   'canvas.persistence.corruptBackedUp':
-    'Canvasの保存データが破損していたため初期化しました。原文は「{key}」へ退避しました',
+    'Canvasの保存データが破損していたため初期化しました。元のデータは「{key}」へ退避しました',
   'canvas.persistence.corruptBackupFailed':
     'Canvasの保存データが破損し、退避にも失敗しました。データ保護のため自動保存を停止しています',
   // ---------- Canvas HUD ----------

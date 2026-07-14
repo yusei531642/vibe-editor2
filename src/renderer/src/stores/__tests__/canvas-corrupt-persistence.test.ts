@@ -48,4 +48,27 @@ describe('Canvas corrupt persistence recovery (Issue #1140)', () => {
     expect(localStorage.getItem(CANVAS_PERSIST_NAME)).toBe(corrupt);
     expect(takeCanvasRecoveryNotice()).toEqual({ backupKey: null });
   });
+
+  it('recovers when only the persisted recovery notice cannot be written', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_721_000_000_001);
+    const corrupt = '{broken-json';
+    localStorage.setItem(CANVAS_PERSIST_NAME, corrupt);
+    const originalSetItem = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (key, value) {
+      if (key === 'vibe-editor:canvas:recovery-notice') {
+        throw new DOMException('quota exceeded', 'QuotaExceededError');
+      }
+      return originalSetItem.call(this, key, value);
+    });
+
+    expect(canvasPersistStorage.getItem(CANVAS_PERSIST_NAME)).toBeNull();
+
+    const backupKey = `${CANVAS_CORRUPT_BACKUP_PREFIX}1721000000001`;
+    expect(localStorage.getItem(backupKey)).toBe(corrupt);
+    expect(localStorage.getItem(CANVAS_PERSIST_NAME)).toBeNull();
+    expect(takeCanvasRecoveryNotice()).toEqual({ backupKey });
+
+    canvasPersistStorage.setItem(CANVAS_PERSIST_NAME, { state: {} as never, version: 6 });
+    expect(localStorage.getItem(CANVAS_PERSIST_NAME)).not.toBeNull();
+  });
 });

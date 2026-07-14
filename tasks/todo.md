@@ -767,6 +767,7 @@ Issue: https://github.com/yusei531642/vibe-editor/issues/1140
 - [x] localStorage parse失敗とZustand persistの保存境界を確認する。
 - [x] 破損原文をtimestamp付き別キーへbyte-for-byteで退避する。
 - [x] 退避失敗時は本キーへの自動保存をfail-closedする。
+- [x] 退避成功後の通知保存だけが失敗した場合は復旧を継続する。
 - [x] CanvasLayoutで復旧結果を1回通知する。
 - [x] 関連テストと全品質ゲートを実行する。
 
@@ -777,7 +778,7 @@ Issue: https://github.com/yusei531642/vibe-editor/issues/1140
 
 ### 検証結果
 
-- [x] 破損永続化 Vitest: PASS (2 tests)
+- [x] 破損永続化 Vitest: PASS (3 tests)
 - [x] `npm run typecheck`: PASS
 - [x] `npm run test`: PASS (87 files / 521 tests)
 - [x] `npm run lint`: PASS (0 errors / 既存 12 warnings)

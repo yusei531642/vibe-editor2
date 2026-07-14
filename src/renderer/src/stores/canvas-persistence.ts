@@ -42,13 +42,17 @@ export const canvasPersistStorage: PersistStorage<CanvasPersistState> = {
       const backupKey = `${CANVAS_CORRUPT_BACKUP_PREFIX}${Date.now()}`;
       try {
         storage?.setItem(backupKey, raw);
-        storage?.setItem(
-          CANVAS_RECOVERY_NOTICE_KEY,
-          JSON.stringify({ backupKey } satisfies CanvasRecoveryNotice)
-        );
         storage?.removeItem(name);
         writeBlockedKeys.delete(name);
         pendingRecoveryNotice = { backupKey };
+        try {
+          storage?.setItem(
+            CANVAS_RECOVERY_NOTICE_KEY,
+            JSON.stringify({ backupKey } satisfies CanvasRecoveryNotice)
+          );
+        } catch (noticeError) {
+          console.error('[canvas-persistence] recovery notice persist failed:', noticeError);
+        }
       } catch (backupError) {
         writeBlockedKeys.add(name);
         pendingRecoveryNotice = { backupKey: null };
