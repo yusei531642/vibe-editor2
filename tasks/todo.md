@@ -758,6 +758,31 @@ Branch: `feature/issue-452`
 #### 検証結果（代替で PASS 済み）
 - [x] `git diff --check`: PASS
 
+## Issue #1137 - 複数タブ復元時のcwdマッピング破壊を防止 (2026-07-14 / Codex)
+
+Issue: https://github.com/yusei531642/vibe-editor/issues/1137
+
+### 計画
+
+- [x] `addTerminalTab` の同期戻り値と永続化mapの依存関係を確認する。
+- [x] stateと同期更新するrefで上限判定とID採番をupdater前に確定する。
+- [x] 同一batchの連続追加が全IDを同期返却する退行テストを追加する。
+- [x] 同一batchの削除後追加が上限判定で拒否されない退行テストを追加する。
+- [x] #588上限契約を含む関連テストと全品質ゲートを実行する。
+
+### Next Steps
+
+- [x] reviewer指摘を修正してfeature branchへpushする。
+- [x] 最新mainを取り込み、CIと再レビューを確認する。
+
+### 検証結果
+
+- [x] `use-terminal-tabs` Vitest: PASS (11 tests)
+- [x] `npm run typecheck`: PASS
+- [x] `npm run lint`: PASS (0 errors / 既存12 warnings)
+- [x] `npm run lint:file-size`: PASS
+- [x] `git diff --check`: PASS
+
 ## PR #1208 - file-size ratchet修正 (2026-07-14 / Codex)
 
 ### RCA結果
