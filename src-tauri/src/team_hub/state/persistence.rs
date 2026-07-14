@@ -159,6 +159,21 @@ impl TeamHub {
         team_id: &str,
         project_root: &str,
     ) -> Result<bool, String> {
+        // Issue #1072 Part3: 破棄前に message log を最終 flush する。
+        // flush は await を伴うため、先に owner を確認して lock を解放し、flush 後に
+        // owner を再確認してから削除する。これにより別 project の team へ副作用を
+        // 起こさず、待機中の owner 変更も TOCTOU として見逃さない。
+        {
+            let s = self.state.lock().await;
+            let Some(existing) = s.teams.get(team_id) else {
+                return Ok(false);
+            };
+            if existing.project_root.as_deref() != Some(project_root) {
+                return Err("team_id is not owned by the active project".to_string());
+            }
+        }
+        self.flush_team_now(team_id).await;
+
         let mut s = self.state.lock().await;
         let Some(existing) = s.teams.get(team_id) else {
             // 未登録 ID に対して global MCP 設定を消す方向へ倒さない。
@@ -196,6 +211,7 @@ impl TeamHub {
     /// `clear_team_for_project` を使い、renderer がこの bypass に到達する経路はない。
     #[cfg(test)]
     pub async fn clear_team(&self, team_id: &str) -> bool {
+        self.flush_team_now(team_id).await;
         let mut s = self.state.lock().await;
         s.teams.remove(team_id);
         s.active_teams.remove(team_id);
