@@ -1,6 +1,6 @@
 // main/preload/renderer で共有する型定義
 import type { FileLockConflictSnapshot } from './generated/team-events';
-
+export type { TerminalWriteOutcome, TerminalWriteResult } from './terminal-write';
 export type ThemeName =
   | 'claude-dark'
   | 'claude-light'
@@ -1604,17 +1604,6 @@ export interface TerminalCreateResult {
    * 新規 spawn 経路 / snapshot が空のときは undefined。
    */
   replay?: string;
-}
-
-export type TerminalWriteOutcome =
-  | 'written'
-  | 'suppressedInjecting'
-  | 'droppedTooLarge'
-  | 'droppedRateLimited'
-  | 'sessionNotFound';
-
-export interface TerminalWriteResult {
-  outcome: TerminalWriteOutcome;
 }
 
 export interface TerminalExitInfo {

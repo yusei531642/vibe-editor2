@@ -14,7 +14,7 @@ Issue: https://github.com/yusei531642/vibe-editor/issues/1156
 ### Next Steps
 
 - [x] 検証結果を記録する。
-- [ ] コミットして feature branch をpushする。
+- [ ] CI修正をコミットして feature branch をpushする。
 - [x] Rust outcome tests: PASS（2 passed / 0 failed）
 - [x] targeted Vitest: PASS（1 file / 5 tests）
 - [x] `npm run typecheck`: PASS
@@ -24,6 +24,7 @@ Issue: https://github.com/yusei531642/vibe-editor/issues/1156
 - [x] `cargo check --locked --manifest-path src-tauri\\Cargo.toml --all-targets`: PASS
 - [x] `cargo clippy --locked --manifest-path src-tauri\\Cargo.toml --all-targets -- -D warnings`: PASS
 - [x] `git diff --check`: PASS
+- [x] `npm run lint:file-size`: PASS（terminal.rs 971/1002、shared.ts 1994/1994）
 
 ## #736 team_hub/state.rs god-file 分割 + team_send 段階関数化 (完了)
 

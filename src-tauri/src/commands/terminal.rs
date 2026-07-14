@@ -8,9 +8,10 @@ pub(crate) mod shell_policy;
 mod codex_prompt;
 mod paste_image;
 mod prompt_files;
+pub(crate) mod write_outcome;
 
 use crate::pty::session::TerminalWarning;
-use crate::pty::{spawn_session, SpawnOptions, UserWriteOutcome};
+use crate::pty::{spawn_session, SpawnOptions};
 use crate::state::AppState;
 use codex_prompt::inject_codex_prompt_to_pty;
 use crate::util::log_redact::redact_home;
@@ -73,33 +74,6 @@ pub struct TerminalCreateResult {
     /// emit 済みで listener には届かないため、直前 64 KiB を文字列で同梱して replay させる。
     /// 新規 spawn 経路や attach 不発 (snapshot 空) では None。
     pub replay: Option<String>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum TerminalWriteOutcome {
-    Written,
-    SuppressedInjecting,
-    DroppedTooLarge,
-    DroppedRateLimited,
-    SessionNotFound,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TerminalWriteResult {
-    pub outcome: TerminalWriteOutcome,
-}
-
-impl From<UserWriteOutcome> for TerminalWriteOutcome {
-    fn from(value: UserWriteOutcome) -> Self {
-        match value {
-            UserWriteOutcome::Written => Self::Written,
-            UserWriteOutcome::SuppressedInjecting => Self::SuppressedInjecting,
-            UserWriteOutcome::DroppedTooLarge => Self::DroppedTooLarge,
-            UserWriteOutcome::DroppedRateLimited => Self::DroppedRateLimited,
-        }
-    }
 }
 
 #[derive(Serialize, Default)]
@@ -644,43 +618,6 @@ pub async fn terminal_create(
     }
 }
 
-#[tauri::command]
-pub async fn terminal_write(
-    state: State<'_, AppState>,
-    id: String,
-    data: String,
-) -> crate::commands::error::CommandResult<TerminalWriteResult> {
-    if let Some(s) = state.pty_registry.get(&id) {
-        let data_len = data.len();
-        let data_bytes = data.into_bytes();
-        let outcome = tokio::task::spawn_blocking(move || s.user_write(&data_bytes))
-            .await
-            .map_err(|e| format!("[terminal] terminal_write spawn_blocking failed for {id}: {e}"))?
-            .map_err(|e| e.to_string())?;
-        match outcome {
-            UserWriteOutcome::Written | UserWriteOutcome::SuppressedInjecting => {}
-            UserWriteOutcome::DroppedTooLarge => {
-                tracing::warn!(
-                    "[terminal] dropped oversized terminal_write payload for {id}: {} bytes",
-                    data_len
-                );
-            }
-            UserWriteOutcome::DroppedRateLimited => {
-                tracing::warn!(
-                    "[terminal] rate-limited terminal_write for {id}: {} bytes",
-                    data_len
-                );
-            }
-        }
-        return Ok(TerminalWriteResult {
-            outcome: outcome.into(),
-        });
-    }
-    Ok(TerminalWriteResult {
-        outcome: TerminalWriteOutcome::SessionNotFound,
-    })
-}
-
 /// Issue #1076: `terminal_resize` の下限クランプ値。spawn 経路 (`session/spawn.rs` の
 /// `openpty` で `cols.max(20)` / `rows.max(5)`) と揃える。
 ///
@@ -967,45 +904,6 @@ mod codex_resume_filter_tests {
         let input = s(&["-c", "k=v", "resume", "abc;rm -rf /"]);
         let out = filter_codex_resume_id_in_place(true, input.clone());
         assert_eq!(out, input);
-    }
-}
-
-#[cfg(test)]
-mod terminal_write_outcome_tests {
-    use super::{TerminalWriteOutcome, UserWriteOutcome};
-
-    #[test]
-    fn maps_all_internal_write_outcomes_to_ipc_contract() {
-        let cases = [
-            (UserWriteOutcome::Written, TerminalWriteOutcome::Written),
-            (
-                UserWriteOutcome::SuppressedInjecting,
-                TerminalWriteOutcome::SuppressedInjecting,
-            ),
-            (
-                UserWriteOutcome::DroppedTooLarge,
-                TerminalWriteOutcome::DroppedTooLarge,
-            ),
-            (
-                UserWriteOutcome::DroppedRateLimited,
-                TerminalWriteOutcome::DroppedRateLimited,
-            ),
-        ];
-        for (internal, expected) in cases {
-            assert_eq!(TerminalWriteOutcome::from(internal), expected);
-        }
-    }
-
-    #[test]
-    fn serializes_write_outcomes_as_camel_case_strings() {
-        assert_eq!(
-            serde_json::to_string(&TerminalWriteOutcome::SuppressedInjecting).unwrap(),
-            r#""suppressedInjecting""#
-        );
-        assert_eq!(
-            serde_json::to_string(&TerminalWriteOutcome::SessionNotFound).unwrap(),
-            r#""sessionNotFound""#
-        );
     }
 }
 
