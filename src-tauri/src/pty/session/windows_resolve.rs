@@ -160,8 +160,21 @@ fn is_wsl_bash_launcher(path: &Path) -> bool {
         || normalized.ends_with("\\microsoft\\windowsapps\\bash.exe")
 }
 
+pub(crate) fn trusted_wsl_executable(
+    path: &Path,
+    system_root: Option<&std::ffi::OsStr>,
+) -> Option<PathBuf> {
+    let expected_dir = PathBuf::from(system_root?).join("System32");
+    let parent = path.parent()?;
+    if normalized_windows_path(parent) != normalized_windows_path(&expected_dir) {
+        return None;
+    }
+    Some(expected_dir.join("wsl.exe"))
+}
+
 fn wsl_launcher_has_distro(path: &Path) -> bool {
-    let Some(wsl_exe) = path.parent().map(|parent| parent.join("wsl.exe")) else {
+    let Some(wsl_exe) = trusted_wsl_executable(path, std::env::var_os("SystemRoot").as_deref())
+    else {
         return false;
     };
     std::process::Command::new(wsl_exe)
@@ -209,14 +222,16 @@ pub(crate) fn resolve_windows_command_path_with_wsl_probe(
         ));
     }
 
-    if command_has_extension(command) {
+    let is_bash_command =
+        command.eq_ignore_ascii_case("bash") || command.eq_ignore_ascii_case("bash.exe");
+
+    if command_has_extension(command) && !is_bash_command {
         if let Ok(found) = which::which(command) {
             return Ok(found);
         }
     }
 
-    let is_bare_bash = command.eq_ignore_ascii_case("bash");
-    if is_bare_bash {
+    if is_bash_command {
         for dir in search_dirs {
             for candidate in candidate_paths(&dir.join(command), pathext) {
                 if candidate.is_file() && is_git_bash_path(&candidate) {
@@ -230,7 +245,10 @@ pub(crate) fn resolve_windows_command_path_with_wsl_probe(
     for dir in search_dirs {
         for candidate in candidate_paths(&dir.join(command), pathext) {
             if candidate.is_file() {
-                if is_bare_bash && is_wsl_bash_launcher(&candidate) && !wsl_has_distro(&candidate) {
+                if is_bash_command
+                    && is_wsl_bash_launcher(&candidate)
+                    && !wsl_has_distro(&candidate)
+                {
                     rejected_wsl_bash = true;
                     continue;
                 }

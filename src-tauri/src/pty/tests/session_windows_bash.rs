@@ -2,6 +2,7 @@
 
 use crate::pty::session::windows_resolve::{
     resolve_windows_command_path_with_wsl_probe, resolve_windows_spawn_command,
+    trusted_wsl_executable,
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -30,6 +31,31 @@ fn bare_bash_prefers_git_bash_over_wsl_launcher() {
 }
 
 #[test]
+fn bash_exe_prefers_git_bash_over_wsl_launcher() {
+    let tmp = tempfile::tempdir().unwrap();
+    let system32 = tmp.path().join("Windows").join("System32");
+    let git_bin = tmp.path().join("Program Files").join("Git").join("bin");
+    std::fs::create_dir_all(&system32).unwrap();
+    std::fs::create_dir_all(&git_bin).unwrap();
+    std::fs::write(system32.join("bash.exe"), "").unwrap();
+    let git_bash = git_bin.join("bash.exe");
+    std::fs::write(&git_bash, "").unwrap();
+
+    let resolved = resolve_windows_command_path_with_wsl_probe(
+        "BASH.EXE",
+        &[system32, git_bin],
+        &[".exe".to_string()],
+        |_| false,
+    )
+    .unwrap();
+
+    assert_eq!(
+        resolved.to_string_lossy().to_ascii_lowercase(),
+        git_bash.to_string_lossy().to_ascii_lowercase()
+    );
+}
+
+#[test]
 fn bare_bash_rejects_unconfigured_wsl_but_accepts_configured_wsl() {
     let tmp = tempfile::tempdir().unwrap();
     let system32 = tmp.path().join("Windows").join("System32");
@@ -48,6 +74,11 @@ fn bare_bash_rejects_unconfigured_wsl_but_accepts_configured_wsl() {
         resolve_windows_command_path_with_wsl_probe("bash", &search_dirs, &pathext, |_| true)
             .unwrap();
     assert_eq!(resolved, wsl_bash);
+
+    let resolved =
+        resolve_windows_command_path_with_wsl_probe("bash.exe", &search_dirs, &pathext, |_| true)
+            .unwrap();
+    assert_eq!(resolved, wsl_bash);
 }
 
 #[test]
@@ -62,4 +93,27 @@ fn explicit_wsl_bash_path_remains_supported() {
         resolve_windows_spawn_command(&wsl_bash.to_string_lossy(), vec![], &HashMap::new())
             .unwrap();
     assert_eq!(PathBuf::from(prepared.resolved_command), wsl_bash);
+}
+
+#[test]
+fn wsl_probe_is_limited_to_system_root_system32() {
+    let tmp = tempfile::tempdir().unwrap();
+    let system_root = tmp.path().join("Windows");
+    let trusted_bash = system_root.join("System32").join("bash.exe");
+    let spoofed_bash = tmp
+        .path()
+        .join("project")
+        .join("Windows")
+        .join("System32")
+        .join("bash.exe");
+
+    assert_eq!(
+        trusted_wsl_executable(&trusted_bash, Some(system_root.as_os_str())),
+        Some(system_root.join("System32").join("wsl.exe"))
+    );
+    assert_eq!(
+        trusted_wsl_executable(&spoofed_bash, Some(system_root.as_os_str())),
+        None
+    );
+    assert_eq!(trusted_wsl_executable(&trusted_bash, None), None);
 }
