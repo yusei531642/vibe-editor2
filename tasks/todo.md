@@ -2037,3 +2037,88 @@ Issue: https://github.com/yusei531642/vibe-editor/issues/1045
 - [x] `cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`: PASS
 - [x] `cargo check --locked --manifest-path src-tauri/Cargo.toml --all-targets`: PASS
 - [x] `git diff --check`: PASS
+## Open Issue / PR cleanup and merge sweep (2026-07-14 / Codex)
+
+Repository: https://github.com/yusei531642/vibe-editor
+
+### 計画
+
+- [x] 実行モード、repo root、`main` HEAD、dirty state、GitHub live stateを確認する。
+- [x] repoの `AGENTS.md`、`CLAUDE.md`、manifest、品質ゲートを確認する。
+- [ ] `orchestrate-frontier-team` を通常より一段低い推論設定で実行し、Issue/PR分類を独立レビューする。
+- [ ] open Issueを本文・コメント・重複・関連PR・現行コードで棚卸しし、根拠を示せる過剰/無効/重複Issueだけcloseする。
+- [ ] open PRごとにhead SHA、mergeability、required checks、review、未解決thread、関連Issueを確認する。
+- [ ] stale/重複/包含済みなど、マージすべきでないPRは根拠コメント付きでcloseする。
+- [ ] 残すPRを低リスク・依存関係順に処理し、競合は最新`main`を取り込んで最小差分で解消する。
+- [ ] 競合解消や修正を行ったPRは、変更範囲に対応するlint・typecheck・test・Rust checkを実行してpushする。
+- [ ] 各PRのlive state、head SHA、checks、review、未解決threadを再確認してからmergeする。
+- [ ] 関連Issueのcloseout条件を確認し、満たす場合だけ根拠コメント・ラベル遷移・close・`CLOSED`再確認を行う。
+- [ ] 最後にopen Issue/PR、`main` HEAD、作業ツリー、未完了gateを再棚卸しする。
+
+### Next Steps
+
+- [x] ユーザー確認後、Issue/PRの分類結果を確定してGitHubのclose/merge操作を開始する。
+
+### 現時点の確認結果
+
+- `main` HEAD: `aea5f41ade3c32ab2ac58a7128af0add383171e6`
+- open PR: 18件（2026-07-14開始時点）。機能PR #1078 / #1079 / #1105 は `DIRTY`、残り15件はDependabot。
+- `vibeeditor` / `pullrequest` skillはrepo内の `.claude/skills/` に実在し、全文を確認済み。
+- Issueタイトルだけでcloseせず、本文・重複・関連PR・現行実装まで確認して判定する。
+
+### 進捗
+
+- [x] `orchestrate-frontier-team` のSol / Fable laneを通常より一段低い推論設定で実行し、終了後にskill本体の設定を復元した。
+- [x] Issue #1188 を情報不足・ローカル設定事象として `invalid / NOT_PLANNED` でcloseし、`CLOSED`を確認した。
+- [x] Dependabot PR 15件を、各head SHA・CI・mergeability・未解決threadのlive gate後にsquash mergeした。
+- [x] PR #1105 は後発PR #1132でIssue #1032が実装済みのため、supersededとしてcloseした。
+- [x] PR #1079 は最新mainとの競合2件を解消し、ローカル検証とCI run `29308201188` PASS後にmergeした。
+- [x] PR #1078 は後発PR #1099 / #1100 / #1101で3件すべて実装済みのため、supersededとしてcloseした。
+- [x] 最終GitHub実状態でopen PRが0件、main HEADが`af7e6ba13685f81697c65c09727cd213ba1f3c89`であることを確認した。
+
+### 検証結果
+
+- [x] PR #1079: `cargo test --locked --manifest-path src-tauri/Cargo.toml --lib team_hub::`: PASS。
+- [x] PR #1079: `cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`: PASS。
+- [x] PR #1079: `npm run typecheck`: PASS。
+- [x] PR #1079: `npm run test`: PASS（86 files / 519 tests）。
+- [x] PR #1079: CI run `29308201188`: verify / Windows cargo-cfg / macOS cargo-cfg / secrets-scan 全PASS。
+- [ ] PR #1079の最新review warning 2件はmergeと同時刻に到着し、未解決のまま残った。Critical/Highではないが、`since_id`上限と初回watermark再送を残存リスクとして報告する。
+
+### Next Tasks
+
+- [ ] PR #1079 reviewer warning 2件を別Issueとして追跡するか、人間が判断する。
+
+## Issue #1159 文書環境記述の同期 (2026-07-14 / Codex)
+
+Issue: https://github.com/yusei531642/vibe-editor/issues/1159
+
+### 計画
+
+- [x] Issue本文・既存計画・現行manifest・対象文書のdriftを実測する。
+- [x] `vibeeditor`、`pullrequest`、`orchestrate-frontier-team` skillを確認する。
+- [x] standard riskでfrontier-teamのSol baselineを完了する。Fableは未認証のためadaptive degradedとして記録する。
+- [x] `CLAUDE.md`、`.claude/skills/vibeeditor/SKILL.md`、`README.md`、`README-ja.md`を現行SSOTへ同期する。
+- [x] 古い主要version・OS固定・非実在skill参照の再混入を検出するcontract testを追加する。
+- [x] 対象test、`npm run typecheck`、`npm run lint`、`npm run test`、`git diff --check`を実行する。
+- [x] 差分を再読し、allowed paths外の機能変更と検証済みblockerがないことを確認する。Fable post-diff reviewは未認証のため未実行。
+- [ ] feature branchへcommit/pushし、PR draftをユーザーへ提示して作成承認を得る。
+
+### スコープ境界
+
+- allowed: `CLAUDE.md`、`.claude/skills/vibeeditor/SKILL.md`、`README.md`、`README-ja.md`、`src/renderer/src/lib/__tests__/documentation-contract.test.ts`、`tasks/todo.md`
+- non-goals: dependency更新、アプリ挙動変更、全ドキュメントの全面リライト、他Issueの同時修正
+- merge: PR・HEAD・品質ゲートを提示し、ユーザーの明示承認後のみ実行する
+
+### Next Steps
+
+- [ ] commit/push後、PR title/body draftを提示して作成承認を得る。
+
+### 検証結果
+
+- [x] `npm run test -- src/renderer/src/lib/__tests__/documentation-contract.test.ts`: 3 tests PASS
+- [x] `npm run typecheck`: PASS
+- [x] `npm run lint`: PASS（error 0、既存warning 12件）
+- [x] `npm run test`: 87 files / 522 tests PASS
+- [x] `git diff --check`: PASS
+- [x] 旧表記検索: 対象4文書で該当0件
