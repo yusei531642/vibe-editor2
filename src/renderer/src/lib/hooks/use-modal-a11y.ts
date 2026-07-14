@@ -17,6 +17,8 @@ export interface ModalA11y {
 /** Issue #1142: nested modal共通の初期focus・focus trap・Escape所有権。 */
 export function useModalA11y(onClose: () => void): ModalA11y {
   const dialogRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -32,7 +34,7 @@ export function useModalA11y(onClose: () => void): ModalA11y {
         if (event.isComposing) return;
         event.preventDefault();
         event.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== 'Tab') return;
@@ -57,7 +59,7 @@ export function useModalA11y(onClose: () => void): ModalA11y {
       document.removeEventListener('keydown', onKeyDown, true);
       if (previous?.isConnected) previous.focus();
     };
-  }, [onClose]);
+  }, []);
 
   return { dialogRef };
 }

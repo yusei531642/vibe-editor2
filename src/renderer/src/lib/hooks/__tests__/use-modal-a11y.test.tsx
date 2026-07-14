@@ -57,6 +57,21 @@ describe('useModalA11y (Issue #1142)', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps focus and uses the latest onClose when its identity changes', () => {
+    const firstOnClose = vi.fn();
+    const latestOnClose = vi.fn();
+    const { rerender } = render(<ModalHarness onClose={firstOnClose} />);
+    const last = screen.getByRole('button', { name: 'last' });
+    last.focus();
+
+    rerender(<ModalHarness onClose={latestOnClose} />);
+
+    expect(document.activeElement).toBe(last);
+    fireEvent.keyDown(last, { key: 'Escape' });
+    expect(firstOnClose).not.toHaveBeenCalled();
+    expect(latestOnClose).toHaveBeenCalledTimes(1);
+  });
+
   it('yields Escape ownership while focus is in a foreground palette', () => {
     const onClose = vi.fn();
     render(
