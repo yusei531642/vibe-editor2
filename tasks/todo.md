@@ -1,5 +1,25 @@
 # vibe-editor Tauri ハイブリッド移行 + 無限キャンバス UI 革新 TODO
 
+## Issue #1146 - API agent session削除失敗を伝播 (2026-07-14 / Codex)
+
+Issue: https://github.com/yusei531642/vibe-editor/issues/1146
+
+### 計画
+
+- [x] 現行の削除処理・エラー型・既存テスト構成を確認する。
+- [x] `NotFound` のみ成功扱いにし、その他のI/Oエラーを伝播する。
+- [x] 成功・NotFound・その他エラーのunit testを追加する。
+- [x] Rust関連品質ゲートを実行する。
+
+### Next Steps
+
+- [x] 検証結果を記録する。
+- [ ] コミットして feature branch をpushする。
+- [x] targeted Rust test: PASS（2 passed / 0 failed）
+- [x] `cargo check --locked --manifest-path src-tauri\\Cargo.toml --all-targets`: PASS
+- [x] `git diff --check`: PASS
+- [ ] repository-wide `cargo fmt --check`: FAIL（今回の差分外に既存不整形あり）
+
 ## #736 team_hub/state.rs god-file 分割 + team_send 段階関数化 (完了)
 
 方針: 振る舞いを一切変えない純粋なリファクタ。lock の取得/解放タイミング・
