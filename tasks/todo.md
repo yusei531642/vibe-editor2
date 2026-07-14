@@ -757,6 +757,33 @@ Branch: `feature/issue-452`
 
 #### 検証結果（代替で PASS 済み）
 - [x] `git diff --check`: PASS
+
+## Issue #1179 - Windows bare bashのWSL誤解決を防止 (2026-07-14 / Codex)
+
+Issue: https://github.com/yusei531642/vibe-editor/issues/1179
+
+### 計画
+
+- [x] Windows resolverと既存テスト境界を確認する。
+- [x] bare `bash` に限ってGit Bashを優先する。
+- [x] WSLランチャしかない場合は説明可能なエラーを返す。
+- [x] 明示パスによるWSL bash起動は維持する。
+- [x] Windows限定テストとRust品質ゲートを実行する。
+
+### Next Steps
+
+- [x] 検証結果を記録する。
+- [x] コミットして feature branch を push する。
+
+### 検証結果
+
+- [x] 対象2ファイル `rustfmt --check`: PASS
+- [x] bare bashテスト: PASS (2 tests)
+- [x] 明示WSL pathテスト: PASS (1 test)
+- [x] Windows resolver suite: PASS (9 tests)
+- [x] `cargo check --locked --manifest-path src-tauri/Cargo.toml --all-targets`: PASS
+- [x] `cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`: PASS
+- [x] `git diff --check`: PASS
 - [x] `npm run typecheck`: PASS
 - [x] `npm run build:vite`: PASS（既存警告あり）
 - [x] targeted Vitest: PASS（2 files / 11 tests）

@@ -108,6 +108,16 @@ pub(super) fn windows_search_dirs(env: &std::collections::HashMap<String, String
         push_dir(base.join("Microsoft").join("WindowsApps"));
         push_dir(base.join("OpenAI").join("Codex").join("bin"));
     }
+    if let Some(program_files) = env_value(env, "ProgramFiles") {
+        let git = PathBuf::from(program_files).join("Git");
+        push_dir(git.join("bin"));
+        push_dir(git.join("usr").join("bin"));
+    }
+    if let Some(program_files_x86) = env_value(env, "ProgramFiles(x86)") {
+        let git = PathBuf::from(program_files_x86).join("Git");
+        push_dir(git.join("bin"));
+        push_dir(git.join("usr").join("bin"));
+    }
 
     dirs
 }
@@ -130,6 +140,24 @@ fn candidate_paths(base: &Path, pathext: &[String]) -> Vec<PathBuf> {
     }
     out.push(base.to_path_buf());
     out
+}
+
+fn normalized_windows_path(path: &Path) -> String {
+    path.to_string_lossy()
+        .replace('/', "\\")
+        .to_ascii_lowercase()
+}
+
+fn is_git_bash_path(path: &Path) -> bool {
+    let normalized = normalized_windows_path(path);
+    normalized.ends_with("\\git\\bin\\bash.exe")
+        || normalized.ends_with("\\git\\usr\\bin\\bash.exe")
+}
+
+fn is_wsl_bash_launcher(path: &Path) -> bool {
+    let normalized = normalized_windows_path(path);
+    normalized.ends_with("\\windows\\system32\\bash.exe")
+        || normalized.ends_with("\\microsoft\\windowsapps\\bash.exe")
 }
 
 pub(super) fn resolve_windows_command_path(
@@ -156,12 +184,34 @@ pub(super) fn resolve_windows_command_path(
         }
     }
 
+    let is_bare_bash = command.eq_ignore_ascii_case("bash");
+    if is_bare_bash {
+        for dir in search_dirs {
+            for candidate in candidate_paths(&dir.join(command), pathext) {
+                if candidate.is_file() && is_git_bash_path(&candidate) {
+                    return Ok(candidate);
+                }
+            }
+        }
+    }
+
+    let mut rejected_wsl_bash = false;
     for dir in search_dirs {
         for candidate in candidate_paths(&dir.join(command), pathext) {
             if candidate.is_file() {
+                if is_bare_bash && is_wsl_bash_launcher(&candidate) {
+                    rejected_wsl_bash = true;
+                    continue;
+                }
                 return Ok(candidate);
             }
         }
+    }
+
+    if rejected_wsl_bash {
+        return Err(anyhow!(
+            "bare bash resolved only to the Windows WSL launcher; configure a default WSL distro, use explicit wsl.exe, or install/configure Git Bash"
+        ));
     }
 
     Err(anyhow!(
