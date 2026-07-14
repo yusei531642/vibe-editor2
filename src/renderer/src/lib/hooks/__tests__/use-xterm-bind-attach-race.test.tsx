@@ -263,7 +263,7 @@ describe('useXtermBind: Issue #633 attach 経路 pre-subscribe race fix', () => 
       expect(opts.attachOnly).toBe(false);
       return { ok: true, id: opts.id, attached: false, command: 'claude' };
     });
-    (window as TestWindow).api = {
+    Object.defineProperty(window, 'api', { configurable: true, writable: true, value: {
       terminal: {
         onDataReady: vi.fn(async (id: string) => {
           targets.push(id);
@@ -279,7 +279,7 @@ describe('useXtermBind: Issue #633 attach 経路 pre-subscribe race fix', () => 
         resize: vi.fn(async () => undefined),
         kill: vi.fn(async () => undefined)
       }
-    };
+    } });
     const ptyIdRef = makeRef<string | null>(null);
 
     renderHook(() =>

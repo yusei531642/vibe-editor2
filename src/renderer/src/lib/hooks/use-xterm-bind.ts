@@ -673,7 +673,7 @@ export function useXtermBind(options: UseXtermBindOptions): void {
 
         // Issue #285: Rust が id を再生成した場合、実 id の Ready listener へ張り直す。
         // sync listener では初期出力を取り逃がすため使わない。
-        if (res.id !== requestedId) {
+        if (res.attached !== true && res.id !== requestedId) {
           unsubscribePtyListeners();
           const ok = await attemptPreSubscribe(
             res.id,
