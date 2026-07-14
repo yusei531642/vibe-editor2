@@ -27,6 +27,13 @@
   stroke: var(--canvas-grid, #1c1c20);
 }
 
+/* MiniMapはReact stateではなくCSS cascadeで全themeへ即時追従させる。 */
+.react-flow__minimap {
+  --xy-minimap-background-color: var(--canvas-minimap-bg);
+  --xy-minimap-mask-background-color: var(--canvas-minimap-mask);
+  border: 1px solid var(--border);
+}
+
 /* ---------- layout root ---------- */
 .canvas-layout {
   position: fixed;
