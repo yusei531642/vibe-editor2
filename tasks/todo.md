@@ -2037,3 +2037,38 @@ Issue: https://github.com/yusei531642/vibe-editor/issues/1045
 - [x] `cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`: PASS
 - [x] `cargo check --locked --manifest-path src-tauri/Cargo.toml --all-targets`: PASS
 - [x] `git diff --check`: PASS
+
+## Issue #1167 - Canvas MiniMapのテーマ追従 (2026-07-14 / Codex)
+
+Issue: https://github.com/yusei531642/vibe-editor/issues/1167
+
+### 計画
+
+- [x] MiniMapのdark固定background/mask propsを削除する。
+- [x] semantic tokenをxyflow MiniMap custom propertyへ接続する。
+- [x] glass themeのMiniMapへbackdrop filterを適用する。
+- [x] CSS contract testで6theme追従と固定色再導入防止を検証する。
+- [x] typecheck、対象テスト、全テスト、lint、Vite buildを実行する。
+
+### Next Steps
+
+- [x] 最小差分を実装する。
+- [x] theme token契約をテストする。
+- [ ] feature branchをpushし、PR作成の明示承認を待つ。
+
+### 進捗
+
+- [x] MiniMapの固定dark背景・mask定数とpropsを削除した。
+- [x] semantic tokenからxyflow公式custom propertyへ接続した。
+- [x] 6themeが`surface-panel` / `surface-elev`を供給する契約を固定した。
+- [x] glass MiniMapを既存backdrop filter対象へ追加した。
+- [x] pannable、zoomable、nodeColorは変更していない。
+
+### 検証結果
+
+- [x] Canvas CSS contract: PASS (6 tests)
+- [x] `npm run typecheck`: PASS
+- [x] `npm run test`: PASS (86 files / 521 tests)
+- [x] `npm run lint`: PASS (0 errors / 既存warnings 12)
+- [x] `npm run build:vite`: PASS
+- [x] `git diff --check`: PASS
