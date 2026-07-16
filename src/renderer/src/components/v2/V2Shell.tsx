@@ -75,6 +75,8 @@ export function V2Shell(): JSX.Element {
   const [entries, setEntries] = useState<TimelineEntry[]>([]);
   // fake runtime (placeholder) の応答 timer。停止/新規タスク/unmount で必ず破棄する。
   const fakeReplyTimerRef = useRef<number | null>(null);
+  // DESIGN.md Interaction contract: run 中の新規入力は破棄せず queue し、run 完了後に順次処理する。
+  const pendingRunsRef = useRef<Array<{ text: string; engine: V2Engine }>>([]);
 
   const cancelFakeReply = useCallback(() => {
     if (fakeReplyTimerRef.current !== null) {
@@ -85,6 +87,7 @@ export function V2Shell(): JSX.Element {
 
   const stopRun = useCallback(() => {
     cancelFakeReply();
+    pendingRunsRef.current = [];
     setRunning(false);
   }, [cancelFakeReply]);
 
@@ -104,9 +107,36 @@ export function V2Shell(): JSX.Element {
     window.dispatchEvent(new Event("vibe-editor2:focus-composer"));
   };
 
+  const scheduleFakeReply = useCallback(
+    (runEngine: V2Engine) => {
+      fakeReplyTimerRef.current = window.setTimeout(() => {
+        fakeReplyTimerRef.current = null;
+        setEntries((current) => [
+          ...current,
+          {
+            id: crypto.randomUUID(),
+            role: "agent",
+            engine: runEngine,
+            text: t("v2.runtime.fakeReady", {
+              engine: runEngine === "claude" ? "Claude" : "Codex",
+            }),
+          },
+        ]);
+        // queue に次の入力があれば run を継続、無ければ idle へ戻る。
+        const next = pendingRunsRef.current.shift();
+        if (next) {
+          scheduleFakeReply(next.engine);
+        } else {
+          setRunning(false);
+        }
+      }, 650);
+    },
+    [t],
+  );
+
   const submit = useCallback(() => {
     const text = prompt.trim();
-    if (!text || running) return;
+    if (!text) return;
     const entry: TimelineEntry = {
       id: crypto.randomUUID(),
       role: "user",
@@ -116,27 +146,19 @@ export function V2Shell(): JSX.Element {
     setEntries((current) => [...current, entry]);
     setPrompt("");
     setHasStarted(true);
+    if (running) {
+      // DESIGN.md: 実行中の新規入力は queue する (破棄しない)。
+      pendingRunsRef.current.push({ text, engine });
+      return;
+    }
     setRunning(true);
     cancelFakeReply();
-    fakeReplyTimerRef.current = window.setTimeout(() => {
-      fakeReplyTimerRef.current = null;
-      setEntries((current) => [
-        ...current,
-        {
-          id: crypto.randomUUID(),
-          role: "agent",
-          engine,
-          text: t("v2.runtime.fakeReady", {
-            engine: engine === "claude" ? "Claude" : "Codex",
-          }),
-        },
-      ]);
-      setRunning(false);
-    }, 650);
-  }, [cancelFakeReply, engine, prompt, running, t]);
+    scheduleFakeReply(engine);
+  }, [cancelFakeReply, engine, prompt, running, scheduleFakeReply]);
 
   const startNewTask = useCallback(() => {
     cancelFakeReply();
+    pendingRunsRef.current = [];
     setEntries([]);
     setPrompt("");
     setRunning(false);

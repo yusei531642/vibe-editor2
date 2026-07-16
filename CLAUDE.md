@@ -1,6 +1,6 @@
 # vibe-editor 2
 
-Tauri ベースのGUI-first Claude Code / Codex / vibe-teamエディタ。正確なアプリ版は `package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` を参照する。
+Tauri ベースのGUI-first Claude Code / Codex / vibe-team2エディタ。正確なアプリ版は `package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` を参照する。
 
 ## 必須スキル
 このリポジトリで作業する前に、以下の skill を必ず起動すること。
