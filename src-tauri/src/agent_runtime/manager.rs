@@ -320,8 +320,12 @@ impl RuntimeManager {
                 format!("runtime endpoint '{endpoint_id}' was not found"),
                 true,
             );
+            // 未登録 endpoint への操作は sequence counter を永続化しない (transient 経路)。
+            // renderer 起点で任意の endpointId を連打されても sequences map が成長しないため、
+            // resource exhaustion にならない。同一 endpointId への繰り返し失敗は renderer 側で
+            // sequence=1 の重複として out-of-order 破棄される (初回のみ表示される契約)。
             return RuntimeOperation {
-                events: self.failure_events(endpoint_id, &error),
+                events: vec![self.transient_error_event(endpoint_id, &error)],
                 result: Err(error),
             };
         };
@@ -398,6 +402,30 @@ impl RuntimeManager {
         events
     }
 
+    /// 未登録 endpoint 向けの失敗 event。sequence counter を作らず固定 sequence=1 で構築する。
+    fn transient_error_event(
+        &self,
+        endpoint_id: &str,
+        error: &RuntimeAdapterError,
+    ) -> RuntimeEventEnvelope {
+        let event = RuntimeEventEnvelope::new(
+            endpoint_id.to_string(),
+            1,
+            RuntimeEventPayload::Error {
+                code: error.code.clone(),
+                message: error.message.clone(),
+                recoverable: error.recoverable,
+            },
+        );
+        recover_mutex(self.event_buffer.lock()).push(event.clone());
+        event
+    }
+
+    /// endpoint 内単調増加の sequence を採番して event を記録する。
+    ///
+    /// counter は「登録 epoch」単位: detach / dispose / stop 成功で削除され、同一 endpointId の
+    /// 再登録では 1 から振り直される。renderer projection は lifecycle `spawning` を新 epoch の
+    /// 開始として扱い projection を reset するため、巻き戻った sequence が黙って捨てられることはない。
     pub fn record_event(
         &self,
         endpoint_id: &str,

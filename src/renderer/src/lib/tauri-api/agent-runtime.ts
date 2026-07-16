@@ -63,7 +63,7 @@ export const agentRuntime = {
   /**
    * Client-generated endpointId で register 前に await し、初期 lifecycle を取り逃さない。
    * Issue #285: returned promise の解決直後に caller が disposed flag を再確認し、set 済みなら
-   * 返された cleanup を即時に呼ぶこと。await pending 中の dispose はhelper側では検知できない。
+   * 返された cleanup を即時に呼ぶこと。await pending 中の dispose は helper 側では検知できない。
    */
   onEventReady: (
     endpointId: string,
