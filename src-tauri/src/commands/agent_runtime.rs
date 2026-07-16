@@ -12,7 +12,6 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
 
 const MAX_RUNTIME_INPUT_BYTES: usize = 64 * 1024;
-#[cfg(unix)]
 const MAX_APPROVAL_REQUEST_ID_BYTES: usize = 256;
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -127,6 +126,35 @@ fn validate_approval_request_id(request_id: &str) -> CommandResult<()> {
         ));
     }
     crate::commands::validation::assert_max_size(request_id.len(), MAX_APPROVAL_REQUEST_ID_BYTES)
+}
+
+/// resume / fork 対象の thread id が「この process が開始/観測した thread」の集合に
+/// 含まれることを要求する (project authority 迂回の防止、Issue #23 三次レビュー)。
+fn authorize_known_thread(
+    known: &std::sync::Mutex<std::collections::HashSet<String>>,
+    thread_id: &str,
+) -> CommandResult<()> {
+    let guard = known.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    if guard.contains(thread_id) {
+        Ok(())
+    } else {
+        Err(CommandError::authz(format!(
+            "thread '{thread_id}' was not started by this session; resume/fork is not authorized"
+        )))
+    }
+}
+
+#[cfg(unix)]
+fn record_known_thread(
+    known: &std::sync::Mutex<std::collections::HashSet<String>>,
+    thread_id: Option<String>,
+) {
+    if let Some(thread_id) = thread_id {
+        known
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .insert(thread_id);
+    }
 }
 
 fn emit_events(app: &AppHandle, events: &[RuntimeEventEnvelope]) {
@@ -302,6 +330,9 @@ async fn register_codex_endpoint(
     match &request.thread {
         CodexThreadAction::Resume { thread_id } | CodexThreadAction::Fork { thread_id } => {
             crate::commands::validation::validate_id_segment("thread_id", thread_id)?;
+            // 認可: この process が自ら開始/観測した thread のみ resume/fork できる。
+            // 任意 threadId の指定で authority 外プロジェクトの thread を開かせない。
+            authorize_known_thread(&state.known_codex_threads, thread_id)?;
         }
         CodexThreadAction::Start => {}
     }
@@ -363,6 +394,9 @@ async fn register_codex_endpoint(
             "Codex app-server did not return a thread id",
         )
     })?;
+    // start/resume/fork いずれも成功した thread を「観測済み」として記録し、
+    // 以後の resume / fork を認可できるようにする。
+    record_known_thread(&state.known_codex_threads, Some(thread_id.clone()));
     Ok(CodexRuntimeEndpointResult {
         endpoint_id,
         thread_id,

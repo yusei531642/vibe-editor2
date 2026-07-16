@@ -56,3 +56,13 @@ fn approval_request_ids_are_opaque_but_bounded_and_control_free() {
     assert!(validate_approval_request_id("request\n900").is_err());
     assert!(validate_approval_request_id(&"r".repeat(257)).is_err());
 }
+
+#[test]
+fn resume_requires_previously_observed_thread_id() {
+    let known = std::sync::Mutex::new(std::collections::HashSet::new());
+    assert!(super::authorize_known_thread(&known, "thread-1").is_err());
+
+    super::record_known_thread(&known, Some("thread-1".to_string()));
+    assert!(super::authorize_known_thread(&known, "thread-1").is_ok());
+    assert!(super::authorize_known_thread(&known, "thread-2").is_err());
+}

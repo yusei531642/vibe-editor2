@@ -308,10 +308,16 @@ async fn projects_turn_steer_and_approval_as_envelopes() {
     assert!(events
         .windows(2)
         .all(|pair| pair[0].sequence < pair[1].sequence));
-    let transcript: Vec<_> = fixture.transcript.try_iter().collect();
-    assert!(transcript.contains(&"steer:turn-active".to_string()));
-    assert!(transcript.contains(&"approval:accept".to_string()));
-    assert!(transcript.contains(&"unknown:-32601".to_string()));
+    // transcript は fixture 側 task が socket を読んでから流れる。respond_approval の
+    // return は client 側 write 完了までしか保証しないため、非同期に到着を待つ。
+    let mut transcript: Vec<String> = Vec::new();
+    for expected in ["steer:turn-active", "approval:accept", "unknown:-32601"] {
+        wait_until(|| {
+            transcript.extend(fixture.transcript.try_iter());
+            transcript.iter().any(|line| line == expected)
+        })
+        .await;
+    }
 
     let stopped = manager.stop("native-events");
     assert!(stopped.result.is_ok());
