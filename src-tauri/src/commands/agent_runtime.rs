@@ -130,6 +130,9 @@ fn validate_approval_request_id(request_id: &str) -> CommandResult<()> {
 
 /// resume / fork 対象の thread id が「この process が開始/観測した thread」の集合に
 /// 含まれることを要求する (project authority 迂回の防止、Issue #23 三次レビュー)。
+/// 非 Unix では呼び出し元 (`register_codex_endpoint`) が cfg で消えるため、lib target の
+/// dead_code を明示的に許可する (test target からは両 OS で使用される)。
+#[cfg_attr(not(unix), allow(dead_code))]
 fn authorize_known_thread(
     known: &std::sync::Mutex<std::collections::HashSet<String>>,
     thread_id: &str,
@@ -144,7 +147,9 @@ fn authorize_known_thread(
     }
 }
 
-// unix の登録経路と (両 OS でコンパイルされる) unit test の双方から使うため cfg を付けない。
+// unix の登録経路と (両 OS でコンパイルされる) unit test の双方から使うため cfg は付けず、
+// 非 Unix の lib target でのみ dead_code を許可する。
+#[cfg_attr(not(unix), allow(dead_code))]
 fn record_known_thread(
     known: &std::sync::Mutex<std::collections::HashSet<String>>,
     thread_id: Option<String>,
