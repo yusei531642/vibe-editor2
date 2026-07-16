@@ -49,6 +49,7 @@ export function useSettingsNav(opts: UseSettingsNavOptions): UseSettingsNavResul
           items: [
             'claude',
             'codex',
+            'runtime',
             ...agents.map((a) => `custom:${a.id}`),
             '__addCustom'
           ]

@@ -70,6 +70,38 @@ export const enSettings: Dict = {
   'settings.section.codex.label': 'Codex',
   'settings.section.codex.title': 'Codex',
   'settings.section.codex.desc': 'Launch command and args',
+  'settings.section.runtime.label': 'Runtime',
+  'settings.section.runtime.title': 'Agent runtime',
+  'settings.section.runtime.desc': 'Execution backend, experimental flags, and capabilities',
+  'settings.runtime.title': 'Runtime guardrails',
+  'settings.runtime.backend.label': 'Execution backend',
+  'settings.runtime.backend.pty': 'PTY (current stable path)',
+  'settings.runtime.backend.auto': 'Auto-select',
+  'settings.runtime.backend.native': 'Native (experimental)',
+  'settings.runtime.backend.hint':
+    'PTY preserves the current execution path. Auto and Native safely fall back to PTY when required capabilities are unavailable.',
+  'settings.runtime.teamSceneV2.label': 'Enable Team Scene v2 (experimental)',
+  'settings.runtime.teamSceneV2.hint':
+    'Off by default. Future Team Scene v2 features are shown only when this flag is enabled.',
+  'settings.runtime.diagnostics.title': 'Capability diagnostics',
+  'settings.runtime.diagnostics.refresh': 'Refresh',
+  'settings.runtime.diagnostics.loading': 'Checking…',
+  'settings.runtime.diagnostics.error': 'Diagnostics failed: {error}',
+  'settings.runtime.diagnostics.selected': 'Selected backend',
+  'settings.runtime.diagnostics.capabilities': 'Detected capabilities',
+  'settings.runtime.reason.explicitPty': 'PTY was selected explicitly.',
+  'settings.runtime.reason.explicitNativeAvailable':
+    'All capabilities required by the Native backend are available.',
+  'settings.runtime.reason.nativeCapabilitiesUnavailable':
+    'Required Native capabilities are unavailable, so PTY will be used.',
+  'settings.runtime.reason.autoNativeCapabilitiesAvailable':
+    'Auto-detection found all required Native capabilities and selected Native.',
+  'settings.runtime.reason.autoPtyFallback':
+    'Auto-detection did not meet the Native requirements and selected PTY.',
+  'settings.runtime.capability.ptyExecution': 'PTY execution',
+  'settings.runtime.capability.nativeProcessExecution': 'Native process execution',
+  'settings.runtime.capability.structuredEventStream': 'Structured event stream',
+  'settings.runtime.capability.cooperativeCancellation': 'Cooperative cancellation',
   // Issue #1068: codex team_send delivery method toggle
   'settings.codexDelivery.title': 'team_send delivery',
   'settings.codexDelivery.label': 'Delivery method',

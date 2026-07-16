@@ -277,4 +277,44 @@ describe('migrateSettings', () => {
       });
     });
   });
+
+  describe('v13 → v14 runtime guardrails (Issue #21)', () => {
+    it('旧設定に PTY backend と無効な Team Scene v2 を補完する', () => {
+      const migrated = migrateSettings({
+        schemaVersion: 13,
+        language: 'ja',
+        theme: 'claude-dark'
+      });
+
+      expect(migrated.agentRuntimeBackend).toBe('pty');
+      expect(migrated.teamSceneV2).toBe(false);
+      expect(migrated.schemaVersion).toBe(APP_SETTINGS_SCHEMA_VERSION);
+    });
+
+    it('有効な明示値を維持する', () => {
+      const migrated = migrateSettings({
+        schemaVersion: 13,
+        language: 'en',
+        theme: 'dark',
+        agentRuntimeBackend: 'auto',
+        teamSceneV2: true
+      });
+
+      expect(migrated.agentRuntimeBackend).toBe('auto');
+      expect(migrated.teamSceneV2).toBe(true);
+    });
+
+    it('現行 schema でも壊れた値を安全な既定値へ戻す', () => {
+      const migrated = migrateSettings({
+        schemaVersion: APP_SETTINGS_SCHEMA_VERSION,
+        language: 'ja',
+        theme: 'claude-light',
+        agentRuntimeBackend: 'unknown',
+        teamSceneV2: 'yes'
+      });
+
+      expect(migrated.agentRuntimeBackend).toBe('pty');
+      expect(migrated.teamSceneV2).toBe(false);
+    });
+  });
 });

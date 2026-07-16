@@ -3,6 +3,7 @@
 // 既存 src/main/ipc/*.ts と 1:1 対応。
 // camelCase JSON 互換のため、各 command struct/enum には #[serde(rename_all = "camelCase")] を付与する。
 
+pub mod agent_runtime;
 pub mod api_agents;
 pub mod app;
 pub mod atomic_write;

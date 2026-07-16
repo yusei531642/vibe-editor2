@@ -1,0 +1,132 @@
+.runtime-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-lg, 12px) !important;
+  background: var(--bg-panel) !important;
+}
+
+.runtime-section__field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.runtime-section__field select {
+  width: min(100%, 420px);
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 10px);
+  background: var(--bg-panel);
+  color: var(--text);
+}
+
+.runtime-section__toggle {
+  margin-top: 8px;
+}
+
+.runtime-diagnostics {
+  margin-top: 8px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 12px);
+  background: color-mix(in srgb, var(--bg-elev) 76%, transparent);
+}
+
+.runtime-diagnostics__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.runtime-diagnostics__refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--bg-panel);
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.runtime-diagnostics__refresh:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.runtime-diagnostics__refresh:disabled {
+  opacity: 0.6;
+}
+
+.runtime-diagnostics__status,
+.runtime-diagnostics__body p {
+  margin: 12px 0 0;
+  color: var(--text-dim);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.runtime-diagnostics__status--error {
+  color: var(--danger, var(--warning));
+}
+
+.runtime-diagnostics__body p:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.runtime-diagnostics__body p:first-child strong {
+  color: var(--accent);
+}
+
+.runtime-diagnostics__body > div {
+  margin-top: 12px;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.runtime-diagnostics__body ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.runtime-diagnostics__body li {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-panel);
+  color: var(--text);
+}
+
+.runtime-diagnostics__refresh .is-spinning {
+  animation: runtime-diagnostics-spin 900ms linear infinite;
+}
+
+@keyframes runtime-diagnostics-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .runtime-diagnostics__refresh .is-spinning {
+    animation: none;
+  }
+}
