@@ -19,11 +19,22 @@ const OP_PING: u8 = 0x9;
 const OP_PONG: u8 = 0xA;
 
 /// 1 本の双方向ストリーム上で WebSocket text frame を読み書きする薄いラッパ。
+///
+/// cancel-safety: `read_text` は `tokio::select!` で毎回 drop されても壊れない。
+/// - 受信バイトは `rbuf` に、fragmented text の蓄積は `partial_text` に持ち、
+///   future ローカルな状態を残さない。
+/// - PING への PONG は read 経路から直接書かず `pending_pongs` へ積み、次の
+///   write 系呼び出し (`write_text` / `flush_pending_pongs`) で送出する。
+///   read future の drop により部分 write でフレームが壊れることを防ぐ。
 pub(crate) struct WsStream<S> {
     stream: S,
     rbuf: Vec<u8>,
     /// 送信フレームを mask するか (client = true, server = false)。
     mask_outgoing: bool,
+    /// fin されていない fragmented text の蓄積 (cancel を跨いで保持)。
+    partial_text: Vec<u8>,
+    /// read 中に受けた PING の payload。write 経路でまとめて PONG を返す。
+    pending_pongs: Vec<Vec<u8>>,
 }
 
 impl<S: AsyncRead + AsyncWrite + Unpin> WsStream<S> {
@@ -32,7 +43,19 @@ impl<S: AsyncRead + AsyncWrite + Unpin> WsStream<S> {
             stream,
             rbuf: Vec::new(),
             mask_outgoing,
+            partial_text: Vec::new(),
+            pending_pongs: Vec::new(),
         }
+    }
+
+    /// 溜まった PONG を送出する。read future の外 (select! branch 本体や
+    /// interval tick) から呼ぶこと。
+    pub(crate) async fn flush_pending_pongs(&mut self) -> Result<(), AppServerError> {
+        while !self.pending_pongs.is_empty() {
+            let payload = self.pending_pongs.remove(0);
+            self.write_frame(OP_PONG, &payload).await?;
+        }
+        Ok(())
     }
 
     /// client 側ハンドシェイク: GET Upgrade を送り 101 を待つ。
@@ -73,29 +96,31 @@ impl<S: AsyncRead + AsyncWrite + Unpin> WsStream<S> {
 
     /// text frame を 1 本送信する。
     pub(crate) async fn write_text(&mut self, payload: &[u8]) -> Result<(), AppServerError> {
+        self.flush_pending_pongs().await?;
         self.write_frame(OP_TEXT, payload).await
     }
 
     /// text メッセージを 1 つ読む。ping には pong で応答し、close なら `None` を返す。
     /// fragmentation (continuation) も最小限ハンドルする。
     pub(crate) async fn read_text(&mut self) -> Result<Option<String>, AppServerError> {
-        let mut acc: Vec<u8> = Vec::new();
         loop {
             let (opcode, fin, payload) = self.read_frame().await?;
             match opcode {
                 OP_CLOSE => return Ok(None),
-                OP_PING => self.write_frame(OP_PONG, &payload).await?,
+                // read 経路からは書かない (select! cancel 中の部分 write 防止)。
+                OP_PING => self.pending_pongs.push(payload),
                 OP_PONG => {}
                 OP_TEXT | OP_CONTINUATION => {
-                    acc.extend_from_slice(&payload);
+                    self.partial_text.extend_from_slice(&payload);
                     if fin {
-                        return Ok(Some(String::from_utf8_lossy(&acc).into_owned()));
+                        let message = std::mem::take(&mut self.partial_text);
+                        return Ok(Some(String::from_utf8_lossy(&message).into_owned()));
                     }
                 }
                 OP_BINARY => {
                     // app-server は text のみを使う。binary は黙って捨てる。
                     if fin {
-                        acc.clear();
+                        self.partial_text.clear();
                     }
                 }
                 other => {

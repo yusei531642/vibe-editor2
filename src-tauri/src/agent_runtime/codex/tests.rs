@@ -267,8 +267,19 @@ async fn projects_turn_steer_and_approval_as_envelopes() {
     })
     .await;
     assert!(manager.steer("native-events", "more".into()).result.is_ok());
+    let request_id = manager
+        .event_snapshot()
+        .iter()
+        .find_map(|event| match &event.payload {
+            RuntimeEventPayload::ApprovalRequest { request_id, .. } => Some(request_id.clone()),
+            _ => None,
+        })
+        .expect("approval request id");
+    // pending でない requestId は業務エラーであり、actor loop / 接続を殺さない。
+    let unknown = manager.respond_approval("native-events", "ghost-id".into(), "accept".into());
+    assert!(unknown.result.is_err());
     assert!(manager
-        .respond_approval("native-events", "900".into(), "accept".into())
+        .respond_approval("native-events", request_id, "accept".into())
         .result
         .is_ok());
 
@@ -297,10 +308,16 @@ async fn projects_turn_steer_and_approval_as_envelopes() {
     assert!(events
         .windows(2)
         .all(|pair| pair[0].sequence < pair[1].sequence));
-    let transcript: Vec<_> = fixture.transcript.try_iter().collect();
-    assert!(transcript.contains(&"steer:turn-active".to_string()));
-    assert!(transcript.contains(&"approval:accept".to_string()));
-    assert!(transcript.contains(&"unknown:-32601".to_string()));
+    // transcript は fixture 側 task が socket を読んでから流れる。respond_approval の
+    // return は client 側 write 完了までしか保証しないため、非同期に到着を待つ。
+    let mut transcript: Vec<String> = Vec::new();
+    for expected in ["steer:turn-active", "approval:accept", "unknown:-32601"] {
+        wait_until(|| {
+            transcript.extend(fixture.transcript.try_iter());
+            transcript.iter().any(|line| line == expected)
+        })
+        .await;
+    }
 
     let stopped = manager.stop("native-events");
     assert!(stopped.result.is_ok());

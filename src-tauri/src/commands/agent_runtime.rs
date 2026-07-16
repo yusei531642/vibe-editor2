@@ -15,8 +15,6 @@ use tauri::{AppHandle, Emitter, State};
 mod registration;
 
 const MAX_RUNTIME_INPUT_BYTES: usize = 64 * 1024;
-#[cfg(unix)]
-const MAX_RUNTIME_PATH_BYTES: usize = 4 * 1024;
 const MAX_APPROVAL_REQUEST_ID_BYTES: usize = 256;
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -69,12 +67,13 @@ pub enum CodexThreadAction {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// DESIGN.md "Runtime boundary": renderer からは endpoint 意図のみを受け、
+/// 実行バイナリ (codex command) は settings.json、control socket は Rust 側の
+/// daemon 検出を正本とする。raw path / argv を renderer から受けない。
 pub struct RegisterCodexEndpointRequest {
     pub endpoint_id: String,
     pub team_id: Option<String>,
     pub agent_id: Option<String>,
-    pub socket_path: Option<String>,
-    pub codex_command: Option<String>,
     pub cwd: Option<String>,
     pub thread: CodexThreadAction,
 }
@@ -132,6 +131,40 @@ fn validate_approval_request_id(request_id: &str) -> CommandResult<()> {
         ));
     }
     crate::commands::validation::assert_max_size(request_id.len(), MAX_APPROVAL_REQUEST_ID_BYTES)
+}
+
+/// resume / fork 対象の thread id が「この process が開始/観測した thread」の集合に
+/// 含まれることを要求する (project authority 迂回の防止、Issue #23 三次レビュー)。
+/// 非 Unix では呼び出し元 (`register_codex_endpoint`) が cfg で消えるため、lib target の
+/// dead_code を明示的に許可する (test target からは両 OS で使用される)。
+#[cfg_attr(not(unix), allow(dead_code))]
+fn authorize_known_thread(
+    known: &std::sync::Mutex<std::collections::HashSet<String>>,
+    thread_id: &str,
+) -> CommandResult<()> {
+    let guard = known.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    if guard.contains(thread_id) {
+        Ok(())
+    } else {
+        Err(CommandError::authz(format!(
+            "thread '{thread_id}' was not started by this session; resume/fork is not authorized"
+        )))
+    }
+}
+
+// unix の登録経路と (両 OS でコンパイルされる) unit test の双方から使うため cfg は付けず、
+// 非 Unix の lib target でのみ dead_code を許可する。
+#[cfg_attr(not(unix), allow(dead_code))]
+fn record_known_thread(
+    known: &std::sync::Mutex<std::collections::HashSet<String>>,
+    thread_id: Option<String>,
+) {
+    if let Some(thread_id) = thread_id {
+        known
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .insert(thread_id);
+    }
 }
 
 fn emit_events(app: &AppHandle, events: &[RuntimeEventEnvelope]) {
