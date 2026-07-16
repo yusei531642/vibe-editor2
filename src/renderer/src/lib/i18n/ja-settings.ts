@@ -322,7 +322,7 @@ export const jaSettings: Dict = {
   'settings.mcp.manualTitle': '手動で入れる',
   'settings.mcp.manualDesc': '好みのエディタで設定ファイルを開いて、以下の断片をマージしてください。',
   'settings.mcp.manualStep1': '~/.claude.json を開く (無ければ新規作成)。',
-  'settings.mcp.manualStep2': '最上位の "mcpServers" オブジェクトに "vibe-team" エントリを追加。',
+  'settings.mcp.manualStep2': '最上位の "mcpServers" オブジェクトに "vibe-team2" エントリを追加。',
   'settings.mcp.manualStep3': 'Codex を使う場合は ~/.codex/config.toml に同等の [mcp_servers.vibe-team2] を追加。',
   'settings.mcp.copy': 'コピー',
   'settings.mcp.copied': 'コピーしました',

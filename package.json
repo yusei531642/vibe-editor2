@@ -2,7 +2,7 @@
   "name": "vibe-editor2",
   "version": "2.0.0-alpha.0",
   "private": true,
-  "description": "GUI-first Claude Code / Codex / vibe-team editor",
+  "description": "GUI-first Claude Code / Codex / vibe-team2 editor",
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
   },

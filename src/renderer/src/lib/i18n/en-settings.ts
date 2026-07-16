@@ -325,7 +325,7 @@ export const enSettings: Dict = {
   'settings.mcp.manualDesc':
     'Open the config files in your editor and merge the snippets below.',
   'settings.mcp.manualStep1': 'Open ~/.claude.json (create it if missing).',
-  'settings.mcp.manualStep2': 'Add a "vibe-team" entry under the top-level "mcpServers" object.',
+  'settings.mcp.manualStep2': 'Add a "vibe-team2" entry under the top-level "mcpServers" object.',
   'settings.mcp.manualStep3':
     'For Codex, add the equivalent [mcp_servers.vibe-team2] section to ~/.codex/config.toml.',
   'settings.mcp.copy': 'Copy',

@@ -52,7 +52,7 @@
     "copyright": "Copyright © 2026 vibe-editor 2",
     "category": "DeveloperTool",
     "shortDescription": "AI エージェント時代のエディタ",
-    "longDescription": "Claude Code / Codex / vibe-teamを同じGUIで操作するエージェントエディタ。",
+    "longDescription": "Claude Code / Codex / vibe-team2を同じGUIで操作するエージェントエディタ。",
     "windows": {
       "nsis": {
         "installMode": "currentUser",
