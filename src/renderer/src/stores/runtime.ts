@@ -54,6 +54,8 @@ export interface RuntimeEndpointProjection {
   toolUses: RuntimeToolUse[];
   diffs: string[];
   usage: RuntimeUsage[];
+  /** Endpoint failure/dispose can leave entries stale; Phase 5 Approval Center must discard
+   * pending approvals when lifecycle becomes `failed` or `exited`. */
   approvalRequests: RuntimeApprovalRequest[];
   /** History caps で先頭から破棄した entry の累計。 */
   truncatedCount: number;

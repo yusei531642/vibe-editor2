@@ -224,7 +224,6 @@ impl AgentRuntimeAdapter for CodexRuntimeAdapter {
             "turn/interrupt",
             json!({ "threadId": thread_id, "turnId": turn_id }),
         )?;
-        *write_lock(&self.state.active_turn_id) = None;
         Ok(())
     }
 
@@ -272,8 +271,29 @@ impl AgentRuntimeAdapter for CodexRuntimeAdapter {
 fn client_sink(state: Arc<SessionState>, sink: CodexAdapterEventSink) -> ClientEventSink {
     Arc::new(move |event| match event {
         ClientEvent::Notification { method, params } => {
-            if let Some(thread_id) = convert::thread_id(&params) {
-                *write_lock(&state.thread_id) = Some(thread_id);
+            if let Some(notification_thread_id) = convert::thread_id(&params) {
+                let mut current = write_lock(&state.thread_id);
+                if let Some(bound_thread_id) = current.as_deref() {
+                    if bound_thread_id != notification_thread_id {
+                        tracing::warn!(
+                            bound_thread_id,
+                            notification_thread_id,
+                            method,
+                            "[runtime] dropped app-server notification for another thread"
+                        );
+                        drop(current);
+                        sink(CodexAdapterEvent::Payload(
+                            RuntimeEventPayload::Diagnostic {
+                                message: format!(
+                                    "dropped app-server notification for unbound thread ({method})"
+                                ),
+                            },
+                        ));
+                        return;
+                    }
+                } else {
+                    *current = Some(notification_thread_id);
+                }
             }
             if method == "turn/started" {
                 if let Some(turn_id) = convert::turn_id(&params) {

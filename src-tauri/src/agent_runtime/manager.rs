@@ -274,17 +274,33 @@ impl RuntimeManager {
     /// Runtime の実行を停止する。cooperative cancellation capability を持たない PTY adapter
     /// では `stop` は session process の kill を意味する。成功後は endpoint を自動 detach し、
     /// terminal layer が所有する session lifetime には dispose 経由で干渉しない。
+    /// cooperative cancellation capability を持つ native adapter は turn だけを停止し、
+    /// session を再利用できるよう endpoint を維持する。
     pub fn stop(&self, endpoint_id: &str) -> RuntimeOperation {
+        let cooperative = self.registry.resolve(endpoint_id).is_some_and(|adapter| {
+            adapter
+                .capabilities()
+                .contains(&super::RuntimeCapability::CooperativeCancellation)
+        });
         let mut operation = self.run_adapter_operation(endpoint_id, |adapter| adapter.stop());
         if operation.result.is_ok() {
-            operation.events.push(self.record_event(
-                endpoint_id,
-                RuntimeEventPayload::Lifecycle {
-                    state: RuntimeLifecycleState::Exited,
-                    detail: Some("interrupted".to_string()),
-                },
-            ));
-            self.detach_endpoint(endpoint_id);
+            if cooperative {
+                operation.events.push(self.record_event(
+                    endpoint_id,
+                    RuntimeEventPayload::Diagnostic {
+                        message: "turn interrupted; runtime session remains ready".to_string(),
+                    },
+                ));
+            } else {
+                operation.events.push(self.record_event(
+                    endpoint_id,
+                    RuntimeEventPayload::Lifecycle {
+                        state: RuntimeLifecycleState::Exited,
+                        detail: Some("interrupted".to_string()),
+                    },
+                ));
+                self.detach_endpoint(endpoint_id);
+            }
         }
         operation
     }

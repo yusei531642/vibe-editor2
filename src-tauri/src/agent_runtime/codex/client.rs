@@ -6,7 +6,7 @@ use crate::team_hub::app_server::wire::WsStream;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::{mpsc as std_mpsc, Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::net::UnixStream;
 use tokio::sync::mpsc;
 
@@ -33,6 +33,7 @@ enum ClientCommand {
     Request {
         method: String,
         params: Value,
+        deadline: Instant,
         response: std_mpsc::Sender<Result<Value, RuntimeAdapterError>>,
     },
     RespondApproval {
@@ -105,6 +106,7 @@ impl ClientHandle {
             .send(ClientCommand::Request {
                 method: method.to_string(),
                 params,
+                deadline: Instant::now() + REQUEST_TIMEOUT,
                 response: tx,
             })
             .map_err(|_| disconnected())?;
@@ -181,6 +183,7 @@ async fn run(
     let mut next_id = 2_i64;
     let mut pending = HashMap::new();
     let mut approvals: HashMap<String, Value> = HashMap::new();
+    let mut pending_cleanup = tokio::time::interval(Duration::from_secs(1));
 
     let failure = loop {
         tokio::select! {
@@ -196,16 +199,22 @@ async fn run(
                 ).await { break error; },
                 Ok(None) => break disconnected(),
                 Err(error) => break map_wire_error(error),
-            }
+            },
+            _ = pending_cleanup.tick() => expire_pending(&mut pending),
         }
     };
-    for (_, response) in pending.drain() {
-        let _ = response.send(Err(failure.clone()));
+    for (_, entry) in pending.drain() {
+        let _ = entry.response.send(Err(failure.clone()));
     }
     sink(ClientEvent::Failure(failure));
 }
 
-type Pending = HashMap<String, std_mpsc::Sender<Result<Value, RuntimeAdapterError>>>;
+struct PendingEntry {
+    deadline: Instant,
+    response: std_mpsc::Sender<Result<Value, RuntimeAdapterError>>,
+}
+
+type Pending = HashMap<String, PendingEntry>;
 
 async fn handle_command(
     command: ClientCommand,
@@ -218,12 +227,18 @@ async fn handle_command(
         ClientCommand::Request {
             method,
             params,
+            deadline,
             response,
         } => {
             let id = *next_id;
             *next_id = next_id.saturating_add(1);
-            write_json(ws, &json!({ "id": id, "method": method, "params": params })).await?;
-            pending.insert(id.to_string(), response);
+            if let Err(error) =
+                write_json(ws, &json!({ "id": id, "method": method, "params": params })).await
+            {
+                let _ = response.send(Err(error.clone()));
+                return Err(error);
+            }
+            pending.insert(id.to_string(), PendingEntry { deadline, response });
         }
         ClientCommand::RespondApproval {
             request_id,
@@ -231,9 +246,7 @@ async fn handle_command(
             response,
         } => {
             let result = if let Some(id) = approvals.remove(&request_id) {
-                write_json(ws, &json!({ "id": id, "result": { "decision": decision } }))
-                    .await
-                    .map(|_| Value::Null)
+                write_json(ws, &json!({ "id": id, "result": { "decision": decision } })).await
             } else {
                 Err(RuntimeAdapterError::new(
                     "runtime_approval_not_found",
@@ -241,7 +254,15 @@ async fn handle_command(
                     true,
                 ))
             };
-            let _ = response.send(result);
+            match result {
+                Ok(()) => {
+                    let _ = response.send(Ok(Value::Null));
+                }
+                Err(error) => {
+                    let _ = response.send(Err(error.clone()));
+                    return Err(error);
+                }
+            }
         }
         ClientCommand::Shutdown => {}
     }
@@ -264,9 +285,9 @@ async fn handle_incoming(
     let method = value.get("method").and_then(Value::as_str);
     let id = value.get("id");
     if method.is_none() {
-        if let Some(response) = id.and_then(id_key).and_then(|key| pending.remove(&key)) {
+        if let Some(entry) = id.and_then(id_key).and_then(|key| pending.remove(&key)) {
             let result = rpc_result(&value);
-            let _ = response.send(result);
+            let _ = entry.response.send(result);
         }
         return Ok(());
     }
@@ -280,7 +301,7 @@ async fn handle_incoming(
                 "server request id is invalid",
             )
         })?;
-        if method.to_ascii_lowercase().contains("approval") {
+        if is_supported_approval_method(&method) {
             approvals.insert(request_id.clone(), id);
             sink(ClientEvent::ServerRequest {
                 request_id,
@@ -288,12 +309,41 @@ async fn handle_incoming(
                 params,
             });
         } else {
-            write_json(ws, &json!({ "id": id, "result": {} })).await?;
+            write_json(
+                ws,
+                &json!({
+                    "id": id,
+                    "error": { "code": -32601, "message": format!("unsupported server request method '{method}'") }
+                }),
+            )
+            .await?;
         }
     } else {
         sink(ClientEvent::Notification { method, params });
     }
     Ok(())
+}
+
+fn expire_pending(pending: &mut Pending) {
+    let now = Instant::now();
+    pending.retain(|_, entry| {
+        if entry.deadline > now {
+            return true;
+        }
+        let _ = entry.response.send(Err(RuntimeAdapterError::new(
+            "runtime_app_server_timeout",
+            "app-server request timed out",
+            true,
+        )));
+        false
+    });
+}
+
+fn is_supported_approval_method(method: &str) -> bool {
+    matches!(
+        method,
+        "item/commandExecution/requestApproval" | "item/fileChange/requestApproval"
+    )
 }
 
 enum ClientSource {
@@ -396,4 +446,23 @@ fn disconnected() -> RuntimeAdapterError {
 
 fn fatal(code: &str, message: impl Into<String>) -> RuntimeAdapterError {
     RuntimeAdapterError::new(code, message, false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_supported_approval_method;
+
+    #[test]
+    fn approval_method_allowlist_is_exact() {
+        assert!(is_supported_approval_method(
+            "item/commandExecution/requestApproval"
+        ));
+        assert!(is_supported_approval_method(
+            "item/fileChange/requestApproval"
+        ));
+        assert!(!is_supported_approval_method(
+            "item/permissions/requestApproval"
+        ));
+        assert!(!is_supported_approval_method("unknownApproval"));
+    }
 }

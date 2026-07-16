@@ -80,13 +80,19 @@ pub trait CapabilityDetector {
 
 /// 実環境 detector。Unix は Codex app-server adapter の能力を、Windows は現行実装が
 /// 保証できる PTY capability だけを公開する。
+/// ただし Unix でも `codex` CLI が PATH 上に存在するときだけ native 能力を公開する。
+/// 診断後に CLI が削除された、または daemon 起動/登録が失敗した場合、renderer は
+/// native registration error を受けて PTY registration へ明示的に fallback する。
 pub struct SystemCapabilityDetector;
 
 impl CapabilityDetector for SystemCapabilityDetector {
+    #[cfg(unix)]
     fn detected_capabilities(&self) -> Vec<RuntimeCapability> {
-        let mut capabilities = vec![RuntimeCapability::PtyExecution];
-        #[cfg(unix)]
-        capabilities.extend([
+        if which::which("codex").is_err() {
+            return vec![RuntimeCapability::PtyExecution];
+        }
+        vec![
+            RuntimeCapability::PtyExecution,
             RuntimeCapability::NativeProcessExecution,
             RuntimeCapability::StructuredEventStream,
             RuntimeCapability::CooperativeCancellation,
@@ -94,8 +100,12 @@ impl CapabilityDetector for SystemCapabilityDetector {
             RuntimeCapability::SessionFork,
             RuntimeCapability::TurnSteering,
             RuntimeCapability::ApprovalResponses,
-        ]);
-        capabilities
+        ]
+    }
+
+    #[cfg(not(unix))]
+    fn detected_capabilities(&self) -> Vec<RuntimeCapability> {
+        vec![RuntimeCapability::PtyExecution]
     }
 }
 

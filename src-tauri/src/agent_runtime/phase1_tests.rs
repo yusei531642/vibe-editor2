@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 struct FakeAdapter {
     spawn_error: Option<RuntimeAdapterError>,
     write_error: Arc<Mutex<Option<RuntimeAdapterError>>>,
+    capabilities: Vec<RuntimeCapability>,
 }
 
 impl FakeAdapter {
@@ -15,6 +16,17 @@ impl FakeAdapter {
         Self {
             spawn_error: None,
             write_error: Arc::new(Mutex::new(None)),
+            capabilities: vec![RuntimeCapability::StructuredEventStream],
+        }
+    }
+
+    fn cooperative() -> Self {
+        Self {
+            capabilities: vec![
+                RuntimeCapability::StructuredEventStream,
+                RuntimeCapability::CooperativeCancellation,
+            ],
+            ..Self::healthy()
         }
     }
 
@@ -26,6 +38,7 @@ impl FakeAdapter {
                 false,
             )),
             write_error: Arc::new(Mutex::new(None)),
+            capabilities: vec![RuntimeCapability::StructuredEventStream],
         }
     }
 
@@ -44,7 +57,7 @@ impl AgentRuntimeAdapter for FakeAdapter {
     }
 
     fn capabilities(&self) -> Vec<RuntimeCapability> {
-        vec![RuntimeCapability::StructuredEventStream]
+        self.capabilities.clone()
     }
 
     fn spawn_session(
@@ -111,6 +124,32 @@ fn fake_adapter_covers_ready_and_stop_lifecycle() {
         missing.result.unwrap_err().code,
         "runtime_endpoint_not_found"
     );
+}
+
+#[test]
+fn cooperative_stop_keeps_endpoint_ready_and_attached() {
+    let manager = RuntimeManager::new();
+    assert!(manager
+        .register_endpoint(
+            "endpoint-cooperative".to_string(),
+            Arc::new(FakeAdapter::cooperative())
+        )
+        .result
+        .is_ok());
+
+    let stopped = manager.stop("endpoint-cooperative");
+    assert!(stopped.result.is_ok());
+    assert!(lifecycle_states(&stopped.events).is_empty());
+    assert!(stopped
+        .events
+        .iter()
+        .any(|event| matches!(event.payload, RuntimeEventPayload::Diagnostic { .. })));
+    assert!(manager.registry().resolve("endpoint-cooperative").is_some());
+    assert!(manager
+        .write("endpoint-cooperative", "next turn")
+        .result
+        .is_ok());
+    assert!(manager.dispose("endpoint-cooperative").result.is_ok());
 }
 
 #[test]

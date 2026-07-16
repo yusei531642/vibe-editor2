@@ -132,10 +132,19 @@ async fn serve(
             }
             (Some("turn/interrupt"), Some(id)) => {
                 send(&mut ws, json!({ "id": id, "result": {} })).await?;
+                send(
+                    &mut ws,
+                    json!({ "method": "turn/interrupted", "params": { "threadId": "thread-new", "turnId": "turn-active" } }),
+                )
+                .await?;
             }
             (None, Some(id)) if id == json!(900) => {
                 let decision = message["result"]["decision"].as_str().unwrap_or_default();
                 let _ = transcript.send(format!("approval:{decision}"));
+            }
+            (None, Some(id)) if id == json!(901) => {
+                let code = message["error"]["code"].as_i64().unwrap_or_default();
+                let _ = transcript.send(format!("unknown:{code}"));
             }
             _ => {}
         }
@@ -145,12 +154,14 @@ async fn serve(
 
 async fn scripted_notifications(ws: &mut WsStream<UnixStream>) -> Result<(), AppServerError> {
     for notification in [
-        json!({ "method": "item/agentMessage/delta", "params": { "delta": "hello" } }),
+        json!({ "method": "item/agentMessage/delta", "params": { "threadId": "thread-other", "delta": "leak" } }),
+        json!({ "method": "item/agentMessage/delta", "params": { "threadId": "thread-new", "delta": "hello" } }),
         json!({ "method": "item/completed", "params": { "item": { "type": "agentMessage", "text": "hello" } } }),
         json!({ "method": "item/started", "params": { "item": { "type": "commandExecution", "id": "call-1", "command": "git status" } } }),
         json!({ "method": "turn/diff/updated", "params": { "diff": "@@ -1 +1 @@" } }),
         json!({ "method": "thread/tokenUsage/updated", "params": { "usage": { "inputTokens": 4, "cachedInputTokens": 2, "outputTokens": 3 } } }),
         json!({ "id": 900, "method": "item/commandExecution/requestApproval", "params": { "reason": "test", "command": ["git", "status"], "cwd": "/tmp/project" } }),
+        json!({ "id": 901, "method": "unknown/request", "params": { "threadId": "thread-new" } }),
     ] {
         send(ws, notification).await?;
     }
@@ -235,7 +246,7 @@ async fn projects_turn_steer_and_approval_as_envelopes() {
     let mut fixture = spawn_fixture(FixtureMode::Scripted);
     let (adapter, manager) = adapter_and_manager(&mut fixture, "native-events");
     assert!(manager
-        .register_endpoint("native-events".into(), adapter)
+        .register_endpoint("native-events".into(), adapter.clone())
         .result
         .is_ok());
     assert!(manager
@@ -274,12 +285,41 @@ async fn projects_turn_steer_and_approval_as_envelopes() {
     assert!(events
         .iter()
         .any(|event| matches!(event.payload, RuntimeEventPayload::Usage { .. })));
+    assert!(!events.iter().any(|event| matches!(
+        &event.payload,
+        RuntimeEventPayload::MessageDelta { delta } if delta.contains("leak")
+    )));
+    assert!(events.iter().any(|event| matches!(
+        &event.payload,
+        RuntimeEventPayload::Diagnostic { message } if message.contains("unbound thread")
+    )));
+    assert_eq!(adapter.thread_id().as_deref(), Some("thread-new"));
     assert!(events
         .windows(2)
         .all(|pair| pair[0].sequence < pair[1].sequence));
     let transcript: Vec<_> = fixture.transcript.try_iter().collect();
     assert!(transcript.contains(&"steer:turn-active".to_string()));
     assert!(transcript.contains(&"approval:accept".to_string()));
+    assert!(transcript.contains(&"unknown:-32601".to_string()));
+
+    let stopped = manager.stop("native-events");
+    assert!(stopped.result.is_ok());
+    assert!(!stopped.events.iter().any(|event| matches!(
+        event.payload,
+        RuntimeEventPayload::Lifecycle {
+            state: RuntimeLifecycleState::Exited,
+            ..
+        }
+    )));
+    assert!(manager.registry().resolve("native-events").is_some());
+    wait_until(|| {
+        manager
+            .interrupt("native-events")
+            .result
+            .is_err_and(|error| error.code == "runtime_turn_not_active")
+    })
+    .await;
+    assert!(manager.registry().resolve("native-events").is_some());
     assert!(manager.dispose("native-events").result.is_ok());
 }
 

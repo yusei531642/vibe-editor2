@@ -1,5 +1,4 @@
 // agent_runtime.* command — Issue #21 diagnostics / Issue #22 endpoint operations.
-
 #[cfg(unix)]
 use crate::agent_runtime::codex::{CodexAdapterEvent, CodexAdapterEventSink, CodexRuntimeAdapter};
 use crate::agent_runtime::{
@@ -13,7 +12,9 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
 
 const MAX_RUNTIME_INPUT_BYTES: usize = 64 * 1024;
-
+#[cfg(unix)]
+const MAX_RUNTIME_PATH_BYTES: usize = 4 * 1024;
+const MAX_APPROVAL_REQUEST_ID_BYTES: usize = 256;
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentRuntimeDiagnostics {
@@ -22,9 +23,9 @@ pub struct AgentRuntimeDiagnostics {
     pub reason: SelectionReason,
     pub capabilities: Vec<RuntimeCapability>,
 }
-
 /// Renderer の未保存 draft も診断できるよう backend を引数で受ける。
 /// system detector は Unix で native adapter、Windows で PTY fallback を報告する。
+/// ただし Unix でも `codex` が PATH にない場合は PTY fallback reason を報告する。
 #[tauri::command]
 pub async fn agent_runtime_diagnostics(backend: String) -> CommandResult<AgentRuntimeDiagnostics> {
     let requested_backend =
@@ -37,14 +38,12 @@ pub async fn agent_runtime_diagnostics(backend: String) -> CommandResult<AgentRu
         capabilities: selection.capabilities,
     })
 }
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RegisterPtyEndpointRequest {
     pub endpoint_id: String,
     pub session_id: String,
 }
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeTurnRequest {
@@ -111,6 +110,25 @@ fn validate_runtime_input(input: &str) -> CommandResult<()> {
     crate::commands::validation::assert_max_size(input.len(), MAX_RUNTIME_INPUT_BYTES)
 }
 
+#[cfg(unix)]
+fn validate_bounded_no_nul(name: &str, value: &str, max: usize) -> CommandResult<()> {
+    if value.contains('\0') {
+        return Err(CommandError::validation(format!(
+            "{name} must not contain NUL"
+        )));
+    }
+    crate::commands::validation::assert_max_size(value.len(), max)
+}
+
+fn validate_approval_request_id(request_id: &str) -> CommandResult<()> {
+    if request_id.is_empty() || request_id.chars().any(char::is_control) {
+        return Err(CommandError::validation(
+            "request_id must be non-empty and contain no control characters",
+        ));
+    }
+    crate::commands::validation::assert_max_size(request_id.len(), MAX_APPROVAL_REQUEST_ID_BYTES)
+}
+
 fn emit_events(app: &AppHandle, events: &[RuntimeEventEnvelope]) {
     for event in events {
         let event_name = format!("runtime:event:{}", event.endpoint_id);
@@ -142,6 +160,7 @@ fn codex_event_sink(
     })
 }
 
+#[cfg(unix)]
 fn finish_codex_failure(
     app: &AppHandle,
     manager: &crate::agent_runtime::RuntimeManager,
@@ -165,6 +184,27 @@ fn finish_operation(
     Ok(RuntimeEndpointResult { endpoint_id })
 }
 
+async fn run_blocking<T, F>(operation: F) -> CommandResult<T>
+where
+    T: Send + 'static,
+    F: FnOnce() -> T + Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(operation)
+        .await
+        .map_err(|error| CommandError::coded("runtime_blocking_task_failed", error.to_string()))
+}
+
+async fn finish_blocking_operation<F>(
+    app: &AppHandle,
+    endpoint_id: String,
+    operation: F,
+) -> CommandResult<RuntimeEndpointResult>
+where
+    F: FnOnce() -> RuntimeOperation + Send + 'static,
+{
+    finish_operation(app, endpoint_id, run_blocking(operation).await?)
+}
+
 #[tauri::command]
 pub async fn agent_runtime_register_pty_endpoint(
     app: AppHandle,
@@ -177,10 +217,13 @@ pub async fn agent_runtime_register_pty_endpoint(
         state.pty_registry.clone(),
         request.session_id,
     ));
-    let operation = state
-        .runtime_manager
-        .register_endpoint(request.endpoint_id.clone(), adapter);
-    finish_operation(&app, request.endpoint_id, operation)
+    let manager = state.runtime_manager.clone();
+    let endpoint_id = request.endpoint_id;
+    let operation_endpoint = endpoint_id.clone();
+    finish_blocking_operation(&app, endpoint_id, move || {
+        manager.register_endpoint(operation_endpoint, adapter)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -224,7 +267,9 @@ pub async fn agent_runtime_reconnect_codex(
             .resolve(&request.endpoint_id)
             .is_some()
         {
-            let operation = state.runtime_manager.dispose(&request.endpoint_id);
+            let manager = state.runtime_manager.clone();
+            let endpoint_id = request.endpoint_id.clone();
+            let operation = run_blocking(move || manager.dispose(&endpoint_id)).await?;
             emit_events(&app, &operation.events);
         }
         register_codex_endpoint(&app, &state, request).await
@@ -239,10 +284,19 @@ async fn register_codex_endpoint(
 ) -> CommandResult<CodexRuntimeEndpointResult> {
     validate_endpoint_id(&request.endpoint_id)?;
     if let Some(cwd) = request.cwd.as_deref() {
-        if cwd.contains('\0') {
-            return Err(CommandError::validation("cwd must not contain NUL"));
+        validate_bounded_no_nul("cwd", cwd, 16 * 1024)?;
+    }
+    if let Some(command) = request.codex_command.as_deref() {
+        validate_bounded_no_nul("codexCommand", command, MAX_RUNTIME_PATH_BYTES)?;
+    }
+    if let Some(socket_path) = request.socket_path.as_deref() {
+        validate_bounded_no_nul("socketPath", socket_path, MAX_RUNTIME_PATH_BYTES)?;
+    }
+    match &request.thread {
+        CodexThreadAction::Resume { thread_id } | CodexThreadAction::Fork { thread_id } => {
+            crate::commands::validation::validate_id_segment("thread_id", thread_id)?;
         }
-        crate::commands::validation::assert_max_size(cwd.len(), 16 * 1024)?;
+        CodexThreadAction::Start => {}
     }
     let endpoint_id = request.endpoint_id.clone();
     let socket_path = match request.socket_path {
@@ -269,32 +323,28 @@ async fn register_codex_endpoint(
         state.runtime_manager.clone(),
         endpoint_id.clone(),
     );
-    let adapter = Arc::new(
-        CodexRuntimeAdapter::connect(socket_path, request.cwd, sink).map_err(|error| {
+    let cwd = request.cwd;
+    let adapter_result =
+        run_blocking(move || CodexRuntimeAdapter::connect(socket_path, cwd, sink)).await?;
+    let adapter =
+        Arc::new(adapter_result.map_err(|error| {
             finish_codex_failure(app, &state.runtime_manager, &endpoint_id, error)
-        })?,
-    );
-    let operation = match request.thread {
-        CodexThreadAction::Start => state
-            .runtime_manager
-            .register_endpoint(endpoint_id.clone(), adapter.clone()),
+        })?);
+    let manager = state.runtime_manager.clone();
+    let operation_endpoint = endpoint_id.clone();
+    let operation_adapter = adapter.clone();
+    let operation = run_blocking(move || match request.thread {
+        CodexThreadAction::Start => {
+            manager.register_endpoint(operation_endpoint, operation_adapter)
+        }
         CodexThreadAction::Resume { thread_id } => {
-            crate::commands::validation::validate_id_segment("thread_id", &thread_id)?;
-            state.runtime_manager.register_resumed_endpoint(
-                endpoint_id.clone(),
-                adapter.clone(),
-                thread_id,
-            )
+            manager.register_resumed_endpoint(operation_endpoint, operation_adapter, thread_id)
         }
         CodexThreadAction::Fork { thread_id } => {
-            crate::commands::validation::validate_id_segment("thread_id", &thread_id)?;
-            state.runtime_manager.register_forked_endpoint(
-                endpoint_id.clone(),
-                adapter.clone(),
-                thread_id,
-            )
+            manager.register_forked_endpoint(operation_endpoint, operation_adapter, thread_id)
         }
-    };
+    })
+    .await?;
     emit_events(app, &operation.events);
     operation
         .result
@@ -319,14 +369,19 @@ pub async fn agent_runtime_spawn_turn(
 ) -> CommandResult<RuntimeEndpointResult> {
     validate_endpoint_id(&request.endpoint_id)?;
     validate_runtime_input(&request.input)?;
-    let operation = state.runtime_manager.spawn_turn(
-        &request.endpoint_id,
-        RuntimeTurnSpawnRequest {
-            input: request.input,
-            submit: request.submit,
-        },
-    );
-    finish_operation(&app, request.endpoint_id, operation)
+    let manager = state.runtime_manager.clone();
+    let endpoint_id = request.endpoint_id;
+    let operation_endpoint = endpoint_id.clone();
+    finish_blocking_operation(&app, endpoint_id, move || {
+        manager.spawn_turn(
+            &operation_endpoint,
+            RuntimeTurnSpawnRequest {
+                input: request.input,
+                submit: request.submit,
+            },
+        )
+    })
+    .await
 }
 
 #[tauri::command]
@@ -338,8 +393,12 @@ pub async fn agent_runtime_write(
 ) -> CommandResult<RuntimeEndpointResult> {
     validate_endpoint_id(&endpoint_id)?;
     validate_runtime_input(&data)?;
-    let operation = state.runtime_manager.write(&endpoint_id, &data);
-    finish_operation(&app, endpoint_id, operation)
+    let manager = state.runtime_manager.clone();
+    let operation_endpoint = endpoint_id.clone();
+    finish_blocking_operation(&app, endpoint_id, move || {
+        manager.write(&operation_endpoint, &data)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -351,8 +410,12 @@ pub async fn agent_runtime_inject(
 ) -> CommandResult<RuntimeEndpointResult> {
     validate_endpoint_id(&endpoint_id)?;
     validate_runtime_input(&data)?;
-    let operation = state.runtime_manager.inject(&endpoint_id, &data);
-    finish_operation(&app, endpoint_id, operation)
+    let manager = state.runtime_manager.clone();
+    let operation_endpoint = endpoint_id.clone();
+    finish_blocking_operation(&app, endpoint_id, move || {
+        manager.inject(&operation_endpoint, &data)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -363,10 +426,13 @@ pub async fn agent_runtime_steer(
 ) -> CommandResult<RuntimeEndpointResult> {
     validate_endpoint_id(&request.endpoint_id)?;
     validate_runtime_input(&request.input)?;
-    let operation = state
-        .runtime_manager
-        .steer(&request.endpoint_id, request.input);
-    finish_operation(&app, request.endpoint_id, operation)
+    let manager = state.runtime_manager.clone();
+    let endpoint_id = request.endpoint_id;
+    let operation_endpoint = endpoint_id.clone();
+    finish_blocking_operation(&app, endpoint_id, move || {
+        manager.steer(&operation_endpoint, request.input)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -376,8 +442,12 @@ pub async fn agent_runtime_interrupt(
     endpoint_id: String,
 ) -> CommandResult<RuntimeEndpointResult> {
     validate_endpoint_id(&endpoint_id)?;
-    let operation = state.runtime_manager.interrupt(&endpoint_id);
-    finish_operation(&app, endpoint_id, operation)
+    let manager = state.runtime_manager.clone();
+    let operation_endpoint = endpoint_id.clone();
+    finish_blocking_operation(&app, endpoint_id, move || {
+        manager.interrupt(&operation_endpoint)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -387,13 +457,14 @@ pub async fn agent_runtime_respond_approval(
     request: RuntimeApprovalCommandRequest,
 ) -> CommandResult<RuntimeEndpointResult> {
     validate_endpoint_id(&request.endpoint_id)?;
-    crate::commands::validation::validate_id_segment("request_id", &request.request_id)?;
-    let operation = state.runtime_manager.respond_approval(
-        &request.endpoint_id,
-        request.request_id,
-        request.decision,
-    );
-    finish_operation(&app, request.endpoint_id, operation)
+    validate_approval_request_id(&request.request_id)?;
+    let manager = state.runtime_manager.clone();
+    let endpoint_id = request.endpoint_id;
+    let operation_endpoint = endpoint_id.clone();
+    finish_blocking_operation(&app, endpoint_id, move || {
+        manager.respond_approval(&operation_endpoint, request.request_id, request.decision)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -403,8 +474,9 @@ pub async fn agent_runtime_stop(
     endpoint_id: String,
 ) -> CommandResult<RuntimeEndpointResult> {
     validate_endpoint_id(&endpoint_id)?;
-    let operation = state.runtime_manager.stop(&endpoint_id);
-    finish_operation(&app, endpoint_id, operation)
+    let manager = state.runtime_manager.clone();
+    let operation_endpoint = endpoint_id.clone();
+    finish_blocking_operation(&app, endpoint_id, move || manager.stop(&operation_endpoint)).await
 }
 
 #[tauri::command]
@@ -414,48 +486,13 @@ pub async fn agent_runtime_dispose(
     endpoint_id: String,
 ) -> CommandResult<RuntimeEndpointResult> {
     validate_endpoint_id(&endpoint_id)?;
-    let operation = state.runtime_manager.dispose(&endpoint_id);
-    finish_operation(&app, endpoint_id, operation)
+    let manager = state.runtime_manager.clone();
+    let operation_endpoint = endpoint_id.clone();
+    finish_blocking_operation(&app, endpoint_id, move || {
+        manager.dispose(&operation_endpoint)
+    })
+    .await
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    #[tokio::test]
-    async fn diagnostics_uses_camelcase_and_safe_auto_fallback() {
-        let result = agent_runtime_diagnostics("auto".to_string()).await.unwrap();
-        let value = serde_json::to_value(result).unwrap();
-
-        assert_eq!(value["requestedBackend"], json!("auto"));
-        #[cfg(unix)]
-        {
-            assert_eq!(value["selectedBackend"], json!("native"));
-            assert_eq!(value["reason"], json!("autoNativeCapabilitiesAvailable"));
-            assert!(value["capabilities"]
-                .as_array()
-                .unwrap()
-                .contains(&json!("approvalResponses")));
-        }
-        #[cfg(not(unix))]
-        {
-            assert_eq!(value["selectedBackend"], json!("pty"));
-            assert_eq!(value["reason"], json!("autoPtyFallback"));
-            assert_eq!(value["capabilities"], json!(["ptyExecution"]));
-        }
-    }
-
-    #[tokio::test]
-    async fn diagnostics_rejects_unknown_backend() {
-        let error = agent_runtime_diagnostics("unknown".to_string())
-            .await
-            .unwrap_err();
-        assert_eq!(error.code(), "validation");
-        let serialized = serde_json::to_value(&error).unwrap();
-        assert!(serialized["message"]
-            .as_str()
-            .unwrap()
-            .contains("expected auto, native, or pty"));
-    }
-}
+mod tests;
