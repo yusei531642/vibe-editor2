@@ -11,7 +11,11 @@ export type AgentRuntimeCapability =
   | 'ptyExecution'
   | 'nativeProcessExecution'
   | 'structuredEventStream'
-  | 'cooperativeCancellation';
+  | 'cooperativeCancellation'
+  | 'sessionResume'
+  | 'sessionFork'
+  | 'turnSteering'
+  | 'approvalResponses';
 
 export type AgentRuntimeSelectionReason =
   | 'explicitPty'
@@ -45,6 +49,40 @@ export interface RuntimeTurnRequest {
   submit: boolean;
 }
 
+export type CodexThreadAction =
+  | { mode: 'start' }
+  | { mode: 'resume'; threadId: string }
+  | { mode: 'fork'; threadId: string };
+
+export interface RegisterCodexRuntimeEndpointRequest {
+  endpointId: string;
+  socketPath?: string | null;
+  codexCommand?: string | null;
+  cwd?: string | null;
+  thread: CodexThreadAction;
+}
+
+export interface RuntimeSteerRequest {
+  endpointId: string;
+  input: string;
+}
+
+export type RuntimeApprovalDecision =
+  | 'accept'
+  | 'acceptForSession'
+  | 'decline'
+  | 'cancel';
+
+export interface RuntimeApprovalResponseRequest {
+  endpointId: string;
+  requestId: string;
+  decision: RuntimeApprovalDecision;
+}
+
 export interface RuntimeEndpointResult {
   endpointId: string;
+}
+
+export interface CodexRuntimeEndpointResult extends RuntimeEndpointResult {
+  threadId: string;
 }

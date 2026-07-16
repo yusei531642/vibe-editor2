@@ -19,6 +19,27 @@ export interface RuntimeProjectionError {
   recoverable: boolean;
 }
 
+export interface RuntimeToolUse {
+  toolName: string;
+  callId: string | null;
+  status: string;
+  detail: string | null;
+}
+
+export interface RuntimeUsage {
+  inputTokens: number;
+  cachedInputTokens: number;
+  outputTokens: number;
+}
+
+export interface RuntimeApprovalRequest {
+  requestId: string;
+  method: string;
+  reason: string | null;
+  command: string | null;
+  cwd: string | null;
+}
+
 export interface RuntimeEndpointProjection {
   endpointId: string;
   lastSequence: number;
@@ -30,6 +51,10 @@ export interface RuntimeEndpointProjection {
   deltaChunks: string[];
   errors: RuntimeProjectionError[];
   diagnostics: string[];
+  toolUses: RuntimeToolUse[];
+  diffs: string[];
+  usage: RuntimeUsage[];
+  approvalRequests: RuntimeApprovalRequest[];
   /** History caps で先頭から破棄した entry の累計。 */
   truncatedCount: number;
   missingSequences: RuntimeSequenceGap[];
@@ -54,6 +79,10 @@ function emptyProjection(endpointId: string): RuntimeEndpointProjection {
     deltaChunks: [],
     errors: [],
     diagnostics: [],
+    toolUses: [],
+    diffs: [],
+    usage: [],
+    approvalRequests: [],
     truncatedCount: 0,
     missingSequences: [],
     outOfOrderCount: 0
@@ -110,6 +139,57 @@ function applyPayload(
           ...base,
           currentMessage: '',
           completedMessages: capped.items,
+          truncatedCount: projection.truncatedCount + capped.truncated
+        };
+      }
+    case 'toolUse':
+      {
+        const capped = appendCapped(projection.toolUses, {
+          toolName: event.payload.toolName,
+          callId: event.payload.callId,
+          status: event.payload.status,
+          detail: event.payload.detail
+        });
+        return {
+          ...base,
+          toolUses: capped.items,
+          truncatedCount: projection.truncatedCount + capped.truncated
+        };
+      }
+    case 'diff':
+      {
+        const capped = appendCapped(projection.diffs, event.payload.diff);
+        return {
+          ...base,
+          diffs: capped.items,
+          truncatedCount: projection.truncatedCount + capped.truncated
+        };
+      }
+    case 'usage':
+      {
+        const capped = appendCapped(projection.usage, {
+          inputTokens: event.payload.inputTokens,
+          cachedInputTokens: event.payload.cachedInputTokens,
+          outputTokens: event.payload.outputTokens
+        });
+        return {
+          ...base,
+          usage: capped.items,
+          truncatedCount: projection.truncatedCount + capped.truncated
+        };
+      }
+    case 'approvalRequest':
+      {
+        const capped = appendCapped(projection.approvalRequests, {
+          requestId: event.payload.requestId,
+          method: event.payload.method,
+          reason: event.payload.reason,
+          command: event.payload.command,
+          cwd: event.payload.cwd
+        });
+        return {
+          ...base,
+          approvalRequests: capped.items,
           truncatedCount: projection.truncatedCount + capped.truncated
         };
       }

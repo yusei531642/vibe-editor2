@@ -5,9 +5,13 @@ import { subscribeEventReady } from '../subscribe-event';
 import type {
   AgentRuntimeBackend,
   AgentRuntimeDiagnostics,
+  CodexRuntimeEndpointResult,
+  RegisterCodexRuntimeEndpointRequest,
   RegisterPtyRuntimeEndpointRequest,
+  RuntimeApprovalResponseRequest,
   RuntimeEndpointResult,
   RuntimeEventEnvelope,
+  RuntimeSteerRequest,
   RuntimeTurnRequest
 } from '../../../../types/agent-runtime';
 
@@ -20,11 +24,35 @@ export const agentRuntime = {
   ): Promise<RuntimeEndpointResult> =>
     invokeCommand('agent_runtime_register_pty_endpoint', { request }),
 
+  registerCodexEndpoint: (
+    request: RegisterCodexRuntimeEndpointRequest
+  ): Promise<CodexRuntimeEndpointResult> =>
+    invokeCommand('agent_runtime_register_codex_endpoint', { request }),
+
+  reconnectCodex: (
+    request: RegisterCodexRuntimeEndpointRequest
+  ): Promise<CodexRuntimeEndpointResult> =>
+    invokeCommand('agent_runtime_reconnect_codex', { request }),
+
   spawnTurn: (request: RuntimeTurnRequest): Promise<RuntimeEndpointResult> =>
     invokeCommand('agent_runtime_spawn_turn', { request }),
 
   write: (endpointId: string, data: string): Promise<RuntimeEndpointResult> =>
     invokeCommand('agent_runtime_write', { endpointId, data }),
+
+  inject: (endpointId: string, data: string): Promise<RuntimeEndpointResult> =>
+    invokeCommand('agent_runtime_inject', { endpointId, data }),
+
+  steer: (request: RuntimeSteerRequest): Promise<RuntimeEndpointResult> =>
+    invokeCommand('agent_runtime_steer', { request }),
+
+  interrupt: (endpointId: string): Promise<RuntimeEndpointResult> =>
+    invokeCommand('agent_runtime_interrupt', { endpointId }),
+
+  respondApproval: (
+    request: RuntimeApprovalResponseRequest
+  ): Promise<RuntimeEndpointResult> =>
+    invokeCommand('agent_runtime_respond_approval', { request }),
 
   stop: (endpointId: string): Promise<RuntimeEndpointResult> =>
     invokeCommand('agent_runtime_stop', { endpointId }),

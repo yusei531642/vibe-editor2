@@ -1,17 +1,21 @@
 //! Issue #21 / #22: agent runtime の境界。
 //!
 //! Phase 0 の backend 選択と capability 診断に加え、Phase 1 では adapter / endpoint
-//! registry / normalized event envelope を提供する。native backend が実装されるまでは
-//! system detector は PTY 能力だけを報告するため、`auto` は安全に PTY へ fallback する。
+//! registry / normalized event envelope を提供する。Phase 2 では Unix の Codex app-server
+//! adapter を native backend として公開し、Windows は PTY へ安全に fallback する。
 
 mod adapter;
+#[cfg(unix)]
+pub mod codex;
 mod event;
 mod event_buffer;
 mod manager;
 mod pty_compat;
 
 pub use adapter::{
-    AgentRuntimeAdapter, RuntimeAdapterError, RuntimeSessionSpawnRequest, RuntimeTurnSpawnRequest,
+    AgentRuntimeAdapter, RuntimeAdapterError, RuntimeApprovalResponseRequest,
+    RuntimeSessionForkRequest, RuntimeSessionResumeRequest, RuntimeSessionSpawnRequest,
+    RuntimeSteerRequest, RuntimeTurnSpawnRequest,
 };
 #[allow(unused_imports)]
 pub use event::{
@@ -54,6 +58,10 @@ pub enum RuntimeCapability {
     NativeProcessExecution,
     StructuredEventStream,
     CooperativeCancellation,
+    SessionResume,
+    SessionFork,
+    TurnSteering,
+    ApprovalResponses,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
@@ -70,13 +78,24 @@ pub trait CapabilityDetector {
     fn detected_capabilities(&self) -> Vec<RuntimeCapability>;
 }
 
-/// Phase 0 の実環境 detector。native runtime はまだ実行経路へ接続されていないため、
-/// 現行実装が保証できる PTY capability だけを公開する。
+/// 実環境 detector。Unix は Codex app-server adapter の能力を、Windows は現行実装が
+/// 保証できる PTY capability だけを公開する。
 pub struct SystemCapabilityDetector;
 
 impl CapabilityDetector for SystemCapabilityDetector {
     fn detected_capabilities(&self) -> Vec<RuntimeCapability> {
-        vec![RuntimeCapability::PtyExecution]
+        let mut capabilities = vec![RuntimeCapability::PtyExecution];
+        #[cfg(unix)]
+        capabilities.extend([
+            RuntimeCapability::NativeProcessExecution,
+            RuntimeCapability::StructuredEventStream,
+            RuntimeCapability::CooperativeCancellation,
+            RuntimeCapability::SessionResume,
+            RuntimeCapability::SessionFork,
+            RuntimeCapability::TurnSteering,
+            RuntimeCapability::ApprovalResponses,
+        ]);
+        capabilities
     }
 }
 

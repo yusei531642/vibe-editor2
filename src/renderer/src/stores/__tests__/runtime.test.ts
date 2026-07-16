@@ -95,4 +95,36 @@ describe('runtime projection store', () => {
     expect(projection.diagnostics[0]).toBe('diagnostic-1');
     expect(projection.truncatedCount).toBe(4);
   });
+
+  it('projects native tool diff usage and approval events', () => {
+    const store = useRuntimeStore.getState();
+    store.projectEvent(event(1, {
+      type: 'toolUse',
+      toolName: 'commandExecution',
+      callId: 'call-1',
+      status: 'started',
+      detail: '{"command":"git status"}'
+    }));
+    store.projectEvent(event(2, { type: 'diff', diff: '@@ -1 +1 @@' }));
+    store.projectEvent(event(3, {
+      type: 'usage',
+      inputTokens: 10,
+      cachedInputTokens: 4,
+      outputTokens: 6
+    }));
+    store.projectEvent(event(4, {
+      type: 'approvalRequest',
+      requestId: '7',
+      method: 'item/commandExecution/requestApproval',
+      reason: 'needs permission',
+      command: 'git status',
+      cwd: '/tmp/project'
+    }));
+
+    const projection = useRuntimeStore.getState().byEndpoint['endpoint-1'];
+    expect(projection.toolUses[0].callId).toBe('call-1');
+    expect(projection.diffs).toEqual(['@@ -1 +1 @@']);
+    expect(projection.usage[0].cachedInputTokens).toBe(4);
+    expect(projection.approvalRequests[0].requestId).toBe('7');
+  });
 });

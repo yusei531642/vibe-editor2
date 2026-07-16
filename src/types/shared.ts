@@ -41,12 +41,7 @@ export interface DialogFileFilter {
 export const APP_SETTINGS_SCHEMA_VERSION = 14;
 
 // Issue #21: agent runtime backend / capability 診断の型は agent-runtime.ts に集約。
-export type {
-  AgentRuntimeBackend,
-  AgentRuntimeCapability,
-  AgentRuntimeDiagnostics,
-  AgentRuntimeSelectionReason,
-} from './agent-runtime';
+export type * from './agent-runtime';
 
 /**
  * API agent provider preset。`openai-compatible` 系は base URL と request shape を共有し、

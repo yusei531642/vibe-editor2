@@ -1,8 +1,9 @@
 //! Endpoint registry and runtime operation coordinator.
 
 use super::{
-    AgentRuntimeAdapter, RuntimeAdapterError, RuntimeEventBuffer, RuntimeEventEnvelope,
-    RuntimeEventPayload, RuntimeLifecycleState, RuntimeSessionSpawnRequest,
+    AgentRuntimeAdapter, RuntimeAdapterError, RuntimeApprovalResponseRequest, RuntimeEventBuffer,
+    RuntimeEventEnvelope, RuntimeEventPayload, RuntimeLifecycleState, RuntimeSessionForkRequest,
+    RuntimeSessionResumeRequest, RuntimeSessionSpawnRequest, RuntimeSteerRequest,
     RuntimeTurnSpawnRequest, DEFAULT_RUNTIME_EVENT_BUFFER_CAPACITY,
 };
 use std::collections::HashMap;
@@ -143,6 +144,44 @@ impl RuntimeManager {
         endpoint_id: String,
         adapter: Arc<dyn AgentRuntimeAdapter>,
     ) -> RuntimeOperation {
+        self.register_with(endpoint_id, adapter, |adapter, endpoint_id| {
+            adapter.spawn_session(&RuntimeSessionSpawnRequest {
+                endpoint_id: endpoint_id.to_string(),
+            })
+        })
+    }
+
+    pub fn register_resumed_endpoint(
+        &self,
+        endpoint_id: String,
+        adapter: Arc<dyn AgentRuntimeAdapter>,
+        thread_id: String,
+    ) -> RuntimeOperation {
+        self.register_with(endpoint_id, adapter, move |adapter, _| {
+            adapter.resume_session(&RuntimeSessionResumeRequest { thread_id })
+        })
+    }
+
+    pub fn register_forked_endpoint(
+        &self,
+        endpoint_id: String,
+        adapter: Arc<dyn AgentRuntimeAdapter>,
+        thread_id: String,
+    ) -> RuntimeOperation {
+        self.register_with(endpoint_id, adapter, move |adapter, _| {
+            adapter.fork_session(&RuntimeSessionForkRequest { thread_id })
+        })
+    }
+
+    fn register_with<F>(
+        &self,
+        endpoint_id: String,
+        adapter: Arc<dyn AgentRuntimeAdapter>,
+        start: F,
+    ) -> RuntimeOperation
+    where
+        F: FnOnce(&Arc<dyn AgentRuntimeAdapter>, &str) -> Result<(), RuntimeAdapterError>,
+    {
         if let Err(error) = self.registry.register(endpoint_id.clone(), adapter.clone()) {
             return RuntimeOperation {
                 events: Vec::new(),
@@ -161,10 +200,7 @@ impl RuntimeManager {
                 detail: Some(format!("{:?}", adapter.backend_kind()).to_lowercase()),
             },
         )];
-        let request = RuntimeSessionSpawnRequest {
-            endpoint_id: endpoint_id.clone(),
-        };
-        match adapter.spawn_session(&request) {
+        match start(&adapter, &endpoint_id) {
             Ok(()) => {
                 events.push(self.record_event(
                     &endpoint_id,
@@ -199,6 +235,34 @@ impl RuntimeManager {
 
     pub fn write(&self, endpoint_id: &str, data: &str) -> RuntimeOperation {
         self.run_adapter_operation(endpoint_id, |adapter| adapter.write(data))
+    }
+
+    pub fn inject(&self, endpoint_id: &str, data: &str) -> RuntimeOperation {
+        self.run_adapter_operation(endpoint_id, |adapter| adapter.inject(data))
+    }
+
+    pub fn steer(&self, endpoint_id: &str, input: String) -> RuntimeOperation {
+        self.run_adapter_operation(endpoint_id, |adapter| {
+            adapter.steer(&RuntimeSteerRequest { input })
+        })
+    }
+
+    pub fn interrupt(&self, endpoint_id: &str) -> RuntimeOperation {
+        self.run_adapter_operation(endpoint_id, |adapter| adapter.interrupt())
+    }
+
+    pub fn respond_approval(
+        &self,
+        endpoint_id: &str,
+        request_id: String,
+        decision: String,
+    ) -> RuntimeOperation {
+        self.run_adapter_operation(endpoint_id, |adapter| {
+            adapter.respond_approval(&RuntimeApprovalResponseRequest {
+                request_id,
+                decision,
+            })
+        })
     }
 
     /// TeamHub 等の上位層が PTY registry を知らずに endpoint へ配送する API。
@@ -290,6 +354,19 @@ impl RuntimeManager {
             }
         }
         self.remove_sequence(endpoint_id);
+    }
+
+    /// Native adapter の監視 task から届く非同期 failure を Phase 1 と同じ順序で記録し、
+    /// non-recoverable failure なら endpoint を自動 detach する。
+    pub fn fail_endpoint(&self, endpoint_id: &str, error: RuntimeAdapterError) -> RuntimeOperation {
+        let events = self.failure_events(endpoint_id, &error);
+        if !error.recoverable {
+            self.detach_endpoint(endpoint_id);
+        }
+        RuntimeOperation {
+            events,
+            result: Err(error),
+        }
     }
 
     fn remove_sequence(&self, endpoint_id: &str) {
