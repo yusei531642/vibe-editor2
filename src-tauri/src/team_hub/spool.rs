@@ -145,7 +145,7 @@ async fn enforce_private_dir_mode(dir: &Path) {
             );
         }
         // 親: `<root>/.vibe-team/` も同様に絞る。canonical_root.join(SPOOL_DIR) で
-        // `SPOOL_DIR = ".vibe-team2/tmp"` の場合 `dir.parent() = <root>/.vibe-team`。
+        // `SPOOL_DIR = ".vibe-team2/tmp"` の場合 `dir.parent() = <root>/.vibe-team2`。
         if let Some(parent) = dir.parent() {
             if let Err(e) = fs::set_permissions(parent, perms).await {
                 tracing::warn!(
