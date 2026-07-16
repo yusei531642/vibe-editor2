@@ -1,10 +1,10 @@
-// Codex MCP 設定 (~/.codex/config.toml) の `[mcp_servers.vibe-team]` を更新
+// Codex MCP 設定 (~/.codex/config.toml) の `[mcp_servers.vibe-team2]` を更新
 
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use tokio::fs;
 
-const SECTION: &str = "mcp_servers.vibe-team";
+const SECTION: &str = "mcp_servers.vibe-team2";
 const LEGACY_SECTION: &str = "mcp_servers.vive-team";
 
 /// Issue #44: TOML basic string の正式な escape。

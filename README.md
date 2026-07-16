@@ -2,20 +2,20 @@
 
 <img src="src/renderer/public/vibe-editor.png" alt="vibe-editor" width="112" />
 
-# vibe-editor
+# vibe-editor 2
 
 **The desktop control room for [Claude Code](https://claude.com/code) & [Codex](https://openai.com/codex/).**
 
 Spin up a *team* of AI coding agents. Watch them hand off work in real time. Drop everything onto an infinite canvas. Stay the reviewer in the loop.
 
-[![Release](https://img.shields.io/github/v/release/yusei531642/vibe-editor?style=flat-square&color=ff7a59&label=release)](https://github.com/yusei531642/vibe-editor/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/yusei531642/vibe-editor/total?style=flat-square&color=ff7a59&label=downloads)](https://github.com/yusei531642/vibe-editor/releases)
-[![Stars](https://img.shields.io/github/stars/yusei531642/vibe-editor?style=flat-square&color=ff7a59&label=stars)](https://github.com/yusei531642/vibe-editor/stargazers)
+[![Release](https://img.shields.io/github/v/release/yusei531642/vibe-editor2?style=flat-square&color=ff7a59&label=release)](https://github.com/yusei531642/vibe-editor2/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/yusei531642/vibe-editor2/total?style=flat-square&color=ff7a59&label=downloads)](https://github.com/yusei531642/vibe-editor2/releases)
+[![Stars](https://img.shields.io/github/stars/yusei531642/vibe-editor2?style=flat-square&color=ff7a59&label=stars)](https://github.com/yusei531642/vibe-editor2/stargazers)
 [![License](https://img.shields.io/badge/license-MIT-ff7a59?style=flat-square)](LICENSE)
 [![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-24c8db?style=flat-square&logo=tauri&logoColor=white)](https://tauri.app/)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS*%20%7C%20Linux*-555?style=flat-square)](#install)
 
-[**English**](README.md) · [日本語](README-ja.md) · [Releases](https://github.com/yusei531642/vibe-editor/releases) · [Issues](https://github.com/yusei531642/vibe-editor/issues)
+[**English**](README.md) · [日本語](README-ja.md) · [Releases](https://github.com/yusei531642/vibe-editor2/releases) · [Issues](https://github.com/yusei531642/vibe-editor2/issues)
 
 ![vibe-editor demo](docs/demo.gif)
 
@@ -25,7 +25,7 @@ Spin up a *team* of AI coding agents. Watch them hand off work in real time. Dro
 
 ## TL;DR
 
-`vibe-editor` is **not** another AI code editor.
+`vibe-editor 2` is a GUI-first workspace for Claude Code, Codex, and vibe-team.
 
 It is a **multi-agent dispatcher** for Claude Code and Codex. You tell a **Leader agent** what you want, the Leader **dynamically recruits a team** of workers tuned for the job, messages are **pty-injected directly into each agent's prompt** through an embedded MCP hub (no polling, no file queues, no latency), and you watch + redirect from a single Tauri desktop window — or rearrange agents, files, diffs, and terminals on an **infinite canvas**.
 
@@ -73,7 +73,7 @@ The built-in editor, git diff, file tree, and session history exist to support t
 
 ## Install
 
-The fastest path: grab the latest Windows installer from the [Releases](https://github.com/yusei531642/vibe-editor/releases/latest) page.
+The fastest path: grab the latest Windows installer from the [Releases](https://github.com/yusei531642/vibe-editor2/releases/latest) page.
 
 1. Download `vibe-editor-Setup-1.6.3.exe` (or the latest version listed there)
 2. Run it. Install is **one-click silent** — no setup wizard — and auto-launches vibe-editor on finish.
@@ -97,7 +97,7 @@ One-click installs go to `%LOCALAPPDATA%\Programs\vibe-editor\` (user-scope, no 
 Pre-built binaries are not yet published. Build from source — Tauri produces `.dmg` / `.app` / `.deb` / `.AppImage` / `.rpm` artifacts:
 
 ```bash
-git clone https://github.com/yusei531642/vibe-editor.git
+git clone https://github.com/yusei531642/vibe-editor2.git
 cd vibe-editor
 npm install
 npm run build      # → src-tauri/target/release/bundle/
@@ -128,11 +128,11 @@ The team architecture was rewritten in v1.3 to remove fixed worker roles. Instea
 - You give the Leader your goal in natural language.
 - The Leader calls `team_recruit(role_definition=…)` to spawn however many workers it needs, each with a custom role definition. Need a tester? An auth specialist? A migration auditor? The Leader designs and hires them on the spot.
 - An **HR meta-role** is available for bulk-hiring sprees.
-- Behavioral rules and tool docs live in a **`vibe-team` Skill** auto-installed at `.claude/skills/vibe-team/SKILL.md` — Claude auto-loads it. You don't memorize protocols.
+- Behavioral rules and tool docs live in a **`vibe-team` Skill** auto-installed at `.claude/skills/vibe-team2/SKILL.md` — Claude auto-loads it. You don't memorize protocols.
 
 **Real-time message delivery, no polling.** When the Leader calls `team_send("worker-3", "rebase onto main")`, the message is **injected directly into worker-3's input prompt** by the in-process **TeamHub** (`src-tauri/src/team_hub/`). It uses bracketed paste so multi-line / Unicode payloads up to ~32 KiB pass through cleanly on Windows ConPTY.
 
-**Persistence.** Every team you create is saved to `~/.vibe-editor/team-history.json`. On next launch the team can be auto-restored — each member resumes its own Claude Code session via `claude --resume <session-id>`.
+**Persistence.** Every team you create is saved to `~/.vibe-editor2/team-history.json`. On next launch the team can be auto-restored — each member resumes its own Claude Code session via `claude --resume <session-id>`.
 
 ### Infinite Canvas mode
 
@@ -194,7 +194,7 @@ Three-tab sidebar:
 ## Run from source
 
 ```bash
-git clone https://github.com/yusei531642/vibe-editor.git
+git clone https://github.com/yusei531642/vibe-editor2.git
 cd vibe-editor
 npm install
 npm run dev
@@ -263,7 +263,7 @@ src/renderer/src/                # React 19 + TypeScript 6, UI only
 - A tiny `team-bridge.js` is written to `%APPDATA%\vibe-editor\team-bridge.js` and registered as the `vibe-team` MCP server in `~/.claude.json` and `~/.codex/config.toml`.
 - When Claude Code spawns `vibe-team`, the bridge connects to the hub via TCP using the token.
 - `team_send(to, message)` resolves the target `agentId` → pty and calls `pty.write(message + '\r')` directly **using bracketed paste** so multi-line and Unicode payloads survive ConPTY.
-- Long payloads (>~32 KiB) are rejected at the hub; the worker is told to stash the content into `.vibe-team/tmp/<id>.md` and send a summary + path instead.
+- Long payloads (>~32 KiB) are rejected at the hub; the worker is told to stash the content into `.vibe-team2/tmp/<id>.md` and send a summary + path instead.
 - On app shutdown the hub stops and MCP config entries are cleaned up (graceful uninstall).
 
 ### Constraints
@@ -301,7 +301,7 @@ The UI's job is to get out of the way.
 - [ ] **Team activity replay** — scrub time backwards across all members
 - [ ] **MCP server browser** — drop-in install for popular MCP servers
 
-Have an idea? [Open an issue](https://github.com/yusei531642/vibe-editor/issues) or jump into [Discussions](https://github.com/yusei531642/vibe-editor/discussions).
+Have an idea? [Open an issue](https://github.com/yusei531642/vibe-editor2/issues) or jump into [Discussions](https://github.com/yusei531642/vibe-editor2/discussions).
 
 ---
 
@@ -312,18 +312,18 @@ PRs welcome — especially:
 - macOS / Linux build verification (the bundle targets are configured but rarely exercised)
 - Theme contributions (drop into `src/renderer/src/lib/themes.ts`)
 - Translation beyond JP/EN (i18n strings live in `src/renderer/src/lib/i18n.ts`)
-- Role profile presets (`~/.vibe-editor/role-profiles.json` schema in `src/types/shared.ts`)
+- Role profile presets (`~/.vibe-editor2/role-profiles.json` schema in `src/types/shared.ts`)
 
 Quick dev loop:
 
 ```bash
-git clone https://github.com/yusei531642/vibe-editor.git
+git clone https://github.com/yusei531642/vibe-editor2.git
 cd vibe-editor && npm install
 npm run dev          # Tauri + Vite hot reload
 npm run typecheck    # before pushing
 ```
 
-If you ship something cool with vibe-editor — multi-agent workflows, recorded demos, screenshots — please share in [Discussions](https://github.com/yusei531642/vibe-editor/discussions) so others can learn from it.
+If you ship something cool with vibe-editor — multi-agent workflows, recorded demos, screenshots — please share in [Discussions](https://github.com/yusei531642/vibe-editor2/discussions) so others can learn from it.
 
 ---
 
@@ -337,6 +337,6 @@ Not affiliated with Anthropic or OpenAI. "Claude Code" is a product of [Anthropi
 
 <div align="center">
 
-If vibe-editor saved you from juggling 12 terminal windows, **[give it a star ⭐](https://github.com/yusei531642/vibe-editor)**.
+If vibe-editor saved you from juggling 12 terminal windows, **[give it a star ⭐](https://github.com/yusei531642/vibe-editor2)**.
 
 </div>

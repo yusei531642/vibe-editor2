@@ -1,20 +1,20 @@
 // logs.* command — 設定モーダルからログを閲覧する用 (Issue #326 / #643)
 //
-// `~/.vibe-editor/logs/vibe-editor.log.YYYY-MM-DD` の末尾だけを UTF-8 で読み出して renderer に返す。
+// `~/.vibe-editor2/logs/vibe-editor2.log.YYYY-MM-DD` の末尾だけを UTF-8 で読み出して renderer に返す。
 // ログファイル自体は `lib.rs` の `init_logging()` 内で tracing-appender が日次回転で書き出している。
 
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 
-/// `~/.vibe-editor/logs/` ディレクトリ
+/// `~/.vibe-editor2/logs/` ディレクトリ
 pub fn log_dir() -> PathBuf {
     crate::util::config_paths::logs_dir()
 }
 
 /// ログファイル本体のパス。
 ///
-/// Issue #643: 日次回転に切り替えた後、実ファイルは `vibe-editor.log.YYYY-MM-DD` 形式に
+/// Issue #643: 日次回転に切り替えた後、実ファイルは `vibe-editor2.log.YYYY-MM-DD` 形式に
 /// なるため、このパス自体には何も書かれない。`team_diagnostics` の `serverLogPath` 等で
 /// ベース位置の目印として残してある。実ファイルを読むときは `latest_log_file()` を使う。
 ///
@@ -22,18 +22,18 @@ pub fn log_dir() -> PathBuf {
 /// 「ログ書き出し先のベースパス」を尋ねるときの公開 API として保持する。
 #[allow(dead_code)]
 pub fn log_file_path() -> PathBuf {
-    log_dir().join("vibe-editor.log")
+    log_dir().join("vibe-editor2.log")
 }
 
-/// Issue #643: ログディレクトリ内の `vibe-editor.log*` のうち mtime 最新のものを返す。
+/// Issue #643: ログディレクトリ内の `vibe-editor2.log*` のうち mtime 最新のものを返す。
 ///
-/// - 候補が無ければベース位置 (`vibe-editor.log`) を返す。呼び出し側は metadata 取得失敗を
+/// - 候補が無ければベース位置 (`vibe-editor2.log`) を返す。呼び出し側は metadata 取得失敗を
 ///   `empty=true` として扱うので、存在しない path でも問題なし。
-/// - 旧無回転 `vibe-editor.log` 単体ファイル (Issue #326 互換) も `vibe-editor.log*` に含むので、
+/// - 旧無回転 `vibe-editor2.log` 単体ファイル (Issue #326 互換) も `vibe-editor2.log*` に含むので、
 ///   起動時 sweep で消えるまでの過渡期にも正しく表示できる。
 fn latest_log_file(dir: &Path) -> PathBuf {
     let Ok(entries) = std::fs::read_dir(dir) else {
-        return dir.join("vibe-editor.log");
+        return dir.join("vibe-editor2.log");
     };
     let mut best: Option<(PathBuf, std::time::SystemTime)> = None;
     for entry in entries.flatten() {
@@ -45,7 +45,7 @@ fn latest_log_file(dir: &Path) -> PathBuf {
         }
         let name = entry.file_name();
         let name_str = name.to_string_lossy();
-        if !name_str.starts_with("vibe-editor.log") {
+        if !name_str.starts_with("vibe-editor2.log") {
             continue;
         }
         let Ok(meta) = entry.metadata() else {
@@ -58,7 +58,7 @@ fn latest_log_file(dir: &Path) -> PathBuf {
         }
     }
     best.map(|(p, _)| p)
-        .unwrap_or_else(|| dir.join("vibe-editor.log"))
+        .unwrap_or_else(|| dir.join("vibe-editor2.log"))
 }
 
 /// renderer に返す read_log_tail 応答。serde が camelCase に変換する。
@@ -86,7 +86,7 @@ pub async fn logs_read_tail(
 ) -> crate::commands::error::CommandResult<ReadLogTailResponse> {
     const DEFAULT_MAX: u64 = 256 * 1024;
     let cap = max_bytes.filter(|n| *n > 0).unwrap_or(DEFAULT_MAX);
-    // Issue #643: 日次回転後の最新ファイル (`vibe-editor.log.YYYY-MM-DD`) を選んで読む。
+    // Issue #643: 日次回転後の最新ファイル (`vibe-editor2.log.YYYY-MM-DD`) を選んで読む。
     let path = latest_log_file(&log_dir());
     let path_str = path.to_string_lossy().to_string();
 
@@ -165,14 +165,14 @@ mod tests {
     use std::fs;
     use std::time::{Duration, SystemTime};
 
-    /// Issue #643: 日次回転後の `vibe-editor.log.YYYY-MM-DD` のうち最新世代を選ぶ。
+    /// Issue #643: 日次回転後の `vibe-editor2.log.YYYY-MM-DD` のうち最新世代を選ぶ。
     #[test]
     fn latest_log_file_picks_newest_dated_log() {
         let dir = tempfile::tempdir().expect("tempdir");
 
-        let oldest = dir.path().join("vibe-editor.log.2026-05-01");
-        let newest = dir.path().join("vibe-editor.log.2026-05-09");
-        let middle = dir.path().join("vibe-editor.log.2026-05-05");
+        let oldest = dir.path().join("vibe-editor2.log.2026-05-01");
+        let newest = dir.path().join("vibe-editor2.log.2026-05-09");
+        let middle = dir.path().join("vibe-editor2.log.2026-05-05");
         let unrelated = dir.path().join("audit.log"); // 触らない (prefix 不一致)
         for f in [&oldest, &newest, &middle, &unrelated] {
             fs::write(f, b"x").unwrap();
@@ -199,14 +199,14 @@ mod tests {
     fn latest_log_file_falls_back_to_base_when_empty() {
         let dir = tempfile::tempdir().expect("tempdir");
         let picked = latest_log_file(dir.path());
-        assert_eq!(picked, dir.path().join("vibe-editor.log"));
+        assert_eq!(picked, dir.path().join("vibe-editor2.log"));
     }
 
-    /// 旧無回転 `vibe-editor.log` 単体ファイル (Issue #326 互換) も候補に含む。
+    /// 旧無回転 `vibe-editor2.log` 単体ファイル (Issue #326 互換) も候補に含む。
     #[test]
     fn latest_log_file_includes_legacy_unrotated_file() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let legacy = dir.path().join("vibe-editor.log");
+        let legacy = dir.path().join("vibe-editor2.log");
         fs::write(&legacy, b"legacy content").unwrap();
 
         let picked = latest_log_file(dir.path());

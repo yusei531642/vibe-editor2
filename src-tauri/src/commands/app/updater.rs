@@ -6,7 +6,7 @@
 //! - CDN / asset 改竄 / 中間者攻撃の可能性 (= ユーザーに気付かせるべき)
 //! - だが renderer 側 toast を毎回出すと spam になり「狼少年」化する
 //!
-//! という両立要件があるので、`~/.vibe-editor/updater-warned.json` に最終警告 ISO 8601
+//! という両立要件があるので、`~/.vibe-editor2/updater-warned.json` に最終警告 ISO 8601
 //! timestamp を書き、24h 経過するまでは renderer 側で toast を出さない。
 //!
 //! ## ファイル構造

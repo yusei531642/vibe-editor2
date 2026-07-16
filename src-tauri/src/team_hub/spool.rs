@@ -1,4 +1,4 @@
-//! Issue #512: 長文 payload を `<project_root>/.vibe-team/tmp/<short_id>.md` に書き出して、
+//! Issue #512: 長文 payload を `<project_root>/.vibe-team2/tmp/<short_id>.md` に書き出して、
 //! Hub から worker へは「summary + attached: <path>」の短文だけを inject する spool 機構。
 //!
 //! 旧実装は `SOFT_PAYLOAD_LIMIT` (32 KiB) を超える `team_send.message` / `team_assign_task.description`
@@ -80,7 +80,7 @@ pub struct SpoolResult {
 /// 長文 payload を spool に書き出して、置換メッセージを返す。
 ///
 /// 引数:
-///   - `project_root`: spool 先 directory の親 (= `<project_root>/.vibe-team/tmp/`)。trim 必須。
+///   - `project_root`: spool 先 directory の親 (= `<project_root>/.vibe-team2/tmp/`)。trim 必須。
 ///   - `content`: 元の長文本文 (UTF-8)。長さチェックは caller 側で済ませている前提。
 ///   - `prefix`: ファイル名 prefix (例: `"send"` / `"assign"`)。可視化用。
 ///
@@ -137,7 +137,7 @@ async fn enforce_private_dir_mode(dir: &Path) {
     {
         use std::os::unix::fs::PermissionsExt;
         let perms = std::fs::Permissions::from_mode(0o700);
-        // 子: `<root>/.vibe-team/tmp/`
+        // 子: `<root>/.vibe-team2/tmp/`
         if let Err(e) = fs::set_permissions(dir, perms.clone()).await {
             tracing::warn!(
                 "[spool] failed to chmod 0o700 on {}: {e} (continuing; spool dir may be world-readable)",
@@ -145,7 +145,7 @@ async fn enforce_private_dir_mode(dir: &Path) {
             );
         }
         // 親: `<root>/.vibe-team/` も同様に絞る。canonical_root.join(SPOOL_DIR) で
-        // `SPOOL_DIR = ".vibe-team/tmp"` の場合 `dir.parent() = <root>/.vibe-team`。
+        // `SPOOL_DIR = ".vibe-team2/tmp"` の場合 `dir.parent() = <root>/.vibe-team`。
         if let Some(parent) = dir.parent() {
             if let Err(e) = fs::set_permissions(parent, perms).await {
                 tracing::warn!(
@@ -181,7 +181,7 @@ async fn write_private_file(path: &Path, content: &str) -> std::io::Result<()> {
     }
 }
 
-/// `<project_root>/.vibe-team/tmp/` を走査し、`SPOOL_TTL_HOURS` を超過した entry を削除する。
+/// `<project_root>/.vibe-team2/tmp/` を走査し、`SPOOL_TTL_HOURS` を超過した entry を削除する。
 /// 失敗は warn ログを残すだけで `Err` にはしない (cleanup は best-effort)。
 pub async fn cleanup_old_spools(project_root: &str) {
     cleanup_old_spools_at(project_root, SystemTime::now()).await;
@@ -428,7 +428,7 @@ mod tests {
             file_mode, 0o600,
             "spool file should be 0o600 (got {file_mode:o})"
         );
-        // dir (`<root>/.vibe-team/tmp`) は 0o700
+        // dir (`<root>/.vibe-team2/tmp`) は 0o700
         let dir = result.spool_path.parent().unwrap();
         let dir_meta = tokio::fs::metadata(dir).await.unwrap();
         let dir_mode = dir_meta.permissions().mode() & 0o777;

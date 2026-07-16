@@ -1,6 +1,6 @@
 // role_profiles.* command
 //
-// ~/.vibe-editor/role-profiles.json (RoleProfilesFile) の load / save。
+// ~/.vibe-editor2/role-profiles.json (RoleProfilesFile) の load / save。
 // 形式の検証は renderer 側の TS で行う想定なので、ここでは raw JSON を扱うだけ。
 
 use crate::commands::atomic_write::atomic_write_with_mode;

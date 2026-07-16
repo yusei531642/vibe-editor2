@@ -155,7 +155,7 @@ function isSigningEnabled(): boolean {
 
 /**
  * Issue #609: signature 系 error を 24h に 1 度だけ toast で通知する。
- * cooldown は Rust 側 `~/.vibe-editor/updater-warned.json` に永続化されている。
+ * cooldown は Rust 側 `~/.vibe-editor2/updater-warned.json` に永続化されている。
  * deps が無い (preview / test) ときは toast を出さず終わる。
  *
  * Issue #852: cooldown の record は「toast を表示した時点」ではなく「ユーザーが

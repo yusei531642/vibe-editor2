@@ -23,7 +23,7 @@ use std::sync::Arc;
 use tauri::State;
 
 /// OS keyring 上で credential を識別する service 名。本クレート内に固定。
-const KEYRING_SERVICE: &str = "vibe-editor";
+const KEYRING_SERVICE: &str = "vibe-editor2";
 /// keyring の account 名。将来 API key 種別を増やす場合はここを enum 化する。
 const KEYRING_ACCOUNT: &str = "openai-realtime-api-key";
 

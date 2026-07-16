@@ -1,7 +1,7 @@
 [package]
-name = "vibe-editor"
-version = "1.6.9"
-description = "Electron→Tauri 移行版 vibe-editor (Claude Code / Codex 専用エディタ)"
+name = "vibe-editor2"
+version = "2.0.0-alpha.0"
+description = "GUI-first vibe-editor 2 (Claude Code / Codex / vibe-team)"
 authors = ["yusei <yusei@yuseilab.com>"]
 edition = "2021"
 rust-version = "1.85"
@@ -41,7 +41,7 @@ cap-primitives = "=4.0.2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Issue #326: 設定モーダルからログを閲覧できるように、stderr に加えて
-# ~/.vibe-editor/logs/vibe-editor.log にも書き出す。non_blocking で I/O を
+# ~/.vibe-editor2/logs/vibe-editor2.log にも書き出す。non_blocking で I/O を
 # 別スレッドへ逃がし、never 戦略 (1 ファイル無回転) でシンプルに保つ。
 tracing-appender = "0.2"
 
@@ -97,7 +97,7 @@ windows-sys = { version = "0.61", features = [
 
 [dev-dependencies]
 # Issue #494: integration test 用に tempfile を導入。fixture 用の tempdir を作成し、
-# `~/.vibe-editor/settings.json` / `~/.claude/projects/<encoded>/*.jsonl` /
+# `~/.vibe-editor2/settings.json` / `~/.claude/projects/<encoded>/*.jsonl` /
 # git fixture repo を tempdir 配下にスタブする。
 tempfile = "3"
 # `Result` の `Err` variant を assert する際に backtrace 付きで panic させる用。
@@ -116,12 +116,12 @@ custom-protocol = ["tauri/custom-protocol"]
 legacy_message_fallback = []
 
 [lib]
-name = "vibe_editor_lib"
+name = "vibe_editor2_lib"
 # rlib は desktop バイナリ (src/main.rs の vibe_editor_lib::run()) が lib を Rust
 # クレートとしてリンクするのに必須 (staticlib/cdylib は mobile 用の C 成果物で
 # Rust クレートとして消費できない)。削除すると desktop ビルドが壊れる (#779)。
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [[bin]]
-name = "vibe-editor"
+name = "vibe-editor2"
 path = "src/main.rs"

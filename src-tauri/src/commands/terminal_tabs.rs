@@ -1,6 +1,6 @@
 // terminal_tabs.* command — Issue #661
 //
-// IDE モード terminal タブの永続化。~/.vibe-editor/terminal-tabs.json を atomic write で
+// IDE モード terminal タブの永続化。~/.vibe-editor2/terminal-tabs.json を atomic write で
 // 読み書きする。team-history.json とは独立した SSOT で、IDE 単独タブの cwd / cols / rows /
 // Claude session id を再起動跨ぎで保持する。
 //

@@ -110,13 +110,13 @@ describe('useCanvasStore subscribeWithSelector middleware (Issue #253 W#2)', () 
     ]);
 
     expect(
-      setItemSpy.mock.calls.some(([name]) => name === 'vibe-editor:canvas')
+      setItemSpy.mock.calls.some(([name]) => name === 'vibe-editor2:canvas')
     ).toBe(false);
 
     store.setCanvasDragging(false);
 
     const canvasWrites = setItemSpy.mock.calls.filter(
-      ([name]) => name === 'vibe-editor:canvas'
+      ([name]) => name === 'vibe-editor2:canvas'
     );
     expect(canvasWrites).toHaveLength(1);
     const [, raw] = canvasWrites[canvasWrites.length - 1];

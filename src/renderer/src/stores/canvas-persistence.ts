@@ -5,7 +5,7 @@ import {
   type PersistedCardNode
 } from './canvas-card-identity';
 
-export const CANVAS_PERSIST_NAME = 'vibe-editor:canvas';
+export const CANVAS_PERSIST_NAME = 'vibe-editor2:canvas';
 export const CANVAS_PERSIST_VERSION = 6;
 export const CANVAS_CORRUPT_BACKUP_PREFIX = `${CANVAS_PERSIST_NAME}:corrupt-backup:`;
 const CANVAS_RECOVERY_NOTICE_KEY = `${CANVAS_PERSIST_NAME}:recovery-notice`;

@@ -361,7 +361,7 @@ pub async fn team_assign_task(
                     code: "assign_payload_threshold".into(),
                     message: format!(
                         "description exceeds the long-payload threshold ({} > {} bytes) and \
-                         auto-spool to `.vibe-team/tmp/` failed: {e}. \
+                         auto-spool to `.vibe-team2/tmp/` failed: {e}. \
                          Write the brief to a file with the Write tool and call team_assign_task \
                          again with a brief summary plus the file path.",
                         description.len(),

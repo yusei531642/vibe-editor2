@@ -2,7 +2,7 @@
 //
 // userData/settings.json に AppSettings を保存。
 // 既存 Electron では app.getPath('userData') を使っていたが、
-// Tauri では `~/.vibe-editor/settings.json` に統一する (シンプル化)。
+// Tauri では `~/.vibe-editor2/settings.json` に統一する (シンプル化)。
 //
 // Issue #493 (Phase 2): 旧 `serde_json::Value` 直渡しを `Settings` strong-typed struct に
 // 置換した。`#[serde(rename_all = "camelCase")]` で renderer 側の AppSettings と完全一致、
@@ -31,7 +31,7 @@ const SETTINGS_READ_RETRY_DELAYS: &[Duration] = &[
     Duration::from_millis(240),
 ];
 
-/// `~/.vibe-editor/settings.json` の serde 表現。renderer 側 `src/types/shared.ts` の
+/// `~/.vibe-editor2/settings.json` の serde 表現。renderer 側 `src/types/shared.ts` の
 /// `AppSettings` と完全一致 (camelCase ですべての field が同名・同型)。
 ///
 /// 設計指針:
@@ -300,7 +300,7 @@ fn default_language() -> String {
 }
 
 fn default_theme() -> String {
-    "claude-dark".to_string()
+    "claude-light".to_string()
 }
 
 fn default_ui_font_family() -> String {
@@ -561,7 +561,7 @@ mod tests {
         let v = serde_json::to_value(&s).unwrap();
         assert_eq!(v["schemaVersion"], json!(APP_SETTINGS_SCHEMA_VERSION));
         assert_eq!(v["language"], json!("ja"));
-        assert_eq!(v["theme"], json!("claude-dark"));
+        assert_eq!(v["theme"], json!("claude-light"));
         assert_eq!(v["density"], json!("normal"));
         assert_eq!(v["uiFontSize"], json!(14.0));
         assert_eq!(v["editorFontSize"], json!(13.0));

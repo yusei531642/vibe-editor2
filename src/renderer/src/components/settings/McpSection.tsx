@@ -65,8 +65,8 @@ Open the user's Claude Code configuration file at "~/.claude.json" (on Windows: 
 }
 
 STEP 2 — Codex CLI (~/.codex/config.toml):
-Open "~/.codex/config.toml". Add an [mcp_servers.vibe-team] section equivalent to the above:
-[mcp_servers.vibe-team]
+Open "~/.codex/config.toml". Add an [mcp_servers.vibe-team2] section equivalent to the above:
+[mcp_servers.vibe-team2]
 command = "node"
 args = ["${bridgePath}"]
 env = { VIBE_TEAM_SOCKET = "${socket}", VIBE_TEAM_TOKEN = "${token}" }
@@ -100,11 +100,11 @@ Notes:
 
   const manualToml = useMemo(
     () =>
-      `[mcp_servers.vibe-team]
+      `[mcp_servers.vibe-team2]
 command = "node"
 args = ["${bridgePath}"]
 
-[mcp_servers.vibe-team.env]
+[mcp_servers.vibe-team2.env]
 VIBE_TEAM_SOCKET = "${socket}"
 VIBE_TEAM_TOKEN = "${token}"`,
     [socket, token, bridgePath]

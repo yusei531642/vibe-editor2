@@ -587,7 +587,7 @@ pub async fn terminal_kill(
     Ok(())
 }
 
-/// Issue #40 / #138: paste image を `~/.vibe-editor/paste-images/` に保存する Tauri IPC。
+/// Issue #40 / #138: paste image を `~/.vibe-editor2/paste-images/` に保存する Tauri IPC。
 /// 本体は `paste_image::save` に委譲 (Phase 3 / Issue #373)。
 #[tauri::command]
 pub async fn terminal_save_pasted_image(
@@ -715,7 +715,7 @@ mod resume_args_filter_tests {
             "--append-system-prompt",
             "you are a helper; rm -rf /",
             "--config",
-            "model_instructions_file=C:\\Users\\zooyo\\.vibe-editor\\instr.md",
+            "model_instructions_file=C:\\Users\\zooyo\\.vibe-editor2\\instr.md",
         ]);
         let out = filter_resume_args_in_place(input.clone());
         assert_eq!(out, input);

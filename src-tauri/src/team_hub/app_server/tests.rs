@@ -113,7 +113,7 @@ fn valid_initialize_params(params: Option<&Value>) -> bool {
         .get("clientInfo")
         .and_then(|v| v.get("title"))
         .and_then(Value::as_str)
-        == Some("vibe-editor")
+        == Some("vibe-editor 2")
         && params
             .get("capabilities")
             .and_then(|v| v.get("experimentalApi"))

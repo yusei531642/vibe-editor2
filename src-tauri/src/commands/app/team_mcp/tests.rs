@@ -142,8 +142,8 @@ async fn setup_rolls_back_both_when_claude_setup_fails() {
     );
 }
 
-/// 正常系: 両方 setup 成功 → claude には mcpServers.vibe-team が、
-/// codex には [mcp_servers.vibe-team] が入る。
+/// 正常系: 両方 setup 成功 → claude には mcpServers.vibe-team2 が、
+/// codex には [mcp_servers.vibe-team2] が入る。
 #[tokio::test]
 async fn setup_writes_both_when_no_failure() {
     let tmp = TempDir::new().unwrap();
@@ -168,7 +168,7 @@ async fn setup_writes_both_when_no_failure() {
     );
     let codex_str = fs::read_to_string(&codex_path).await.unwrap();
     assert!(
-        codex_str.contains("[mcp_servers.vibe-team]"),
+        codex_str.contains("[mcp_servers.vibe-team2]"),
         "codex should contain section"
     );
 }
@@ -180,7 +180,7 @@ async fn cleanup_removes_from_both() {
     let claude_path = tmp.path().join(".claude.json");
     let original_claude = br#"{
   "mcpServers": {
-"vibe-team": { "command": "node" }
+"vibe-team2": { "command": "node" }
   }
 }"#
     .to_vec();
@@ -188,7 +188,7 @@ async fn cleanup_removes_from_both() {
 
     let codex_path = tmp.path().join(".codex").join("config.toml");
     let original_codex =
-        b"[other]\nfoo = 1\n\n[mcp_servers.vibe-team]\ncommand = \"node\"\n".to_vec();
+        b"[other]\nfoo = 1\n\n[mcp_servers.vibe-team2]\ncommand = \"node\"\n".to_vec();
     fs::create_dir_all(codex_path.parent().unwrap())
         .await
         .unwrap();
@@ -197,17 +197,17 @@ async fn cleanup_removes_from_both() {
     let removed = run_cleanup_at(&claude_path, &codex_path).await.unwrap();
     assert!(
         removed,
-        "cleanup should report removed=true when claude had vibe-team entry"
+        "cleanup should report removed=true when claude had vibe-team2 entry"
     );
 
     let claude_after = fs::read_to_string(&claude_path).await.unwrap();
     assert!(
-        !claude_after.contains("vibe-team"),
-        "claude vibe-team entry should be gone"
+        !claude_after.contains("vibe-team2"),
+        "claude vibe-team2 entry should be gone"
     );
     let codex_after = fs::read_to_string(&codex_path).await.unwrap();
     assert!(
-        !codex_after.contains("[mcp_servers.vibe-team]"),
+        !codex_after.contains("[mcp_servers.vibe-team2]"),
         "codex section should be gone"
     );
     assert!(

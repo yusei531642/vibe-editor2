@@ -1,5 +1,5 @@
 /**
- * RoleProfilesContext — built-in + ~/.vibe-editor/role-profiles.json を合成し、
+ * RoleProfilesContext — built-in + ~/.vibe-editor2/role-profiles.json を合成し、
  * effectiveProfiles として供給する。
  *
  * 合成規則:

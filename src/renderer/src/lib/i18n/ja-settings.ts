@@ -223,7 +223,7 @@ export const jaSettings: Dict = {
   // ---------- Settings: Logs (Issue #326) ----------
   'settings.logs.title': 'ログ',
   'settings.logs.desc':
-    'アプリの実行ログ (~/.vibe-editor/logs/vibe-editor.log) の末尾を表示します。バグ報告にはこのログを添付してください。',
+    'アプリの実行ログ (~/.vibe-editor2/logs/vibe-editor2.log) の末尾を表示します。バグ報告にはこのログを添付してください。',
   'settings.logs.refresh': '再読み込み',
   'settings.logs.openDir': 'ログフォルダを開く',
   'settings.logs.levelFilter': 'レベル',
@@ -323,7 +323,7 @@ export const jaSettings: Dict = {
   'settings.mcp.manualDesc': '好みのエディタで設定ファイルを開いて、以下の断片をマージしてください。',
   'settings.mcp.manualStep1': '~/.claude.json を開く (無ければ新規作成)。',
   'settings.mcp.manualStep2': '最上位の "mcpServers" オブジェクトに "vibe-team" エントリを追加。',
-  'settings.mcp.manualStep3': 'Codex を使う場合は ~/.codex/config.toml に同等の [mcp_servers.vibe-team] を追加。',
+  'settings.mcp.manualStep3': 'Codex を使う場合は ~/.codex/config.toml に同等の [mcp_servers.vibe-team2] を追加。',
   'settings.mcp.copy': 'コピー',
   'settings.mcp.copied': 'コピーしました',
   // Issue #729: McpSection の isJa 三項を i18n.ts に移管

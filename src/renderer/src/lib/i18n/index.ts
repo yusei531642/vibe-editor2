@@ -21,7 +21,7 @@ const en: Dict = { ...enShell, ...enCanvas, ...enSettings };
 
 const translations: Record<Language, Dict> = { ja, en };
 
-export const BOOTSTRAP_LANGUAGE_STORAGE_KEY = 'vibe-editor:language';
+export const BOOTSTRAP_LANGUAGE_STORAGE_KEY = 'vibe-editor2:language';
 
 export function resolveBootstrapLanguage(): Language {
   try {

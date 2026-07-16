@@ -63,6 +63,9 @@ jobs:
       - name: TypeScript typecheck
         run: npm run typecheck
 
+      - name: v2 product identity isolation
+        run: npm run lint:v2-identity
+
       # Issue #959: Rust の TeamHub event payload struct から生成した TS 型が stale でないことを保証する。
       - name: Team event generated type check
         run: npm run lint:team-event-types

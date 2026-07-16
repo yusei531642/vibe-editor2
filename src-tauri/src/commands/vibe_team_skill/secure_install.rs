@@ -9,7 +9,7 @@ use std::fs::File;
 use std::io::{self, Read, Write};
 use std::path::Path;
 
-const COMPONENTS: [&str; 3] = [".claude", "skills", "vibe-team"];
+const COMPONENTS: [&str; 3] = [".claude", "skills", "vibe-team2"];
 const FINAL_NAME: &str = "SKILL.md";
 static INSTALL_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 

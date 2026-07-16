@@ -2,7 +2,7 @@
 // import (Issue #998 / #1017)。
 //
 // 構成:
-//   - API エージェントが読む skill ソースは vibe-editor 専用フォルダ `~/.vibe-editor/skills`。
+//   - API エージェントが読む skill ソースは vibe-editor 専用フォルダ `~/.vibe-editor2/skills`。
 //   - import 元は Claude (`~/.claude/skills`, `<project>/.claude/skills`) と
 //     Codex (`~/.agents/skills`, `<project>/.agents/skills`)。設定からコピー (snapshot) する。
 //
@@ -36,7 +36,7 @@ pub(super) const VIBE_TEAM_SKILL_ID: &str = "vibe-team";
 // 専用フォルダ (API エージェントが読む skill ソース)
 // ============================================================
 
-/// vibe-editor 専用 skill フォルダ (`~/.vibe-editor/skills`) の skill 一覧を返す。
+/// vibe-editor 専用 skill フォルダ (`~/.vibe-editor2/skills`) の skill 一覧を返す。
 #[tauri::command]
 pub async fn api_agent_skill_list() -> CommandResult<Vec<ApiAgentSkillMeta>> {
     Ok(list_skills_in(&config_paths::vibe_skills_dir()).await)

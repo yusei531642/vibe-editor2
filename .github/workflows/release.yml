@@ -135,7 +135,7 @@ jobs:
         with:
           # tag 名そのものを Release タグに使う
           tagName: ${{ github.ref_name }}
-          releaseName: 'vibe-editor ${{ github.ref_name }}'
+          releaseName: 'vibe-editor 2 ${{ github.ref_name }}'
           releaseBody: |
             自動ビルド成果物。
 

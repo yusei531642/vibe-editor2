@@ -1,14 +1,14 @@
-//! vibe-editor の永続化ディレクトリ・ファイルパスを一元化する helper。
+//! vibe-editor 2 の永続化ディレクトリ・ファイルパスを一元化する helper。
 //!
-//! すべての関数は `~/.vibe-editor` 直下の決め打ちパスを返すだけで、ディレクトリの作成や
+//! すべての関数は `~/.vibe-editor2` 直下の決め打ちパスを返すだけで、ディレクトリの作成や
 //! 存在確認は行わない。呼び出し側で必要に応じて `fs::create_dir_all` を行うこと。
 use std::path::PathBuf;
 
-/// vibe-editor のユーザー設定ルート (`~/.vibe-editor`)。
+/// vibe-editor 2 のユーザー設定ルート (`~/.vibe-editor2`)。
 ///
 /// Issue #631: 旧実装は `dirs::home_dir().unwrap_or_default()` を返しており、HOME 不在環境
 /// (sandbox / CI / サービスアカウント / 環境破損) では空 `PathBuf` にフォールバックしていた。
-/// `PathBuf::new().join(".vibe-editor")` は `.vibe-editor` という **相対 path** に解決され、
+/// `PathBuf::new().join(".vibe-editor2")` は `.vibe-editor2` という **相対 path** に解決され、
 /// プロセス CWD (= ユーザーのリポジトリ root 等) 配下に paste-images / settings.json 等を書き出し、
 /// `cleanup_old_paste_images` が CWD/paste-images/ 配下の古いファイルを 24h で消す事故を起こしていた。
 ///
@@ -16,12 +16,12 @@ use std::path::PathBuf;
 /// 必ず絶対 path を返す。
 pub fn vibe_root() -> PathBuf {
     match dirs::home_dir() {
-        Some(h) => h.join(".vibe-editor"),
-        None => std::env::temp_dir().join("vibe-editor"),
+        Some(h) => h.join(".vibe-editor2"),
+        None => std::env::temp_dir().join("vibe-editor2"),
     }
 }
 
-/// 設定ファイル `~/.vibe-editor/settings.json` のパス。
+/// 設定ファイル `~/.vibe-editor2/settings.json` のパス。
 pub fn settings_path() -> PathBuf {
     vibe_root().join("settings.json")
 }
@@ -41,38 +41,38 @@ pub fn custom_mascot_path() -> PathBuf {
     vibe_root().join("custom-mascot.json")
 }
 
-/// ログ出力先ディレクトリ `~/.vibe-editor/logs`。
+/// ログ出力先ディレクトリ `~/.vibe-editor2/logs`。
 pub fn logs_dir() -> PathBuf {
     vibe_root().join("logs")
 }
 
-/// TeamHub handoff の永続化先 `~/.vibe-editor/handoffs`。
+/// TeamHub handoff の永続化先 `~/.vibe-editor2/handoffs`。
 pub fn handoffs_path() -> PathBuf {
     vibe_root().join("handoffs")
 }
 
 // Issue #1072: Monitor watcher の per-agent high-water mark は
-// `~/.vibe-editor/team-inbox-watermarks/<team>/<agent>.json` に保存される。唯一の読み書き手は
+// `~/.vibe-editor2/team-inbox-watermarks/<team>/<agent>.json` に保存される。唯一の読み書き手は
 // JS watcher (team-inbox-watch.js) なので、パス算出はそちら側に閉じている (Rust ヘルパは設けない)。
 
-/// ロールプロファイル定義ファイル `~/.vibe-editor/role-profiles.json` のパス。
+/// ロールプロファイル定義ファイル `~/.vibe-editor2/role-profiles.json` のパス。
 pub fn role_profiles_path() -> PathBuf {
     vibe_root().join("role-profiles.json")
 }
 
-/// Issue #661: IDE モード terminal タブの永続化先 `~/.vibe-editor/terminal-tabs.json` のパス。
+/// Issue #661: IDE モード terminal タブの永続化先 `~/.vibe-editor2/terminal-tabs.json` のパス。
 /// `team-history.json` とは独立した SSOT で、IDE 単独タブの cwd / cols / rows / Claude
 /// session id を再起動跨ぎで保持する。
 pub fn terminal_tabs_path() -> PathBuf {
     vibe_root().join("terminal-tabs.json")
 }
 
-/// Issue #994: API agent の会話履歴保存先 `~/.vibe-editor/api-agent-sessions`。
+/// Issue #994: API agent の会話履歴保存先 `~/.vibe-editor2/api-agent-sessions`。
 pub fn api_agent_sessions_dir() -> PathBuf {
     vibe_root().join("api-agent-sessions")
 }
 
-/// Issue #1017: API agent 専用 skill フォルダ `~/.vibe-editor/skills`。
+/// Issue #1017: API agent 専用 skill フォルダ `~/.vibe-editor2/skills`。
 /// Claude (`~/.claude/skills`, `<project>/.claude/skills`) / Codex (`~/.agents/skills`,
 /// `<project>/.agents/skills`) から import (コピー) した SKILL.md をここに保存し、API agent は
 /// このフォルダを skill ソースとして読む。
@@ -88,7 +88,7 @@ pub fn home_dir() -> PathBuf {
 }
 
 /// Issue #609 (Security): updater の minisign 署名検証失敗を「24h に 1 度だけ」ユーザーに
-/// 通知するための最終警告タイムスタンプ永続化先 `~/.vibe-editor/updater-warned.json` のパス。
+/// 通知するための最終警告タイムスタンプ永続化先 `~/.vibe-editor2/updater-warned.json` のパス。
 ///
 /// renderer 側 `silentCheckForUpdate` が signature 系 error を検知したとき、Rust 側の
 /// `app_updater_should_warn_signature` でこのファイルを読み、24h 以上経過していれば

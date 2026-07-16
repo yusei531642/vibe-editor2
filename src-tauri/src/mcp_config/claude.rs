@@ -1,11 +1,11 @@
-// Claude Code MCP 設定 (~/.claude.json) の `mcpServers.vibe-team` を更新
+// Claude Code MCP 設定 (~/.claude.json) の `mcpServers.vibe-team2` を更新
 
 use anyhow::{Context, Result};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use tokio::fs;
 
-const ENTRY: &str = "vibe-team";
+const ENTRY: &str = "vibe-team2";
 const LEGACY_ENTRY: &str = "vive-team";
 
 pub(crate) fn config_path() -> PathBuf {
