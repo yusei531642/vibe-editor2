@@ -10,7 +10,7 @@
     "render": "npm run audio && remotion render src/index.ts VibeEditorPromo out/vibe-editor-promo.mp4 --codec=h264 --pixel-format=yuv420p"
   },
   "dependencies": {
-    "@remotion/cli": "^4.0.388",
+    "@remotion/cli": "^4.0.489",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "remotion": "^4.0.388"
