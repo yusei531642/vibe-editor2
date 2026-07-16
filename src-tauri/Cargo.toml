@@ -1,7 +1,7 @@
 [package]
 name = "vibe-editor2"
 version = "2.0.0-alpha.0"
-description = "GUI-first vibe-editor 2 (Claude Code / Codex / vibe-team)"
+description = "GUI-first vibe-editor 2 (Claude Code / Codex / vibe-team2)"
 authors = ["yusei <yusei@yuseilab.com>"]
 edition = "2021"
 rust-version = "1.85"
