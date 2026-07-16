@@ -54,10 +54,13 @@ export type CodexThreadAction =
   | { mode: 'resume'; threadId: string }
   | { mode: 'fork'; threadId: string };
 
+/**
+ * DESIGN.md "Runtime boundary": renderer は endpoint 意図のみを渡す。
+ * codex 実行コマンドは settings.json、control socket は Rust 側 daemon 検出が正本で、
+ * renderer から raw path / argv は受け付けない。cwd は project authority 照合を通る。
+ */
 export interface RegisterCodexRuntimeEndpointRequest {
   endpointId: string;
-  socketPath?: string | null;
-  codexCommand?: string | null;
   cwd?: string | null;
   thread: CodexThreadAction;
 }

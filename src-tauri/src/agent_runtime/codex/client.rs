@@ -200,7 +200,14 @@ async fn run(
                 Ok(None) => break disconnected(),
                 Err(error) => break map_wire_error(error),
             },
-            _ = pending_cleanup.tick() => expire_pending(&mut pending),
+            _ = pending_cleanup.tick() => {
+                expire_pending(&mut pending);
+                // read 経路が積んだ PONG を返す (wire.rs の cancel-safe 化に伴い
+                // PONG 送出は write 側の責務)。失敗は接続断として扱う。
+                if let Err(error) = ws.flush_pending_pongs().await {
+                    break map_wire_error(error);
+                }
+            },
         }
     };
     for (_, entry) in pending.drain() {

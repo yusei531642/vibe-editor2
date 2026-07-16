@@ -13,7 +13,6 @@ use tauri::{AppHandle, Emitter, State};
 
 const MAX_RUNTIME_INPUT_BYTES: usize = 64 * 1024;
 #[cfg(unix)]
-const MAX_RUNTIME_PATH_BYTES: usize = 4 * 1024;
 const MAX_APPROVAL_REQUEST_ID_BYTES: usize = 256;
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -66,10 +65,11 @@ pub enum CodexThreadAction {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// DESIGN.md "Runtime boundary": renderer からは endpoint 意図のみを受け、
+/// 実行バイナリ (codex command) は settings.json、control socket は Rust 側の
+/// daemon 検出を正本とする。raw path / argv を renderer から受けない。
 pub struct RegisterCodexEndpointRequest {
     pub endpoint_id: String,
-    pub socket_path: Option<String>,
-    pub codex_command: Option<String>,
     pub cwd: Option<String>,
     pub thread: CodexThreadAction,
 }
@@ -283,15 +283,22 @@ async fn register_codex_endpoint(
     request: RegisterCodexEndpointRequest,
 ) -> CommandResult<CodexRuntimeEndpointResult> {
     validate_endpoint_id(&request.endpoint_id)?;
-    if let Some(cwd) = request.cwd.as_deref() {
-        validate_bounded_no_nul("cwd", cwd, 16 * 1024)?;
-    }
-    if let Some(command) = request.codex_command.as_deref() {
-        validate_bounded_no_nul("codexCommand", command, MAX_RUNTIME_PATH_BYTES)?;
-    }
-    if let Some(socket_path) = request.socket_path.as_deref() {
-        validate_bounded_no_nul("socketPath", socket_path, MAX_RUNTIME_PATH_BYTES)?;
-    }
+    // cwd は active project root / native picker 由来 grant への authority 照合を必須とする
+    // (renderer 指定の任意パスで thread を開かせない)。省略時は authority 照合済みの
+    // active project root を使う。
+    let cwd = match request.cwd.as_deref() {
+        Some(given) => {
+            validate_bounded_no_nul("cwd", given, 16 * 1024)?;
+            let authorized = crate::commands::authz::assert_readable_project_root(
+                &state.project_root,
+                &state.project_root_identity,
+                given,
+            )
+            .await?;
+            Some(authorized.as_str().to_string())
+        }
+        None => state.project_root.load().as_deref().map(|p| p.to_string()),
+    };
     match &request.thread {
         CodexThreadAction::Resume { thread_id } | CodexThreadAction::Fork { thread_id } => {
             crate::commands::validation::validate_id_segment("thread_id", thread_id)?;
@@ -299,11 +306,14 @@ async fn register_codex_endpoint(
         CodexThreadAction::Start => {}
     }
     let endpoint_id = request.endpoint_id.clone();
-    let socket_path = match request.socket_path {
-        Some(path) if !path.trim().is_empty() => path,
-        _ => crate::pty::codex_app_server::ensure_control_socket(
-            request.codex_command.as_deref().unwrap_or("codex"),
-        )
+    // codex 実行コマンドは settings.json (Rust 正本) から解決し、renderer 入力を使わない。
+    let codex_command = crate::commands::settings::settings_load()
+        .await
+        .map(|settings| settings.codex_command)
+        .unwrap_or_else(|_| "codex".to_string());
+    // control socket は常に Rust 側の daemon 検出で解決する (renderer 指定の socket へ
+    // ユーザー入力や approval を流させない)。
+    let socket_path = crate::pty::codex_app_server::ensure_control_socket(&codex_command)
         .await
         .ok_or_else(|| {
             finish_codex_failure(
@@ -316,14 +326,12 @@ async fn register_codex_endpoint(
                     false,
                 ),
             )
-        })?,
-    };
+        })?;
     let sink = codex_event_sink(
         app.clone(),
         state.runtime_manager.clone(),
         endpoint_id.clone(),
     );
-    let cwd = request.cwd;
     let adapter_result =
         run_blocking(move || CodexRuntimeAdapter::connect(socket_path, cwd, sink)).await?;
     let adapter =
