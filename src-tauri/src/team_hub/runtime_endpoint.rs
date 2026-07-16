@@ -3,7 +3,6 @@
 use crate::agent_runtime::{
     BackendKind, PtyCompatAdapter, RuntimeDeliveryRequest, RuntimeEventEnvelope, RuntimeManager,
 };
-use crate::pty::session::TerminationReason;
 use crate::pty::SessionRegistry;
 use crate::team_hub::inject::InjectError;
 use crate::team_hub::state::HubState;
@@ -35,11 +34,21 @@ pub(crate) struct AgentRuntimeBinding {
 }
 
 pub(crate) type RuntimeEndpointMap = HashMap<(String, String), AgentRuntimeBinding>;
+#[cfg(test)]
+pub(crate) type LegacyAppServerDelivery = (String, String, String, String);
 
 #[derive(Clone)]
 pub(crate) struct RuntimeRouting {
     pub manager: Arc<RuntimeManager>,
     pub backend_override: Arc<std::sync::RwLock<Option<BackendKind>>>,
+    pub pty_binding_lock: Arc<Mutex<()>>,
+    #[cfg(test)]
+    pub codex_delivery_override:
+        Arc<std::sync::RwLock<Option<crate::team_hub::codex_delivery::CodexDelivery>>>,
+    #[cfg(test)]
+    pub legacy_app_server_override: Arc<std::sync::RwLock<Option<bool>>>,
+    #[cfg(test)]
+    pub legacy_app_server_deliveries: Arc<std::sync::Mutex<Vec<LegacyAppServerDelivery>>>,
 }
 
 fn key(team_id: &str, agent_id: &str) -> (String, String) {
@@ -83,6 +92,13 @@ impl TeamHub {
             runtime: RuntimeRouting {
                 manager: runtime_manager,
                 backend_override: Arc::new(std::sync::RwLock::new(None)),
+                pty_binding_lock: Arc::new(Mutex::new(())),
+                #[cfg(test)]
+                codex_delivery_override: Arc::new(std::sync::RwLock::new(None)),
+                #[cfg(test)]
+                legacy_app_server_override: Arc::new(std::sync::RwLock::new(None)),
+                #[cfg(test)]
+                legacy_app_server_deliveries: Arc::new(std::sync::Mutex::new(Vec::new())),
             },
             state: Arc::new(Mutex::new(HubState {
                 teams: HashMap::new(),
@@ -111,6 +127,7 @@ impl TeamHub {
         agent_id: &str,
         session_id: Option<String>,
     ) -> Result<String, String> {
+        let _binding_guard = self.runtime.pty_binding_lock.lock().await;
         let endpoint_id = pty_endpoint_id(agent_id);
         let already_bound = {
             let state = self.state.lock().await;
@@ -198,21 +215,12 @@ impl TeamHub {
         Ok(())
     }
 
-    pub async fn deliver_agent_message(
-        &self,
-        team_id: &str,
-        agent_id: &str,
-        from_role: &str,
-        data: &str,
-    ) -> Result<(), InjectError> {
-        let backend = self
-            .runtime
+    pub(crate) fn selected_runtime_backend(&self) -> BackendKind {
+        self.runtime
             .backend_override
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .unwrap_or_else(crate::agent_runtime::requested_backend);
-        self.deliver_agent_message_with_backend(team_id, agent_id, from_role, data, backend)
-            .await
+            .unwrap_or_else(crate::agent_runtime::requested_backend)
     }
 
     #[cfg(test)]
@@ -224,46 +232,111 @@ impl TeamHub {
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(backend);
     }
 
-    pub(crate) async fn deliver_agent_message_with_backend(
+    #[cfg(test)]
+    pub(crate) fn set_codex_delivery_for_test(
+        &self,
+        delivery: crate::team_hub::codex_delivery::CodexDelivery,
+    ) {
+        *self
+            .runtime
+            .codex_delivery_override
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(delivery);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_legacy_app_server_result_for_test(&self, result: bool) {
+        *self
+            .runtime
+            .legacy_app_server_override
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(result);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn take_legacy_app_server_deliveries_for_test(
+        &self,
+    ) -> Vec<LegacyAppServerDelivery> {
+        std::mem::take(
+            &mut *self
+                .runtime
+                .legacy_app_server_deliveries
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()),
+        )
+    }
+
+    pub(crate) fn prefers_legacy_codex_pty(&self) -> bool {
+        #[cfg(test)]
+        if let Some(delivery) = *self
+            .runtime
+            .codex_delivery_override
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+        {
+            return delivery == crate::team_hub::codex_delivery::CodexDelivery::Pty;
+        }
+        crate::team_hub::codex_delivery::prefers_pty()
+    }
+
+    pub(crate) async fn try_deliver_native_message(
         &self,
         team_id: &str,
         agent_id: &str,
         from_role: &str,
         data: &str,
         backend: BackendKind,
-    ) -> Result<(), InjectError> {
-        if backend != BackendKind::Pty {
-            let native = {
-                let state = self.state.lock().await;
-                state
-                    .runtime_endpoints
-                    .get(&key(team_id, agent_id))
-                    .and_then(|binding| binding.native.clone())
-            };
-            if let Some(endpoint) = native {
-                if self
-                    .runtime
-                    .manager
-                    .registry()
-                    .resolve(&endpoint.endpoint_id)
-                    .is_some()
-                {
-                    match self
-                        .deliver_to_runtime_endpoint(&endpoint.endpoint_id, from_role, data)
-                        .await
-                    {
-                        Ok(()) => return Ok(()),
-                        Err(error) => tracing::warn!(
-                            agent_id,
-                            endpoint_id = endpoint.endpoint_id,
-                            code = error.code(),
-                            "[teamhub] native delivery failed; falling back to PTY"
-                        ),
-                    }
-                }
-            }
+    ) -> Option<Result<(), InjectError>> {
+        if backend == BackendKind::Pty {
+            return None;
         }
+        let endpoint = {
+            let state = self.state.lock().await;
+            state
+                .runtime_endpoints
+                .get(&key(team_id, agent_id))
+                .and_then(|binding| binding.native.clone())
+        }?;
+        if self
+            .runtime
+            .manager
+            .registry()
+            .resolve(&endpoint.endpoint_id)
+            .is_none()
+        {
+            self.prune_native_runtime_endpoint(team_id, agent_id, &endpoint.endpoint_id)
+                .await;
+            return None;
+        }
+        let result = self
+            .deliver_to_runtime_endpoint(
+                &endpoint.endpoint_id,
+                RuntimeEndpointBackend::Native,
+                from_role,
+                data,
+            )
+            .await;
+        if result.is_err()
+            && self
+                .runtime
+                .manager
+                .registry()
+                .resolve(&endpoint.endpoint_id)
+                .is_none()
+        {
+            self.prune_native_runtime_endpoint(team_id, agent_id, &endpoint.endpoint_id)
+                .await;
+        }
+        Some(result)
+    }
 
+    pub(crate) async fn deliver_pty_message(
+        &self,
+        team_id: &str,
+        agent_id: &str,
+        from_role: &str,
+        data: &str,
+    ) -> Result<(), InjectError> {
         let session_id = {
             let state = self.state.lock().await;
             state
@@ -280,36 +353,66 @@ impl TeamHub {
                     "runtime_pty_endpoint_registration_failed: {message}"
                 ))
             })?;
-        self.deliver_to_runtime_endpoint(&endpoint_id, from_role, data)
+        self.deliver_to_runtime_endpoint(&endpoint_id, RuntimeEndpointBackend::Pty, from_role, data)
             .await
     }
 
     async fn deliver_to_runtime_endpoint(
         &self,
         endpoint_id: &str,
+        backend: RuntimeEndpointBackend,
         from_role: &str,
         data: &str,
     ) -> Result<(), InjectError> {
-        let operation = self
-            .runtime
-            .manager
-            .deliver_team_message(
-                endpoint_id,
-                RuntimeDeliveryRequest {
-                    data: data.to_string(),
-                    from_role: from_role.to_string(),
-                },
-            )
-            .await;
+        let request = RuntimeDeliveryRequest {
+            data: data.to_string(),
+            from_role: from_role.to_string(),
+        };
+        let operation = match backend {
+            RuntimeEndpointBackend::Native => {
+                let manager = self.runtime.manager.clone();
+                let endpoint_id = endpoint_id.to_string();
+                tauri::async_runtime::spawn_blocking(move || {
+                    manager.deliver_team_message_blocking(&endpoint_id, request)
+                })
+                .await
+                .map_err(|error| InjectError::TaskJoinFailed {
+                    phase: "native_delivery",
+                    source: error.to_string(),
+                })?
+            }
+            RuntimeEndpointBackend::Pty => {
+                self.runtime
+                    .manager
+                    .deliver_team_message(endpoint_id, request)
+                    .await
+            }
+        };
         self.emit_runtime_events(&operation.events).await;
         operation
             .result
-            .map_err(|error| {
-                InjectError::WriteInitialFailed(format!("{}: {}", error.code, error.message))
-            })
+            .map_err(crate::team_hub::runtime_cleanup::restore_inject_error)
     }
 
-    async fn emit_runtime_events(&self, events: &[RuntimeEventEnvelope]) {
+    async fn prune_native_runtime_endpoint(
+        &self,
+        team_id: &str,
+        agent_id: &str,
+        endpoint_id: &str,
+    ) {
+        let mut state = self.state.lock().await;
+        if let Some(binding) = state.runtime_endpoints.get_mut(&key(team_id, agent_id)) {
+            if binding
+                .native
+                .as_ref()
+                .is_some_and(|endpoint| endpoint.endpoint_id == endpoint_id)
+            {
+                binding.native = None;
+            }
+        }
+    }
+
+    pub(super) async fn emit_runtime_events(&self, events: &[RuntimeEventEnvelope]) {
         let app = self.app_handle.lock().await.clone();
         let Some(app) = app else { return };
         for event in events {
@@ -374,48 +477,5 @@ impl TeamHub {
                     && (endpoint.backend == RuntimeEndpointBackend::Native
                         || self.registry.get_by_agent(agent_id).is_some())
             })
-    }
-
-    pub async fn cleanup_agent_runtime(&self, team_id: &str, agent_id: &str) {
-        let binding = {
-            let mut state = self.state.lock().await;
-            state.runtime_endpoints.remove(&key(team_id, agent_id))
-        };
-        if let Some(binding) = binding {
-            for endpoint in binding.native.into_iter().chain(binding.pty) {
-                let stop = self.runtime.manager.stop(&endpoint.endpoint_id);
-                self.emit_runtime_events(&stop.events).await;
-                if self
-                    .runtime
-                    .manager
-                    .registry()
-                    .resolve(&endpoint.endpoint_id)
-                    .is_some()
-                {
-                    let dispose = self.runtime.manager.dispose(&endpoint.endpoint_id);
-                    self.emit_runtime_events(&dispose.events).await;
-                }
-            }
-        }
-        if let Some(session) = self.registry.get_by_agent(agent_id) {
-            if let Err(error) = session.kill(TerminationReason::UserClose) {
-                tracing::warn!(agent_id, "[teamhub] fallback PTY cleanup failed: {error}");
-            }
-        }
-    }
-
-    pub async fn cleanup_team_runtimes(&self, team_id: &str) {
-        let agent_ids: Vec<String> = {
-            let state = self.state.lock().await;
-            state
-                .runtime_endpoints
-                .keys()
-                .filter(|(candidate, _)| candidate == team_id)
-                .map(|(_, agent_id)| agent_id.clone())
-                .collect()
-        };
-        for agent_id in agent_ids {
-            self.cleanup_agent_runtime(team_id, &agent_id).await;
-        }
     }
 }

@@ -3,13 +3,23 @@
 use crate::team_hub::events::{RecruitLifecyclePayload, RecruitLifecycleState};
 use crate::team_hub::runtime_endpoint::RuntimeEndpoint;
 use crate::team_hub::TeamHub;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 use tauri::Emitter;
+
+const TERMINAL_RECRUIT_RETENTION: Duration = Duration::from_secs(5 * 60);
+static NEXT_RECRUIT_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+
+fn next_recruit_sequence() -> u64 {
+    NEXT_RECRUIT_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+}
 
 #[derive(Clone, Debug)]
 pub(crate) struct RecruitLifecycle {
     pub team_id: String,
     pub agent_id: String,
     pub role_profile_id: String,
+    pub sequence: u64,
     pub state: RecruitLifecycleState,
     pub endpoint_id: Option<String>,
     pub session_id: Option<String>,
@@ -23,6 +33,7 @@ impl RecruitLifecycle {
             team_id: self.team_id.clone(),
             agent_id: self.agent_id.clone(),
             role_profile_id: self.role_profile_id.clone(),
+            sequence: self.sequence,
             state: self.state,
             endpoint_id: self.endpoint_id.clone(),
             session_id: self.session_id.clone(),
@@ -81,6 +92,7 @@ impl TeamHub {
             team_id: team_id.to_string(),
             agent_id: agent_id.to_string(),
             role_profile_id: role_profile_id.to_string(),
+            sequence: next_recruit_sequence(),
             state: RecruitLifecycleState::Requested,
             endpoint_id: None,
             session_id: None,
@@ -108,7 +120,7 @@ impl TeamHub {
                 return false;
             };
             if lifecycle.state == next {
-                return true;
+                return false;
             }
             if !can_transition(lifecycle.state, next) {
                 tracing::warn!(
@@ -119,6 +131,7 @@ impl TeamHub {
                 );
                 return false;
             }
+            lifecycle.sequence = next_recruit_sequence();
             lifecycle.state = next;
             lifecycle.reason = reason;
             lifecycle.payload()
@@ -127,14 +140,31 @@ impl TeamHub {
         true
     }
 
-    pub async fn fail_recruit(&self, agent_id: &str, reason: impl Into<String>) {
+    pub async fn fail_recruit(&self, agent_id: &str, reason: impl Into<String>) -> bool {
         self.finish_recruit_terminal(agent_id, RecruitLifecycleState::Failed, reason.into())
-            .await;
+            .await
     }
 
-    pub async fn cancel_recruit(&self, agent_id: &str, reason: impl Into<String>) {
+    pub async fn cancel_recruit(&self, agent_id: &str, reason: impl Into<String>) -> bool {
         self.finish_recruit_terminal(agent_id, RecruitLifecycleState::Cancelled, reason.into())
-            .await;
+            .await
+    }
+
+    pub async fn cancel_recruit_with_pending_grace(
+        &self,
+        team_id: &str,
+        agent_id: &str,
+        reason: impl Into<String>,
+    ) {
+        let transitioned = self.cancel_recruit(agent_id, reason).await;
+        self.cancel_pending_recruit(agent_id).await;
+        if !transitioned {
+            self.cleanup_agent_runtime(team_id, agent_id).await;
+        }
+    }
+
+    pub async fn discard_pending_recruit(&self, agent_id: &str) {
+        self.state.lock().await.pending_recruits.remove(agent_id);
     }
 
     async fn finish_recruit_terminal(
@@ -142,39 +172,61 @@ impl TeamHub {
         agent_id: &str,
         terminal: RecruitLifecycleState,
         reason: String,
-    ) {
+    ) -> bool {
         let cancel_payload = crate::team_hub::events::RecruitCancelledPayload {
             new_agent_id: agent_id.to_string(),
             reason: reason.clone(),
         };
-        let team_id = {
+        if !self
+            .transition_recruit_lifecycle(agent_id, terminal, Some(reason))
+            .await
+        {
+            return false;
+        }
+        let (team_id, sequence) = {
             let state = self.state.lock().await;
-            state
+            let lifecycle = state
                 .recruit_lifecycles
                 .get(agent_id)
-                .map(|lifecycle| lifecycle.team_id.clone())
+                .expect("transitioned recruit lifecycle must still exist");
+            (lifecycle.team_id.clone(), lifecycle.sequence)
         };
-        let _ = self
-            .transition_recruit_lifecycle(agent_id, terminal, Some(reason))
-            .await;
         {
             let mut state = self.state.lock().await;
-            state.pending_recruits.remove(agent_id);
-            if let Some(team_id) = team_id.as_deref() {
-                state
-                    .agents
-                    .remove(&(team_id.to_string(), agent_id.to_string()));
-            }
+            state
+                .agents
+                .remove(&(team_id.clone(), agent_id.to_string()));
         }
-        if let Some(team_id) = team_id {
-            self.cleanup_agent_runtime(&team_id, agent_id).await;
-            let _ = self
-                .release_all_file_locks_for_agent(&team_id, agent_id)
-                .await;
-        }
+        self.cleanup_agent_runtime(&team_id, agent_id).await;
+        let _ = self
+            .release_all_file_locks_for_agent(&team_id, agent_id)
+            .await;
         if let Some(app) = self.app_handle.lock().await.clone() {
             let _ = app.emit("team:recruit-cancelled", cancel_payload);
         }
+        self.schedule_terminal_recruit_cleanup(agent_id.to_string(), sequence);
+        true
+    }
+
+    fn schedule_terminal_recruit_cleanup(&self, agent_id: String, sequence: u64) {
+        let hub = self.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(TERMINAL_RECRUIT_RETENTION).await;
+            let mut state = hub.state.lock().await;
+            let should_remove = state
+                .recruit_lifecycles
+                .get(&agent_id)
+                .is_some_and(|lifecycle| {
+                    lifecycle.sequence == sequence
+                        && matches!(
+                            lifecycle.state,
+                            RecruitLifecycleState::Failed | RecruitLifecycleState::Cancelled
+                        )
+                });
+            if should_remove {
+                state.recruit_lifecycles.remove(&agent_id);
+            }
+        });
     }
 
     async fn emit_recruit_lifecycle(&self, payload: RecruitLifecyclePayload) {
@@ -197,5 +249,24 @@ impl TeamHub {
             .recruit_lifecycles
             .get(agent_id)
             .cloned()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn lock_recruit_rescue_for_test() -> std::sync::MutexGuard<'static, ()> {
+        super::recruit::RECRUIT_RESCUE_TEST_LOCK
+            .lock()
+            .expect("recruit rescue test mutex poisoned")
+    }
+
+    #[cfg(test)]
+    pub(crate) fn take_recruit_rescued_events_for_test(&self) -> Vec<(String, u64)> {
+        std::mem::take(
+            &mut *super::recruit::RECRUIT_RESCUED_EVENTS_FOR_TEST
+                .lock()
+                .expect("recruit rescued test event mutex poisoned"),
+        )
+        .into_iter()
+        .map(|payload| (payload.new_agent_id, payload.late_by_ms))
+        .collect()
     }
 }

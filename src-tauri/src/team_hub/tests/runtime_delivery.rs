@@ -154,7 +154,7 @@ async fn team_send_delivers_to_native_and_pty_members_through_agent_mapping() {
             .writes
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner()),
-        vec!["mixed delivery".to_string()]
+        vec!["[Team ← leader] mixed delivery".to_string()]
     );
     assert_eq!(
         *pty_writes
@@ -217,6 +217,19 @@ async fn explicit_pty_backend_preserves_legacy_inject_trace_and_skips_native() {
 }
 
 #[tokio::test]
+async fn concurrent_pty_binding_registers_one_live_endpoint() {
+    let (hub, _registry, manager) = hub();
+    let first = hub.bind_pty_runtime_endpoint("team-race", "race-member", None);
+    let second = hub.bind_pty_runtime_endpoint("team-race", "race-member", None);
+
+    let (first, second) = tokio::join!(first, second);
+
+    assert_eq!(first.as_deref(), Ok("team-pty-race-member"));
+    assert_eq!(second.as_deref(), Ok("team-pty-race-member"));
+    assert!(manager.registry().resolve("team-pty-race-member").is_some());
+}
+
+#[tokio::test]
 async fn recruit_failure_rolls_back_placeholder_process_endpoint_and_sequence() {
     let (hub, _registry, manager) = hub();
     let team_id = "team-failure";
@@ -251,7 +264,8 @@ async fn recruit_failure_rolls_back_placeholder_process_endpoint_and_sequence() 
     .await
     .unwrap();
 
-    hub.fail_recruit(agent_id, "spawn_failed").await;
+    let _ = hub.fail_recruit(agent_id, "spawn_failed").await;
+    hub.discard_pending_recruit(agent_id).await;
 
     let lifecycle = hub.recruit_lifecycle_for_test(agent_id).await.unwrap();
     assert_eq!(lifecycle.state, RecruitLifecycleState::Failed);
@@ -316,4 +330,94 @@ async fn recruit_transitions_preserve_runtime_session_and_task_association() {
     );
     assert_eq!(lifecycle.session_id.as_deref(), Some("associated-session"));
     assert_eq!(lifecycle.task_ids, vec![24]);
+}
+
+#[tokio::test]
+async fn recruit_sequence_is_monotonic_and_rejected_terminal_has_no_state() {
+    let (hub, _registry, _manager) = hub();
+    assert!(!hub.cancel_recruit("absent-agent", "dismissed").await);
+    assert!(hub
+        .recruit_lifecycle_for_test("absent-agent")
+        .await
+        .is_none());
+
+    hub.begin_recruit_lifecycle("team-sequence", "sequence-agent", "worker")
+        .await;
+    let requested = hub
+        .recruit_lifecycle_for_test("sequence-agent")
+        .await
+        .unwrap()
+        .sequence;
+    assert!(hub
+        .transition_recruit_lifecycle(
+            "sequence-agent",
+            RecruitLifecycleState::Spawning,
+            None,
+        )
+        .await);
+    let spawning = hub
+        .recruit_lifecycle_for_test("sequence-agent")
+        .await
+        .unwrap()
+        .sequence;
+    hub.begin_recruit_lifecycle("team-sequence", "sequence-agent", "worker")
+        .await;
+    let rerequested = hub
+        .recruit_lifecycle_for_test("sequence-agent")
+        .await
+        .unwrap()
+        .sequence;
+
+    assert!(requested < spawning);
+    assert!(spawning < rerequested);
+}
+
+#[allow(clippy::await_holding_lock)]
+#[tokio::test(flavor = "current_thread")]
+async fn production_timeout_cancellation_keeps_grace_rescue_reachable() {
+    let _rescue_guard = TeamHub::lock_recruit_rescue_for_test();
+    let (hub, _registry, _manager) = hub();
+    let team_id = "team-grace-integration";
+    let agent_id = "grace-agent";
+    let _ = hub.take_recruit_rescued_events_for_test();
+    let _channels = hub
+        .try_register_pending_recruit(
+            agent_id.into(),
+            team_id.into(),
+            "programmer".into(),
+            "leader".into(),
+            false,
+            &[],
+        )
+        .await
+        .unwrap();
+    hub.begin_recruit_lifecycle(team_id, agent_id, "programmer")
+        .await;
+    let _ = hub
+        .transition_recruit_lifecycle(agent_id, RecruitLifecycleState::Spawning, None)
+        .await;
+
+    hub.cancel_recruit_with_pending_grace(team_id, agent_id, "ack_timeout")
+        .await;
+    assert!(hub
+        .state
+        .lock()
+        .await
+        .pending_recruits
+        .contains_key(agent_id));
+
+    hub.resolve_recruit_ack(
+        agent_id,
+        team_id,
+        crate::team_hub::RecruitAckOutcome {
+            ok: true,
+            reason: None,
+            phase: None,
+        },
+    )
+    .await
+    .unwrap();
+    let rescued = hub.take_recruit_rescued_events_for_test();
+    assert_eq!(rescued.len(), 1);
+    assert_eq!(rescued[0].0, agent_id);
 }

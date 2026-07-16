@@ -127,6 +127,8 @@ pub struct RecruitLifecyclePayload {
     pub team_id: String,
     pub agent_id: String,
     pub role_profile_id: String,
+    #[ts(type = "number")]
+    pub sequence: u64,
     pub state: RecruitLifecycleState,
     pub endpoint_id: Option<String>,
     pub session_id: Option<String>,

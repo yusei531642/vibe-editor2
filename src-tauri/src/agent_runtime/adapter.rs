@@ -42,6 +42,12 @@ pub struct RuntimeDeliveryRequest {
     pub from_role: String,
 }
 
+impl RuntimeDeliveryRequest {
+    pub fn framed_data(&self) -> String {
+        format!("[Team ← {}] {}", self.from_role, self.data)
+    }
+}
+
 pub type RuntimeDeliveryFuture<'a> =
     Pin<Box<dyn Future<Output = Result<(), RuntimeAdapterError>> + Send + 'a>>;
 
@@ -107,8 +113,14 @@ pub trait AgentRuntimeAdapter: Send + Sync {
     fn inject(&self, data: &str) -> Result<(), RuntimeAdapterError> {
         self.write(data)
     }
+    fn deliver_blocking(
+        &self,
+        request: &RuntimeDeliveryRequest,
+    ) -> Result<(), RuntimeAdapterError> {
+        self.write(&request.framed_data())
+    }
     fn deliver<'a>(&'a self, request: &'a RuntimeDeliveryRequest) -> RuntimeDeliveryFuture<'a> {
-        Box::pin(async move { self.write(&request.data) })
+        Box::pin(async move { self.deliver_blocking(request) })
     }
     fn steer(&self, _request: &RuntimeSteerRequest) -> Result<(), RuntimeAdapterError> {
         Err(unsupported("turn steer"))

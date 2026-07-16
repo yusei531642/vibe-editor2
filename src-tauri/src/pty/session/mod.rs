@@ -54,5 +54,5 @@ pub(crate) use spawn::resolve_terminal_command_path_for_check;
 #[cfg(test)]
 pub(crate) mod test_support {
     pub(crate) use super::handle::test_support::*;
-    pub(crate) use super::recording_test_support::recording_handle;
+    pub(crate) use super::recording_test_support::{failing_recording_handle, recording_handle};
 }

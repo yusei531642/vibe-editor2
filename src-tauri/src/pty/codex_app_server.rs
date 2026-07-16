@@ -67,7 +67,6 @@ pub fn spawn_prepare_task(
     });
 }
 
-#[allow(dead_code)]
 pub fn target_for_session(session: &SessionHandle) -> Option<(String, String)> {
     if !session.is_codex {
         return None;
@@ -91,7 +90,6 @@ pub fn set_thread_id(session: &SessionHandle, thread_id: &str) {
     }
 }
 
-#[allow(dead_code)]
 fn clone_metadata(lock: &Mutex<Option<String>>, name: &str) -> Option<String> {
     match lock.lock() {
         Ok(guard) => guard.clone(),

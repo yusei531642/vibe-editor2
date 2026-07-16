@@ -231,7 +231,7 @@ async fn verify_recruit_liveness(
         elapsed_ms,
         diag,
     );
-    hub.fail_recruit(agent_id, error.code.clone()).await;
+    let _ = hub.fail_recruit(agent_id, error.code.clone()).await;
     Err(error)
 }
 
@@ -540,15 +540,18 @@ pub async fn team_recruit(
             dynamic_role: dynamic_role_payload,
         };
         if let Err(e) = app.emit("team:recruit-request", payload) {
-            hub.fail_recruit(&new_agent_id, "recruit_emit_failed").await;
+            let _ = hub.fail_recruit(&new_agent_id, "recruit_emit_failed").await;
+            hub.discard_pending_recruit(&new_agent_id).await;
             return Err(RecruitError::new(
                 "recruit_emit_failed",
                 format!("failed to emit recruit-request: {e}"),
             ));
         }
     } else {
-        hub.fail_recruit(&new_agent_id, "renderer_unavailable")
+        let _ = hub
+            .fail_recruit(&new_agent_id, "renderer_unavailable")
             .await;
+        hub.discard_pending_recruit(&new_agent_id).await;
         return Err(RecruitError::new(
             "recruit_renderer_unavailable",
             "renderer not available (canvas mode required)",
@@ -581,8 +584,10 @@ pub async fn team_recruit(
             }
             Ok(Ok(ack)) => {
                 // renderer から ack(ok=false) が来た = 起動失敗を即時通知された
-                hub.fail_recruit(&new_agent_id, "renderer_spawn_failed")
+                let _ = hub
+                    .fail_recruit(&new_agent_id, "renderer_spawn_failed")
                     .await;
+                hub.discard_pending_recruit(&new_agent_id).await;
                 let phase_str = ack
                     .phase
                     .map(|p| p.as_str().to_string())
@@ -599,7 +604,8 @@ pub async fn team_recruit(
             }
             Ok(Err(_)) => {
                 // ack_tx が drop された (renderer 側が pending を resolve せずに崩壊) — 緊急 cancel 扱い
-                hub.cancel_recruit(&new_agent_id, "ack_dropped").await;
+                hub.cancel_recruit_with_pending_grace(&ctx.team_id, &new_agent_id, "ack_dropped")
+                    .await;
                 return Err(RecruitError::new(
                     "recruit_ack_dropped",
                     "renderer ack channel was dropped before reply",
@@ -615,7 +621,8 @@ pub async fn team_recruit(
                      team_id={team_id} elapsed_ms={elapsed_ms}",
                     team_id = ctx.team_id,
                 );
-                hub.cancel_recruit(&new_agent_id, "ack_timeout").await;
+                hub.cancel_recruit_with_pending_grace(&ctx.team_id, &new_agent_id, "ack_timeout")
+                    .await;
                 return Err(RecruitError::new(
                     "recruit_ack_timeout",
                     format!(
@@ -700,8 +707,12 @@ pub async fn team_recruit(
             // 旧実装は cancel_pending_recruit を呼ばずに Err を返していたため、
             // 孤立 pending が try_register_pending_recruit の人数/singleton 判定に
             // 永久カウントされ、再起動まで採用不能化していた。
-            hub.cancel_recruit(&new_agent_id, "handshake_cancelled")
-                .await;
+            hub.cancel_recruit_with_pending_grace(
+                &ctx.team_id,
+                &new_agent_id,
+                "handshake_cancelled",
+            )
+            .await;
             // Issue #342 Phase 1: 構造化エラーで返す (cancelled は handshake 直前 cancel 等)
             Err(
                 RecruitError::new("recruit_cancelled", "recruit cancelled before handshake")
@@ -711,7 +722,8 @@ pub async fn team_recruit(
         }
         Err(_) => {
             // timeout
-            hub.fail_recruit(&new_agent_id, "handshake_timeout").await;
+            let _ = hub.fail_recruit(&new_agent_id, "handshake_timeout").await;
+            hub.discard_pending_recruit(&new_agent_id).await;
             // renderer にも cancel イベントを emit してカードを撤収させる
             // Issue #342 Phase 1: 構造化エラー化
             // Issue #811: env override で延長可能であることを message に明示する

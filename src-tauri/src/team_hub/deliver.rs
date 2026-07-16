@@ -20,14 +20,75 @@ pub async fn deliver_message(
     text: &str,
 ) -> Result<(), InjectError> {
     // Issue #1068: 設定で PTY を強制している場合は app-server 経路を完全にスキップする。
-    // app-server 未対応 / 失敗時は下の PTY 注入へフォールバック。
-    hub.deliver_agent_message(team_id, agent_id, from_role, text)
+    let backend = hub.selected_runtime_backend();
+    if let Some(result) = hub
+        .try_deliver_native_message(team_id, agent_id, from_role, text, backend)
         .await
+    {
+        match result {
+            Ok(()) => return Ok(()),
+            Err(error) => tracing::warn!(
+                agent_id,
+                code = error.code(),
+                "[teamhub] native delivery failed; falling back to PTY"
+            ),
+        }
+        return hub
+            .deliver_pty_message(team_id, agent_id, from_role, text)
+            .await;
+    }
+    if !hub.prefers_legacy_codex_pty() {
+        if let Some(session) = hub.registry.get_by_agent(agent_id) {
+            if let Some((socket, thread_id)) =
+                crate::pty::codex_app_server::target_for_session(&session)
+            {
+                if hub
+                    .try_legacy_app_server(agent_id, &socket, &thread_id, text)
+                    .await
+                {
+                    return Ok(());
+                }
+            }
+        }
+    }
+    // app-server 未対応 / 失敗時は下の PTY 注入へフォールバック。
+    hub.deliver_pty_message(team_id, agent_id, from_role, text)
+        .await
+}
+
+impl TeamHub {
+    async fn try_legacy_app_server(
+        &self,
+        agent_id: &str,
+        socket: &str,
+        thread_id: &str,
+        text: &str,
+    ) -> bool {
+        #[cfg(test)]
+        if let Some(result) = *self
+            .runtime
+            .legacy_app_server_override
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+        {
+            self.runtime
+                .legacy_app_server_deliveries
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .push((
+                    agent_id.to_string(),
+                    socket.to_string(),
+                    thread_id.to_string(),
+                    text.to_string(),
+                ));
+            return result;
+        }
+        try_app_server(agent_id, socket, thread_id, text).await
+    }
 }
 
 /// app-server 経路での配送を試みる。成功で `true`、失敗 (= PTY フォールバック) で `false`。
 #[cfg(unix)]
-#[allow(dead_code)]
 async fn try_app_server(agent_id: &str, socket: &str, thread_id: &str, text: &str) -> bool {
     match crate::team_hub::app_server::deliver(socket, thread_id, text).await {
         Ok(()) => true,
@@ -44,7 +105,6 @@ async fn try_app_server(agent_id: &str, socket: &str, thread_id: &str, text: &st
 
 /// Windows では app-server (unix socket) 配送は未対応のため常に PTY 注入へフォールバックする。
 #[cfg(not(unix))]
-#[allow(dead_code)]
 async fn try_app_server(_agent_id: &str, _socket: &str, _thread_id: &str, _text: &str) -> bool {
     false
 }

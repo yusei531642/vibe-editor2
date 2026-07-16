@@ -7,6 +7,12 @@ pub(super) async fn register_codex_endpoint(
     request: RegisterCodexEndpointRequest,
 ) -> CommandResult<CodexRuntimeEndpointResult> {
     validate_endpoint_id(&request.endpoint_id)?;
+    if let Some(team_id) = request.team_id.as_deref() {
+        crate::commands::validation::validate_id_segment("team_id", team_id)?;
+    }
+    if let Some(agent_id) = request.agent_id.as_deref() {
+        crate::commands::validation::validate_id_segment("agent_id", agent_id)?;
+    }
     let runtime_team_agent = request.team_id.clone().zip(request.agent_id.clone());
     // cwd は active project root / native picker 由来 grant への authority 照合を必須とする
     // (renderer 指定の任意パスで thread を開かせない)。省略時は authority 照合済みの
@@ -86,17 +92,23 @@ pub(super) async fn register_codex_endpoint(
     operation
         .result
         .map_err(|error| CommandError::coded(error.code, error.message))?;
-    let thread_id = adapter.thread_id().ok_or_else(|| {
-        CommandError::coded(
-            "runtime_thread_not_ready",
-            "Codex app-server did not return a thread id",
-        )
-    })?;
-    // start/resume/fork いずれも成功した thread を「観測済み」として記録し、
-    // 以後の resume / fork を認可できるようにする。
-    record_known_thread(&state.known_codex_threads, Some(thread_id.clone()));
+    let thread_id = match adapter.thread_id() {
+        Some(thread_id) => thread_id,
+        None => {
+            return Err(finish_codex_failure(
+                app,
+                &state.runtime_manager,
+                &endpoint_id,
+                crate::agent_runtime::RuntimeAdapterError::new(
+                    "runtime_thread_not_ready",
+                    "Codex app-server did not return a thread id",
+                    false,
+                ),
+            ));
+        }
+    };
     if let Some((team_id, agent_id)) = runtime_team_agent {
-        state
+        if let Err(error) = state
             .team_hub
             .bind_native_runtime_endpoint(
                 &team_id,
@@ -105,8 +117,22 @@ pub(super) async fn register_codex_endpoint(
                 Some(thread_id.clone()),
             )
             .await
-            .map_err(|error| CommandError::coded("runtime_team_binding_failed", error))?;
+        {
+            return Err(finish_codex_failure(
+                app,
+                &state.runtime_manager,
+                &endpoint_id,
+                crate::agent_runtime::RuntimeAdapterError::new(
+                    "runtime_team_binding_failed",
+                    error,
+                    false,
+                ),
+            ));
+        }
     }
+    // start/resume/fork いずれも成功した thread を「観測済み」として記録し、
+    // 以後の resume / fork を認可できるようにする。
+    record_known_thread(&state.known_codex_threads, Some(thread_id.clone()));
     Ok(CodexRuntimeEndpointResult {
         endpoint_id,
         thread_id,

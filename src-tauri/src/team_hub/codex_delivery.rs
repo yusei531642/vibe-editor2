@@ -6,8 +6,6 @@
 //! ミラーを更新し、`deliver.rs` がここを見て分岐する。settings.json を Single Source of Truth とし、
 //! 本ミラーはその読み取り専用キャッシュにすぎない。
 
-#![allow(dead_code)]
-
 use std::sync::atomic::{AtomicU8, Ordering};
 
 /// codex `team_send` の配送方式。

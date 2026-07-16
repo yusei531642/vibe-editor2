@@ -65,9 +65,8 @@ pub async fn team_dismiss(
     // 旧実装は emit のみで Hub 状態を直接触らなかったため、handshake 完了前に
     // dismiss された pending が孤立し、try_register_pending_recruit の人数 / singleton
     // 判定にゴミとして残り続けていた (renderer 反映の冪等性が壊れる)。
-    hub.cancel_pending_recruit(&agent_id).await;
-    hub.cancel_recruit(&agent_id, "dismissed").await;
-    hub.cleanup_agent_runtime(&ctx.team_id, &agent_id).await;
+    hub.cancel_recruit_with_pending_grace(&ctx.team_id, &agent_id, "dismissed")
+        .await;
     // Issue #526: dismiss された worker が握っていた advisory file lock を漏れなく解放する。
     // 解放しないと「dismiss 済の worker が無限に lock を保持し続けて誰もファイル編集できない」
     // 状態になりうる。dismiss が成立した時点で lock も自動失効と扱う。

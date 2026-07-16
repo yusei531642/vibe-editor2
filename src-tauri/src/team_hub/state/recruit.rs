@@ -36,6 +36,8 @@ const HANDSHAKE_GRANT_TTL_MAX_MS: u64 = 300_000;
 pub(super) static RECRUIT_RESCUED_EVENTS_FOR_TEST: once_cell::sync::Lazy<
     std::sync::Mutex<Vec<RecruitRescuedPayload>>,
 > = once_cell::sync::Lazy::new(|| std::sync::Mutex::new(Vec::new()));
+#[cfg(test)]
+pub(super) static RECRUIT_RESCUE_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 #[derive(Clone, Debug)]
 pub struct RecruitOutcome {
@@ -233,7 +235,7 @@ impl TeamHub {
                 );
                 s.pending_recruits.remove(agent_id);
                 drop(s);
-                self.fail_recruit(agent_id, "handshake_grant_expired").await;
+                let _ = self.fail_recruit(agent_id, "handshake_grant_expired").await;
                 return false;
             }
             if p.team_id != team_id {
@@ -733,16 +735,14 @@ mod role_binding_team_id_tests {
 /// Issue #577: timeout 後 grace 期間中の recruit ack rescue の単体テスト。
 #[cfg(test)]
 mod recruit_rescue_tests {
-    use super::{RecruitAckOutcome, RECRUIT_RESCUED_EVENTS_FOR_TEST};
+    use super::{RecruitAckOutcome, RECRUIT_RESCUED_EVENTS_FOR_TEST, RECRUIT_RESCUE_TEST_LOCK as ENV_LOCK};
     use crate::pty::SessionRegistry;
     use crate::team_hub::error::AckError;
     use crate::team_hub::TeamHub;
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
     use std::time::Duration;
     use tokio::sync::Barrier;
     use tokio::time::sleep;
-
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     fn make_hub() -> TeamHub {
         TeamHub::new(Arc::new(SessionRegistry::new()))

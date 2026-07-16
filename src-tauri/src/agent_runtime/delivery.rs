@@ -38,4 +38,38 @@ impl RuntimeManager {
             }
         }
     }
+
+    pub fn deliver_team_message_blocking(
+        &self,
+        endpoint_id: &str,
+        request: RuntimeDeliveryRequest,
+    ) -> RuntimeOperation {
+        let Some(adapter) = self.registry().resolve(endpoint_id) else {
+            let error = RuntimeAdapterError::new(
+                "runtime_endpoint_not_found",
+                format!("runtime endpoint '{endpoint_id}' was not found"),
+                true,
+            );
+            return RuntimeOperation {
+                events: vec![self.transient_error_event(endpoint_id, &error)],
+                result: Err(error),
+            };
+        };
+        match adapter.deliver_blocking(&request) {
+            Ok(()) => RuntimeOperation {
+                events: Vec::new(),
+                result: Ok(()),
+            },
+            Err(error) => {
+                let events = self.failure_events(endpoint_id, &error);
+                if !error.recoverable {
+                    self.detach_endpoint(endpoint_id);
+                }
+                RuntimeOperation {
+                    events,
+                    result: Err(error),
+                }
+            }
+        }
+    }
 }

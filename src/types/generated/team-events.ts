@@ -19,7 +19,7 @@ export type RecruitCancelledPayload = { newAgentId: string, reason: string, };
 
 export type RecruitLifecycleState = "requested" | "spawning" | "handshaking" | "ready" | "failed" | "cancelled";
 
-export type RecruitLifecyclePayload = { teamId: string, agentId: string, roleProfileId: string, state: RecruitLifecycleState, endpointId: string | null, sessionId: string | null, taskIds: Array<number>, reason: string | null, };
+export type RecruitLifecyclePayload = { teamId: string, agentId: string, roleProfileId: string, sequence: number, state: RecruitLifecycleState, endpointId: string | null, sessionId: string | null, taskIds: Array<number>, reason: string | null, };
 
 export type DismissRequestPayload = { teamId: string, agentId: string, };
 
