@@ -95,7 +95,7 @@ impl ClientHandle {
             }
             Err(_) => Err(fatal(
                 "runtime_app_server_timeout",
-                "app-server initialize timed out",
+                "app-server initialization timed out",
             )),
         }
     }
@@ -175,7 +175,7 @@ async fn run(
         Err(_) => {
             let _ = ready.send(Err(fatal(
                 "runtime_app_server_timeout",
-                "app-server initialize timed out",
+                "app-server initialization timed out",
             )));
             return;
         }
@@ -238,23 +238,24 @@ async fn handle_command(
                 let _ = response.send(Err(error.clone()));
                 return Err(error);
             }
-            pending.insert(id.to_string(), PendingEntry { deadline, response });
+            pending.insert(format!("i:{id}"), PendingEntry { deadline, response });
         }
         ClientCommand::RespondApproval {
             request_id,
             decision,
             response,
         } => {
-            let result = if let Some(id) = approvals.remove(&request_id) {
-                write_json(ws, &json!({ "id": id, "result": { "decision": decision } })).await
-            } else {
-                Err(RuntimeAdapterError::new(
+            // pending でない requestId (応答済み / 未知) は業務エラー: caller にだけ返し、
+            // 接続と actor loop は維持する。loop を殺すのは実 I/O 失敗のみ。
+            let Some(id) = approvals.remove(&request_id) else {
+                let _ = response.send(Err(RuntimeAdapterError::new(
                     "runtime_approval_not_found",
                     format!("approval request '{request_id}' is not pending"),
                     true,
-                ))
+                )));
+                return Ok(());
             };
-            match result {
+            match write_json(ws, &json!({ "id": id, "result": { "decision": decision } })).await {
                 Ok(()) => {
                     let _ = response.send(Ok(Value::Null));
                 }
@@ -426,11 +427,13 @@ fn rpc_result(value: &Value) -> Result<Value, RuntimeAdapterError> {
     Ok(value.get("result").cloned().unwrap_or(Value::Null))
 }
 
+/// JSON-RPC id を map キー化する。数値 `900` と文字列 `"900"` が同一キーへ潰れて
+/// approval エントリを上書きし合わないよう、型タグ付きで区別する。
 fn id_key(value: &Value) -> Option<String> {
     value
         .as_str()
-        .map(str::to_string)
-        .or_else(|| value.as_i64().map(|id| id.to_string()))
+        .map(|id| format!("s:{id}"))
+        .or_else(|| value.as_i64().map(|id| format!("i:{id}")))
 }
 
 fn map_wire_error(error: AppServerError) -> RuntimeAdapterError {

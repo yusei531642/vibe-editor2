@@ -267,8 +267,19 @@ async fn projects_turn_steer_and_approval_as_envelopes() {
     })
     .await;
     assert!(manager.steer("native-events", "more".into()).result.is_ok());
+    let request_id = manager
+        .event_snapshot()
+        .iter()
+        .find_map(|event| match &event.payload {
+            RuntimeEventPayload::ApprovalRequest { request_id, .. } => Some(request_id.clone()),
+            _ => None,
+        })
+        .expect("approval request id");
+    // pending でない requestId は業務エラーであり、actor loop / 接続を殺さない。
+    let unknown = manager.respond_approval("native-events", "ghost-id".into(), "accept".into());
+    assert!(unknown.result.is_err());
     assert!(manager
-        .respond_approval("native-events", "900".into(), "accept".into())
+        .respond_approval("native-events", request_id, "accept".into())
         .result
         .is_ok());
 
