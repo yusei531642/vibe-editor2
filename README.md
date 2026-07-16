@@ -128,7 +128,7 @@ The team architecture was rewritten in v1.3 to remove fixed worker roles. Instea
 - You give the Leader your goal in natural language.
 - The Leader calls `team_recruit(role_definition=…)` to spawn however many workers it needs, each with a custom role definition. Need a tester? An auth specialist? A migration auditor? The Leader designs and hires them on the spot.
 - An **HR meta-role** is available for bulk-hiring sprees.
-- Behavioral rules and tool docs live in a **`vibe-team` Skill** auto-installed at `.claude/skills/vibe-team2/SKILL.md` — Claude auto-loads it. You don't memorize protocols.
+- Behavioral rules and tool docs live in a **`vibe-team2` Skill** auto-installed at `.claude/skills/vibe-team2/SKILL.md` — Claude auto-loads it. You don't memorize protocols.
 
 **Real-time message delivery, no polling.** When the Leader calls `team_send("worker-3", "rebase onto main")`, the message is **injected directly into worker-3's input prompt** by the in-process **TeamHub** (`src-tauri/src/team_hub/`). It uses bracketed paste so multi-line / Unicode payloads up to ~32 KiB pass through cleanly on Windows ConPTY.
 
