@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -73,6 +73,22 @@ export function V2Shell(): JSX.Element {
   const [leftOpen, setLeftOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [entries, setEntries] = useState<TimelineEntry[]>([]);
+  // fake runtime (placeholder) の応答 timer。停止/新規タスク/unmount で必ず破棄する。
+  const fakeReplyTimerRef = useRef<number | null>(null);
+
+  const cancelFakeReply = useCallback(() => {
+    if (fakeReplyTimerRef.current !== null) {
+      window.clearTimeout(fakeReplyTimerRef.current);
+      fakeReplyTimerRef.current = null;
+    }
+  }, []);
+
+  const stopRun = useCallback(() => {
+    cancelFakeReply();
+    setRunning(false);
+  }, [cancelFakeReply]);
+
+  useEffect(() => cancelFakeReply, [cancelFakeReply]);
 
   const projectName = useMemo(() => {
     if (!projectRoot) return t("v2.project.select");
@@ -101,7 +117,9 @@ export function V2Shell(): JSX.Element {
     setPrompt("");
     setHasStarted(true);
     setRunning(true);
-    window.setTimeout(() => {
+    cancelFakeReply();
+    fakeReplyTimerRef.current = window.setTimeout(() => {
+      fakeReplyTimerRef.current = null;
       setEntries((current) => [
         ...current,
         {
@@ -115,15 +133,16 @@ export function V2Shell(): JSX.Element {
       ]);
       setRunning(false);
     }, 650);
-  }, [engine, prompt, running, t]);
+  }, [cancelFakeReply, engine, prompt, running, t]);
 
   const startNewTask = useCallback(() => {
+    cancelFakeReply();
     setEntries([]);
     setPrompt("");
     setRunning(false);
     setHasStarted(false);
     window.dispatchEvent(new Event("vibe-editor2:focus-composer"));
-  }, []);
+  }, [cancelFakeReply]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -140,7 +159,7 @@ export function V2Shell(): JSX.Element {
         setInspectorOpen((current) => !current);
       } else if (mod && event.key === ".") {
         event.preventDefault();
-        setRunning(false);
+        stopRun();
       } else if (event.key === "Escape") {
         setLeftOpen(false);
         setInspectorOpen(false);
@@ -148,7 +167,7 @@ export function V2Shell(): JSX.Element {
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, []);
+  }, [stopRun]);
 
   return (
     <main className={`v2-shell${hasStarted ? " v2-shell--session" : ""}`}>
@@ -298,7 +317,7 @@ export function V2Shell(): JSX.Element {
           onProjectClick={() => void handleOpenFolder()}
           onPromptChange={setPrompt}
           onSubmit={submit}
-          onStop={() => setRunning(false)}
+          onStop={stopRun}
         />
       </div>
 
