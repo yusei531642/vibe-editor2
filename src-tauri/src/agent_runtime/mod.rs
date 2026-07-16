@@ -1,8 +1,26 @@
-//! Issue #21: agent runtime の最小境界。
+//! Issue #21 / #22: agent runtime の境界。
 //!
-//! Phase 0 では既存 PTY 実行経路へ接続せず、backend 選択と capability 診断だけを提供する。
-//! native backend が実装されるまでは system detector は PTY 能力だけを報告するため、
-//! `auto` は安全に PTY へ fallback する。
+//! Phase 0 の backend 選択と capability 診断に加え、Phase 1 では adapter / endpoint
+//! registry / normalized event envelope を提供する。native backend が実装されるまでは
+//! system detector は PTY 能力だけを報告するため、`auto` は安全に PTY へ fallback する。
+
+mod adapter;
+mod event;
+mod event_buffer;
+mod manager;
+mod pty_compat;
+
+pub use adapter::{
+    AgentRuntimeAdapter, RuntimeAdapterError, RuntimeSessionSpawnRequest, RuntimeTurnSpawnRequest,
+};
+#[allow(unused_imports)]
+pub use event::{
+    RuntimeEventEnvelope, RuntimeEventKind, RuntimeEventPayload, RuntimeLifecycleState,
+};
+pub use event_buffer::{RuntimeEventBuffer, DEFAULT_RUNTIME_EVENT_BUFFER_CAPACITY};
+#[allow(unused_imports)]
+pub use manager::{RuntimeEndpointRegistry, RuntimeManager, RuntimeOperation};
+pub use pty_compat::PtyCompatAdapter;
 
 use serde::{Deserialize, Serialize};
 
@@ -181,3 +199,6 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod phase1_tests;

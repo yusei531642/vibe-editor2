@@ -70,6 +70,10 @@ jobs:
       - name: Team event generated type check
         run: npm run lint:team-event-types
 
+      # Issue #22: Rust の runtime event envelope から生成した TS 型の同期を保証する。
+      - name: Runtime event generated type check
+        run: npm run lint:runtime-event-types
+
       # Issue #721: ESLint flat config (eslint.config.mjs) によるベースライン lint。
       # 現状はエラー 0 で通る最小ルールセット (将来 PR で段階的に厳格化する)。
       - name: ESLint
