@@ -103,7 +103,7 @@ export function UnifiedComposer({
         onChange={(event) => onPromptChange(event.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={t("v2.composer.placeholder")}
-        rows={4}
+        rows={2}
         aria-label={t("v2.composer.inputAria")}
       />
 

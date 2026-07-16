@@ -471,6 +471,10 @@ export const enShell: Dict = {
   'v2.runtime.fakeReady':
     '{engine} Runtime is ready to connect. The non-PTY adapter will connect to this timeline in the next implementation wave.',
   'v2.shell.views': 'Workspace views',
+  'v2.shell.navigation': 'Task navigation',
+  'v2.shell.back': 'Go back',
+  'v2.shell.forward': 'Go forward',
+  'v2.shell.newTask': 'New task',
   'v2.drawer.left': 'Projects and sessions',
   'v2.drawer.inspector': 'Inspector',
   'v2.runtime.setupTitle': 'Set up Claude Code',

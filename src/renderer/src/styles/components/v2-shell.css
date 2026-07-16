@@ -3,7 +3,7 @@
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #f8f8f6;
+  background: #fbfbfa;
   color: #1d1d1f;
   font-family: var(--ui-font);
   font-feature-settings: normal;
@@ -31,6 +31,17 @@
   gap: 6px;
 }
 
+.v2-history-actions {
+  position: absolute;
+  z-index: 20;
+  top: 10px;
+  left: 118px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.v2-history-actions button,
 .v2-window-actions button,
 .v2-icon-button,
 .v2-send-button {
@@ -43,40 +54,61 @@
   transition: color 150ms var(--ease-standard), background 150ms var(--ease-standard);
 }
 
+.v2-history-actions button:hover:not(:disabled),
 .v2-window-actions button:hover,
 .v2-icon-button:hover { background: rgba(31, 30, 29, 0.05); color: inherit; }
 
+.v2-history-actions button:disabled {
+  color: #b8b7b3;
+  cursor: default;
+}
+
+.v2-history-actions__workspace {
+  position: relative;
+}
+
+.v2-history-actions__workspace i {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #3886e5;
+}
+
 .v2-home {
   position: absolute;
-  top: 31%;
+  top: 51%;
   left: 50%;
-  width: min(1240px, calc(100vw - 96px));
+  width: min(984px, calc(100vw - 96px));
   transform: translate(-50%, -50%);
   text-align: center;
 }
 
 .v2-mark {
-  width: 64px;
-  height: 64px;
+  width: 58px;
+  height: 58px;
   margin: 0 auto 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  border: 5px solid #b9b9b7;
-  border-radius: 45% 55% 48% 52%;
-  color: #aaa;
-  font: 600 28px/1 var(--mono-font);
-  transform: rotate(-2deg);
+  color: #b9b9b6;
 }
 
-.v2-mark span,
-.v2-mark i { transform: rotate(2deg); font-style: normal; }
+.v2-mark svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 48px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 
 .v2-home h1 {
   margin: 0;
   font-family: var(--ui-font);
-  font-size: clamp(34px, 3.2vw, 46px);
+  font-size: clamp(30px, 2.35vw, 38px);
   font-weight: 400;
   line-height: 1.15;
   letter-spacing: -0.035em;
@@ -94,13 +126,13 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
-  margin-top: 48px;
+  margin-top: 42px;
   text-align: left;
 }
 
 .v2-quick-action {
-  min-height: 172px;
-  padding: 28px;
+  min-height: 144px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -109,7 +141,7 @@
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.66);
   color: #1d1d1f;
-  font-size: 17px;
+  font-size: 16px;
   line-height: 1.45;
   transition: border-color 150ms var(--ease-standard), background 150ms var(--ease-standard), transform 150ms var(--ease-standard);
 }
@@ -139,17 +171,19 @@
 .v2-composer-wrap {
   position: absolute;
   z-index: 10;
-  left: 60px;
-  right: 60px;
-  bottom: 24px;
+  left: 50%;
+  right: auto;
+  bottom: 20px;
+  width: min(1024px, calc(100vw - 48px));
   display: flex;
   justify-content: center;
+  transform: translateX(-50%);
 }
 
 .v2-shell--session .v2-composer-wrap { left: 50%; right: auto; width: min(920px, calc(100vw - 48px)); transform: translateX(-50%); }
 
 .v2-composer {
-  width: min(1320px, 100%);
+  width: 100%;
   overflow: hidden;
   border: 1px solid rgba(31, 30, 29, 0.14);
   border-radius: 16px;
@@ -165,7 +199,8 @@
 
 .v2-composer__context {
   min-height: 52px;
-  padding: 0 24px;
+  margin: 0 18px;
+  padding: 0 18px;
   display: flex;
   align-items: center;
   gap: 28px;
@@ -194,10 +229,10 @@ button.v2-context-item:hover span { text-decoration: underline; text-underline-o
 
 .v2-composer textarea {
   width: 100%;
-  min-height: 112px;
+  min-height: 56px;
   max-height: 240px;
   resize: none;
-  padding: 24px;
+  padding: 14px 18px 8px;
   border: 0;
   outline: 0;
   background: transparent;
@@ -209,8 +244,8 @@ button.v2-context-item:hover span { text-decoration: underline; text-underline-o
 .v2-composer textarea::placeholder { color: #a3a3a0; }
 
 .v2-composer__toolbar {
-  min-height: 58px;
-  padding: 6px 12px 10px;
+  min-height: 48px;
+  padding: 4px 10px 8px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -309,7 +344,7 @@ button.v2-context-item:hover span { text-decoration: underline; text-underline-o
 .v2-runtime-setup button { min-height: 44px; margin-top: 18px; padding: 0 18px; border: 1px solid rgba(31,30,29,.14); border-radius: 6px; }
 
 @media (max-width: 1279px) {
-  .v2-home { width: min(760px, calc(100vw - 64px)); top: 34%; }
+  .v2-home { width: min(760px, calc(100vw - 64px)); top: 48%; }
   .v2-quick-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .v2-quick-action { min-height: 130px; }
 }
@@ -320,7 +355,8 @@ button.v2-context-item:hover span { text-decoration: underline; text-underline-o
   .v2-mark { width: 52px; height: 52px; margin-bottom: 18px; }
   .v2-quick-actions { grid-template-columns: 1fr; margin-top: 28px; max-height: 42vh; overflow: auto; }
   .v2-quick-action { min-height: 88px; padding: 18px; flex-direction: row; align-items: center; justify-content: flex-start; gap: 16px; }
-  .v2-composer-wrap { left: 16px; right: 16px; }
+  .v2-history-actions { left: 12px; }
+  .v2-composer-wrap { left: 16px; right: 16px; width: auto; transform: none; }
   .v2-composer__context { gap: 14px; overflow: auto; }
   .v2-engine-control span { display: none; }
   .v2-select-control svg { display: none; }

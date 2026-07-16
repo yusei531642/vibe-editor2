@@ -470,6 +470,10 @@ export const jaShell: Dict = {
   'v2.runtime.fakeReady':
     '{engine} Runtimeを接続する準備ができました。非PTYアダプターは次の実装WaveでこのTimelineへ接続されます。',
   'v2.shell.views': 'ワークスペース表示',
+  'v2.shell.navigation': 'タスクナビゲーション',
+  'v2.shell.back': '前の画面へ戻る',
+  'v2.shell.forward': '次の画面へ進む',
+  'v2.shell.newTask': '新しいタスク',
   'v2.drawer.left': 'プロジェクトとセッション',
   'v2.drawer.inspector': 'Inspector',
   'v2.runtime.setupTitle': 'Claude Codeをセットアップ',

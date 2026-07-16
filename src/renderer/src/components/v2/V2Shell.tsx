@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
   Bug,
   CodeXml,
   FileCode2,
@@ -9,6 +11,7 @@ import {
   PanelLeft,
   PanelRight,
   SearchCode,
+  SquarePen,
   TestTube2,
   X,
 } from "lucide-react";
@@ -114,6 +117,14 @@ export function V2Shell(): JSX.Element {
     }, 650);
   }, [engine, prompt, running, t]);
 
+  const startNewTask = useCallback(() => {
+    setEntries([]);
+    setPrompt("");
+    setRunning(false);
+    setHasStarted(false);
+    window.dispatchEvent(new Event("vibe-editor2:focus-composer"));
+  }, []);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.isComposing) return;
@@ -142,6 +153,35 @@ export function V2Shell(): JSX.Element {
   return (
     <main className={`v2-shell${hasStarted ? " v2-shell--session" : ""}`}>
       <div className="v2-drag-region" data-tauri-drag-region />
+      <nav className="v2-history-actions" aria-label={t("v2.shell.navigation")}>
+        <button
+          type="button"
+          className="v2-history-actions__workspace"
+          aria-label={t("v2.drawer.left")}
+          onClick={() => setLeftOpen(true)}
+        >
+          <PanelLeft size={20} strokeWidth={1.65} />
+          <i aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          aria-label={t("v2.shell.back")}
+          disabled={!hasStarted}
+          onClick={() => setHasStarted(false)}
+        >
+          <ArrowLeft size={20} strokeWidth={1.65} />
+        </button>
+        <button type="button" aria-label={t("v2.shell.forward")} disabled>
+          <ArrowRight size={20} strokeWidth={1.65} />
+        </button>
+        <button
+          type="button"
+          aria-label={t("v2.shell.newTask")}
+          onClick={startNewTask}
+        >
+          <SquarePen size={20} strokeWidth={1.65} />
+        </button>
+      </nav>
       <nav className="v2-window-actions" aria-label={t("v2.shell.views")}>
         <button
           type="button"
@@ -173,8 +213,11 @@ export function V2Shell(): JSX.Element {
           ) : (
             <>
               <div className="v2-mark" aria-hidden="true">
-                <span>›</span>
-                <i>_</i>
+                <svg viewBox="140 140 760 720" role="presentation">
+                  <path d="M350 721c-94 0-170-76-170-170 0-77 51-142 121-163 6-115 101-206 217-206 91 0 172 56 204 139 79 14 139 83 139 166 0 44-17 84-45 114 2 12 3 24 3 36 0 94-76 170-170 170-51 0-97-22-128-58-31 36-77 58-128 58-70 0-130-42-156-102-25 10-52 16-80 16Z" />
+                  <path d="M400 429l74 86-74 86" />
+                  <path d="M536 601h126" />
+                </svg>
               </div>
               <h1 id="v2-home-title">
                 <button type="button" onClick={() => void handleOpenFolder()}>

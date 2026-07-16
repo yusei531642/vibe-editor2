@@ -10,10 +10,14 @@ and review a durable timeline. Engine differences are capabilities, not separate
 
 - Light is the default (`#f8f8f6`); Dark uses the same DOM and dimensions (`#171716`).
 - The first viewport has no permanent rail, sidebar, status bar, terminal grid, or editor tabs.
-- A 48px drag region and two 44px drawer controls are the only permanent top chrome.
+- A 48px drag region, compact task navigation on the left, and two 44px drawer controls on
+  the right are the only permanent top chrome.
 - The Home center contains the vibe mark, one question, and four action controls.
+- The Home action row is capped at 984px and sits near the vertical center, leaving generous
+  whitespace above it instead of crowding the title bar.
 - Cards are allowed only because each card performs an action. They have a hairline border,
   12px radius, no shadow, and color only in their icon.
+- The idle Composer is capped at 1024px and remains detached from the window edges.
 - UI and user text use Inter with Japanese platform fallbacks. Agent prose uses Source Serif 4.
 - The composer is the only floating surface and the only non-modal element allowed a soft shadow.
 
