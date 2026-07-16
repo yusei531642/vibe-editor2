@@ -95,4 +95,21 @@ describe('runtime projection store', () => {
     expect(projection.diagnostics[0]).toBe('diagnostic-1');
     expect(projection.truncatedCount).toBe(4);
   });
+
+  it('resets the projection when a spawning lifecycle event starts a new epoch', () => {
+    const store = useRuntimeStore.getState();
+    store.projectEvent(event(1, { type: 'lifecycle', state: 'spawning', detail: null }));
+    store.projectEvent(event(2, { type: 'messageDelta', delta: 'old-epoch' }));
+    store.projectEvent(event(3, { type: 'messageComplete', message: 'old-message' }));
+
+    // detach 後の再登録: Rust 側 counter は 1 から振り直される。
+    store.projectEvent(event(1, { type: 'lifecycle', state: 'spawning', detail: null }));
+
+    const projection = useRuntimeStore.getState().byEndpoint['endpoint-1'];
+    expect(projection.lastSequence).toBe(1);
+    expect(projection.lifecycle).toBe('spawning');
+    expect(projection.completedMessages).toHaveLength(0);
+    expect(projection.deltaChunks).toHaveLength(0);
+    expect(projection.outOfOrderCount).toBe(0);
+  });
 });

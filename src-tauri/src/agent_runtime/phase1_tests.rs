@@ -259,3 +259,19 @@ fn manager_drop_detaches_pty_endpoint_without_killing_terminal_owned_session() {
     assert_eq!(kills.load(Ordering::SeqCst), 0);
     registry.remove("terminal-owned");
 }
+
+#[test]
+fn unknown_endpoint_operations_do_not_accumulate_sequence_counters() {
+    let manager = RuntimeManager::new();
+
+    // renderer が任意の endpointId を連打しても sequence counter は永続化されない。
+    for attempt in 0..3 {
+        let operation = manager.write(&format!("ghost-{attempt}"), "data");
+        assert!(operation.result.is_err());
+        assert_eq!(operation.events.len(), 1);
+        // transient 経路は常に sequence=1 (counter 非採番) で emit する。
+        assert_eq!(operation.events[0].sequence, 1);
+    }
+    let repeated = manager.write("ghost-0", "data");
+    assert_eq!(repeated.events[0].sequence, 1);
+}

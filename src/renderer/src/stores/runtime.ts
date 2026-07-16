@@ -140,10 +140,20 @@ function applyPayload(
   }
 }
 
+function isSpawning(event: RuntimeEventEnvelope): boolean {
+  return event.payload.type === 'lifecycle' && event.payload.state === 'spawning';
+}
+
 function project(
   projection: RuntimeEndpointProjection,
   event: RuntimeEventEnvelope
 ): RuntimeEndpointProjection {
+  // Rust 側の sequence counter は「登録 epoch」単位 (detach/dispose で削除、再登録で 1 から)。
+  // lifecycle `spawning` は新 epoch の開始なので、巻き戻った sequence を out-of-order として
+  // 捨てずに projection を作り直す。
+  if (isSpawning(event) && event.sequence <= projection.lastSequence) {
+    return applyPayload(emptyProjection(projection.endpointId), event);
+  }
   if (event.sequence <= projection.lastSequence) {
     return { ...projection, outOfOrderCount: projection.outOfOrderCount + 1 };
   }
