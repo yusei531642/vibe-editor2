@@ -12,8 +12,6 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::Emitter;
 use tokio::sync::{oneshot, OwnedSemaphorePermit, Semaphore};
-
-
 const RECRUIT_GRACE_DEFAULT_MS: u64 = 2_000;
 const RECRUIT_GRACE_MAX_MS: u64 = 10_000;
 
@@ -34,7 +32,6 @@ const HANDSHAKE_GRANT_TTL_DEFAULT_MS: u64 = 120_000;
 /// TTL の許容上限。これより大きい env 値は無効として既定値に丸める
 /// (TTL を実質無効化するような巨大値の誤設定 / 改ざんを防ぐ)。
 const HANDSHAKE_GRANT_TTL_MAX_MS: u64 = 300_000;
-
 #[cfg(test)]
 pub(super) static RECRUIT_RESCUED_EVENTS_FOR_TEST: once_cell::sync::Lazy<
     std::sync::Mutex<Vec<RecruitRescuedPayload>>,
@@ -235,6 +232,8 @@ impl TeamHub {
                     p.issued_at.elapsed()
                 );
                 s.pending_recruits.remove(agent_id);
+                drop(s);
+                self.fail_recruit(agent_id, "handshake_grant_expired").await;
                 return false;
             }
             if p.team_id != team_id {

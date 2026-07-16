@@ -170,8 +170,8 @@ pub async fn team_diagnostics(hub: &TeamHub, ctx: &CallContext) -> Result<Value,
 
     let now = Utc::now();
     let members: Vec<_> = hub
-        .registry
-        .list_team_members(&ctx.team_id)
+        .team_members(&ctx.team_id)
+        .await
         .into_iter()
         .map(|(aid, role)| {
             let inconsistent = match bindings_snapshot.get(&aid) {

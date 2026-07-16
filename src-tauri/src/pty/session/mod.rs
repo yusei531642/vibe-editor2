@@ -28,6 +28,8 @@ mod handle;
 mod injecting_guard;
 mod lock;
 mod registration;
+#[cfg(test)]
+mod recording_test_support;
 mod termination;
 pub(crate) mod spawn;
 pub(crate) mod spawn_metrics;
@@ -45,10 +47,12 @@ pub use handle::{SessionHandle, UserWriteOutcome};
 pub use termination::TerminationReason;
 pub(crate) use registration::RegistrationLatch;
 pub use spawn::{resolve_valid_cwd, spawn_session, SpawnOptions, TerminalWarning};
+pub(crate) use spawn::resolve_terminal_command_path_for_check;
 
 // Issue #937: registry の kill_team テスト等が mock killer 付き handle を作れるよう、
 // テスト専用の構築 helper を crate 内へ再エクスポートする (`handle` モジュール自体は private)。
 #[cfg(test)]
-pub(crate) use handle::test_support;
-
-pub(crate) use spawn::resolve_terminal_command_path_for_check;
+pub(crate) mod test_support {
+    pub(crate) use super::handle::test_support::*;
+    pub(crate) use super::recording_test_support::recording_handle;
+}

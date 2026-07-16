@@ -30,6 +30,7 @@ pub mod protocol;
 pub mod redeliver;
 // Issue #517: 動的ロール同士の責務境界 lint (recruit / assign_task で warning 発火)。
 pub mod role_lint;
+mod runtime_endpoint;
 // Issue #512: 32 KiB 超の payload を `<project_root>/.vibe-team2/tmp/<short_id>.md` に書き出して
 // inject 本文を「summary + attached: <path>」に置換する spool 機構。
 pub mod spool;
@@ -41,13 +42,11 @@ pub mod task_status;
 /// `protocol::permissions` の matrix 検証等を `tests/permissions.rs` に置く。
 #[cfg(test)]
 mod tests;
-
 pub use state::{
     server_log_path_for_diagnostics, set_server_log_path, CallContext, DynamicRole, EnginePolicy,
     EnginePolicyKind, MemberDiagnostics, RecruitAckOutcome, RoleProfileSummary, TeamInfo,
     TeamMessage, TeamTask,
 };
-
 use crate::pty::SessionRegistry;
 use crate::team_hub::state::HubState;
 use anyhow::{anyhow, Result};
@@ -327,6 +326,7 @@ fn constant_time_eq_bytes(a: &[u8], b: &[u8]) -> bool {
 pub struct TeamHub {
     pub(crate) state: Arc<Mutex<HubState>>,
     pub(crate) registry: Arc<SessionRegistry>,
+    pub(crate) runtime: runtime_endpoint::RuntimeRouting,
     /// 任意で AppHandle を保持。`set_app_handle` で setup 後に注入する。
     /// Phase 3: protocol::team_send が `team:handoff` event を emit するために使う。
     pub(crate) app_handle: Arc<Mutex<Option<tauri::AppHandle>>>,

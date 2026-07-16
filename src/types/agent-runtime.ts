@@ -56,6 +56,8 @@ export type CodexThreadAction =
 
 export interface RegisterCodexRuntimeEndpointRequest {
   endpointId: string;
+  teamId?: string | null;
+  agentId?: string | null;
   socketPath?: string | null;
   codexCommand?: string | null;
   cwd?: string | null;

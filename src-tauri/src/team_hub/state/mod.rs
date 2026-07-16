@@ -26,8 +26,10 @@ mod message_log;
 // Issue #1072 Part3: message log の dirty-flag + debounce flusher。`impl TeamHub` の
 // mark_message_dirty / flush_dirty_message_logs / flush_team_now / run_message_flusher を提供。
 mod message_flush;
+pub(crate) use message_flush::MessageFlusher;
 mod persistence;
 mod recruit;
+mod recruit_lifecycle;
 
 // 旧 `state.rs` が公開していた型を `state` の表層に再エクスポートし、外部
 // (`team_hub::mod.rs` の `pub use state::{...}` や `crate::team_hub::state::HubState`

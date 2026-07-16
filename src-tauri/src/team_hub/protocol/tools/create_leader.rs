@@ -111,7 +111,7 @@ pub async fn team_create_leader(
     let new_agent_id = format!("vc-{}", Uuid::new_v4());
 
     let started = Instant::now();
-    let current_members = hub.registry.list_team_members(&ctx.team_id);
+    let current_members = hub.team_members(&ctx.team_id).await;
     // Issue #423: 引き継ぎのため singleton=false で登録。同チームに leader が
     // 2 人並ぶ過渡状態を許容する (`team_switch_leader` で旧 leader を retire するまで)。
     let channels = match hub

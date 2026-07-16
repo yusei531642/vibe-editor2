@@ -8,3 +8,4 @@
 //! ここでは Hub state 操作を伴わない pure な permission table を中心にカバーする。
 
 mod permissions;
+mod runtime_delivery;

@@ -173,6 +173,7 @@ impl TeamHub {
             }
         }
         self.flush_team_now(team_id).await;
+        self.cleanup_team_runtimes(team_id).await;
 
         let mut s = self.state.lock().await;
         let Some(existing) = s.teams.get(team_id) else {
@@ -200,6 +201,8 @@ impl TeamHub {
 
         // (2) agent ライフサイクル state (role binding / diagnostics / status rate limit) を一括除去。
         s.remove_team_agents(team_id);
+        s.recruit_lifecycles
+            .retain(|_, lifecycle| lifecycle.team_id != team_id);
 
         // (3) (team_id, *) を key に持つ advisory file lock も retain で一括除去。
         s.file_locks.retain(|(tid, _), _| tid != team_id);
@@ -212,12 +215,15 @@ impl TeamHub {
     #[cfg(test)]
     pub async fn clear_team(&self, team_id: &str) -> bool {
         self.flush_team_now(team_id).await;
+        self.cleanup_team_runtimes(team_id).await;
         let mut s = self.state.lock().await;
         s.teams.remove(team_id);
         s.active_teams.remove(team_id);
         s.dynamic_roles.remove(team_id);
         s.recruit_semaphores.remove(team_id);
         s.remove_team_agents(team_id);
+        s.recruit_lifecycles
+            .retain(|_, lifecycle| lifecycle.team_id != team_id);
         s.file_locks.retain(|(tid, _), _| tid != team_id);
         s.active_teams.is_empty()
     }

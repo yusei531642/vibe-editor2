@@ -68,7 +68,7 @@ pub async fn team_switch_leader(
         .map(ToOwned::to_owned);
 
     // 新 leader が同チームに居て role が leader か確認
-    let members = hub.registry.list_team_members(&ctx.team_id);
+    let members = hub.team_members(&ctx.team_id).await;
     let new_leader_entry = members
         .iter()
         .find(|(aid, _)| aid == &new_leader_agent_id)

@@ -1965,7 +1965,7 @@ export interface RecruitRequestPayload {
   dynamicRole?: RecruitRequestDynamicRole | null;
 }
 
-export type { DismissRequestPayload, FileLockConflictEventPayload, FileLockConflictSnapshot, RecruitCancelledPayload, RoleCreatedPayload, RoleLintFinding, RoleLintWarningPayload } from './generated/team-events';
+export type { DismissRequestPayload, FileLockConflictEventPayload, FileLockConflictSnapshot, RecruitCancelledPayload, RecruitLifecyclePayload, RecruitLifecycleState, RoleCreatedPayload, RoleLintFinding, RoleLintWarningPayload } from './generated/team-events';
 
 /**
  * Issue #930: `team:handoff` イベントの payload。

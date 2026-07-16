@@ -378,8 +378,7 @@ async fn resolve_send_targets(
     to: &str,
     message_kind: MessageKind,
 ) -> SendTargets {
-    let registry = hub.registry.clone();
-    let team_members = registry.list_team_members(&ctx.team_id);
+    let team_members = hub.team_members(&ctx.team_id).await;
     let active_leader_agent_id = {
         let state = hub.state.lock().await;
         state
@@ -591,7 +590,6 @@ async fn dispatch_injects(
 ) -> DispatchOutcome {
     // hand-off event の preview。元 god-fn と同じく effective_message の先頭 80 文字。
     let preview: String = effective_message.chars().take(80).collect();
-    let registry = hub.registry.clone();
     // Issue #630: 各 inject() 呼び出しを `pty_inflight` tracker に計上する。これにより
     // window CloseRequested handler の wait_idle(3s) が、PTY write 中の inject task の
     // 自然完了を待ってから kill_all() を呼べるようになる (= SessionHandle Mutex poison /
@@ -599,7 +597,8 @@ async fn dispatch_injects(
     let inflight = hub.inflight.clone();
     let mut join_set = tokio::task::JoinSet::new();
     for (target_aid, target_role) in &targets.targets {
-        let reg = registry.clone();
+        let delivery_hub = hub.clone();
+        let team_id = ctx.team_id.clone();
         let aid = target_aid.clone();
         let from_role = message_kind.inject_from_label(&ctx.role);
         let msg = effective_message.to_string();
@@ -609,7 +608,7 @@ async fn dispatch_injects(
             // Issue #1062: codex は app-server JSON-RPC、それ以外は従来 PTY inject へルーティング。
             let result = tracker
                 .track_async(crate::team_hub::deliver::deliver_message(
-                    reg, &aid, &from_role, &msg,
+                    &delivery_hub, &team_id, &aid, &from_role, &msg,
                 ))
                 .await;
             (aid, role_clone, result)

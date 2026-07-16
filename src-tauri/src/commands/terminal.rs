@@ -150,6 +150,7 @@ pub async fn terminal_create(
         });
     }
     let is_codex_command = command_validation::is_codex_command(&command);
+    let runtime_team_agent = opts.team_id.clone().zip(opts.agent_id.clone());
 
     // Issue #607 (security): Claude `--resume <id>` に渡される session id は renderer
     // (CardFrame / TerminalCard / use-team-launch-helpers) が `args.push("--resume", id)`
@@ -209,6 +210,19 @@ pub async fn terminal_create(
                 .pty_registry
                 .get(&existing_id)
                 .and_then(|h| h.scrollback_snapshot());
+            if let Some((team_id, agent_id)) = &runtime_team_agent {
+                if let Err(error) = state
+                    .team_hub
+                    .bind_pty_runtime_endpoint(team_id, agent_id, Some(existing_id.clone()))
+                    .await
+                {
+                    tracing::warn!(
+                        team_id,
+                        agent_id,
+                        "[terminal] failed to bind attached PTY runtime endpoint: {error}"
+                    );
+                }
+            }
             return Ok(TerminalCreateResult {
                 ok: true,
                 id: Some(existing_id),
@@ -449,6 +463,19 @@ pub async fn terminal_create(
                     id.clone(),
                     command.clone(),
                 );
+            }
+            if let Some((team_id, agent_id)) = &runtime_team_agent {
+                if let Err(error) = state
+                    .team_hub
+                    .bind_pty_runtime_endpoint(team_id, agent_id, Some(id.clone()))
+                    .await
+                {
+                    tracing::warn!(
+                        team_id,
+                        agent_id,
+                        "[terminal] failed to bind PTY runtime endpoint: {error}"
+                    );
+                }
             }
 
             // Issue #413: Fallback 経路として PTY 直接注入する。

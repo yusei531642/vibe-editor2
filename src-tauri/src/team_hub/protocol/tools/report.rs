@@ -11,7 +11,7 @@
 
 use crate::commands::team_state::{TeamReportFinding, TeamReportSnapshot};
 use crate::team_hub::task_status::TaskStatus;
-use crate::team_hub::{inject, CallContext, TeamHub};
+use crate::team_hub::{CallContext, TeamHub};
 
 use super::super::consts::MAX_TEAM_REPORTS;
 use super::error::ToolError;
@@ -308,7 +308,7 @@ pub async fn team_report(
         // (Leader 引き継ぎ過渡期で複数 leader が共存し得るため)。自分自身 (= leader が自己 report する
         // ケース) は inject 対象から外す。
         let self_agent_id = ctx.agent_id.clone();
-        let members = hub.registry.list_team_members(&ctx.team_id);
+        let members = hub.team_members(&ctx.team_id).await;
         if let Some(active) = active_leader.filter(|v| !v.trim().is_empty()) {
             members
                 .into_iter()
@@ -339,8 +339,8 @@ pub async fn team_report(
     let mut delivered_to: Vec<String> = Vec::new();
     let mut inject_failed: Vec<Value> = Vec::new();
     for leader_aid in &leader_agent_ids {
-        let inject_fut =
-            inject::inject(hub.registry.clone(), leader_aid, &ctx.role, &terminal_summary);
+        let inject_fut = crate::team_hub::deliver::deliver_message(
+            hub, &ctx.team_id, leader_aid, &ctx.role, &terminal_summary);
         match hub.inflight.track_async(inject_fut).await {
             Ok(()) => delivered_to.push(leader_aid.clone()),
             Err(e) => {

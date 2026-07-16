@@ -6,6 +6,8 @@
 //! ミラーを更新し、`deliver.rs` がここを見て分岐する。settings.json を Single Source of Truth とし、
 //! 本ミラーはその読み取り専用キャッシュにすぎない。
 
+#![allow(dead_code)]
+
 use std::sync::atomic::{AtomicU8, Ordering};
 
 /// codex `team_send` の配送方式。
@@ -48,6 +50,11 @@ static PREF: AtomicU8 = AtomicU8::new(0);
 /// settings の `codexTeamSendDelivery` をミラーへ反映する。
 pub fn set_from_settings(value: Option<&str>) {
     PREF.store(parse(value).as_u8(), Ordering::Relaxed);
+}
+
+pub fn sync_settings(codex_delivery: &str, runtime_backend: &str) {
+    set_from_settings(Some(codex_delivery));
+    crate::agent_runtime::set_requested_backend_from_settings(runtime_backend);
 }
 
 /// 現在の配送方式。

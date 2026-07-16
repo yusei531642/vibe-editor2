@@ -27,8 +27,8 @@ pub async fn team_info(hub: &TeamHub, ctx: &CallContext) -> Result<Value, ToolEr
         state.team_member_roles(&ctx.team_id).into_iter().collect();
     drop(state);
     let members: Vec<_> = hub
-        .registry
-        .list_team_members(&ctx.team_id)
+        .team_members(&ctx.team_id)
+        .await
         .into_iter()
         .map(|(aid, role)| {
             // role 比較は case-insensitive (resolve_targets と同じ流儀)。

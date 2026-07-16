@@ -8,7 +8,6 @@ use crate::commands::team_state::{
     FileLockConflictSnapshot, HandoffLifecycleEvent, HumanGateState, TaskDoneEvidenceSnapshot,
     TaskPreApprovalSnapshot, TeamReportSnapshot, TeamTaskSnapshot, WorkerReportSnapshot,
 };
-use crate::pty::SessionRegistry;
 use crate::team_hub::{bridge, TeamHub};
 use anyhow::Result;
 use once_cell::sync::OnceCell;
@@ -16,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::{Mutex, Semaphore};
+use tokio::sync::Semaphore;
 
 use super::recruit::PendingRecruit;
 
@@ -37,6 +36,8 @@ pub(crate) struct HubState {
     /// pending を含められるようにする (旧実装は registry の handshake 済みだけを見ていたため
     /// 並行 recruit で上限超過や singleton 重複が起きえた)。
     pub(crate) pending_recruits: HashMap<String, PendingRecruit>,
+    /// requested から terminal state までを保持する recruit lifecycle の正本。
+    pub(crate) recruit_lifecycles: HashMap<String, super::recruit_lifecycle::RecruitLifecycle>,
     /// Issue #934: agent ライフサイクルの統合 entry。key は `(team_id, agent_id)`。
     ///
     /// 旧 4 並行 map (`agent_role_bindings` #183/#637 / `member_diagnostics` #342 /
@@ -45,6 +46,8 @@ pub(crate) struct HubState {
     /// team prefix retain 一発。遷移は `state::agent_entry` の accessor 経由のみ。
     /// in-memory only (Hub 再起動で全 clear)。
     pub(crate) agents: super::agent_entry::AgentMap,
+    /// agentId -> native / PTY RuntimeEndpoint。TeamHub が配送 backend の差異を所有する。
+    pub(crate) runtime_endpoints: crate::team_hub::runtime_endpoint::RuntimeEndpointMap,
     /// renderer から同期された role profile 一覧 (team_list_role_profiles で返す)
     pub(crate) role_profile_summary: Vec<RoleProfileSummary>,
     /// Leader が team_create_role / team_recruit(role_definition=...) で動的に生成した
@@ -459,41 +462,6 @@ pub struct CallContext {
 }
 
 impl TeamHub {
-    /// テスト専用コンストラクタ。production は in-flight tracker を共有する
-    /// `with_inflight` を使う (`AppState::new` 経由)。Issue #801: caller は
-    /// `#[cfg(test)]` モジュールのみのため test build 限定にし dead_code 警告を解消する。
-    #[cfg(test)]
-    pub fn new(registry: Arc<SessionRegistry>) -> Self {
-        Self::with_inflight(registry, crate::pty::InFlightTracker::new())
-    }
-
-    /// Issue #630: AppState 側で生成した in-flight tracker を共有する用。
-    /// `AppState::new()` から呼ばれる。
-    pub fn with_inflight(
-        registry: Arc<SessionRegistry>,
-        inflight: Arc<crate::pty::InFlightTracker>,
-    ) -> Self {
-        Self {
-            registry,
-            state: Arc::new(Mutex::new(HubState {
-                teams: HashMap::new(),
-                active_teams: HashSet::new(),
-                endpoint: String::new(),
-                token: String::new(),
-                bridge_path: PathBuf::new(),
-                pending_recruits: HashMap::new(),
-                agents: HashMap::new(),
-                role_profile_summary: Vec::new(),
-                dynamic_roles: HashMap::new(),
-                file_locks: HashMap::new(),
-                recruit_semaphores: HashMap::new(),
-                message_flusher: super::message_flush::MessageFlusher::default(),
-            })),
-            app_handle: Arc::new(Mutex::new(None)),
-            inflight,
-        }
-    }
-
     /// setup 後に AppHandle を注入 (event::emit で使う)
     pub async fn set_app_handle(&self, app: tauri::AppHandle) {
         let mut g = self.app_handle.lock().await;

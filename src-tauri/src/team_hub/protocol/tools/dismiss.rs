@@ -36,7 +36,7 @@ pub async fn team_dismiss(
         });
     }
     // チーム所属チェック
-    let members = hub.registry.list_team_members(&ctx.team_id);
+    let members = hub.team_members(&ctx.team_id).await;
     if !members.iter().any(|(aid, _)| aid == &agent_id) {
         return Err(DismissError {
             code: "dismiss_not_found".into(),
@@ -66,6 +66,8 @@ pub async fn team_dismiss(
     // dismiss された pending が孤立し、try_register_pending_recruit の人数 / singleton
     // 判定にゴミとして残り続けていた (renderer 反映の冪等性が壊れる)。
     hub.cancel_pending_recruit(&agent_id).await;
+    hub.cancel_recruit(&agent_id, "dismissed").await;
+    hub.cleanup_agent_runtime(&ctx.team_id, &agent_id).await;
     // Issue #526: dismiss された worker が握っていた advisory file lock を漏れなく解放する。
     // 解放しないと「dismiss 済の worker が無限に lock を保持し続けて誰もファイル編集できない」
     // 状態になりうる。dismiss が成立した時点で lock も自動失効と扱う。
