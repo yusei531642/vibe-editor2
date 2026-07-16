@@ -144,7 +144,7 @@ fn authorize_known_thread(
     }
 }
 
-#[cfg(unix)]
+// unix の登録経路と (両 OS でコンパイルされる) unit test の双方から使うため cfg を付けない。
 fn record_known_thread(
     known: &std::sync::Mutex<std::collections::HashSet<String>>,
     thread_id: Option<String>,
