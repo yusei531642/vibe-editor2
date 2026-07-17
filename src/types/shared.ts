@@ -1,5 +1,6 @@
 // main/preload/renderer で共有する型定義
 import type { FileLockConflictSnapshot } from './generated/team-events';
+import type { AgentRuntimeBackend } from './agent-runtime';
 export type { TerminalWriteOutcome, TerminalWriteResult } from './terminal-write';
 export type ThemeName =
   | 'claude-dark'
@@ -34,8 +35,18 @@ export interface DialogFileFilter {
  * Issue #1113 で custom agent に descriptor フィールド (engine/env/icon/tags/defaultSkillIds/
  * skillInjection) を追加し v13。すべて additive-optional なので migration block は不要だが、
  * 旧 build (#641 save-guard) が新フィールドを silent drop しないよう版数を上げる。
+ * Issue #21 で `agentRuntimeBackend` / `teamSceneV2` を追加し v14。同じく additive だが
+ * 旧 build の silent drop を防ぐため bump する。
  */
-export const APP_SETTINGS_SCHEMA_VERSION = 13;
+export const APP_SETTINGS_SCHEMA_VERSION = 14;
+
+// Issue #21: agent runtime backend / capability 診断の型は agent-runtime.ts に集約。
+export type {
+  AgentRuntimeBackend,
+  AgentRuntimeCapability,
+  AgentRuntimeDiagnostics,
+  AgentRuntimeSelectionReason,
+} from './agent-runtime';
 
 /**
  * API agent provider preset。`openai-compatible` 系は base URL と request shape を共有し、
@@ -266,6 +277,8 @@ export interface AppSettings {
   terminalFontFamily?: string;
   terminalFontSize: number;
   density: Density;
+  agentRuntimeBackend: AgentRuntimeBackend;
+  teamSceneV2: boolean;
   /** ステータスバー左側に表示するキャラクターの見た目 */
   statusMascotVariant?: StatusMascotVariant;
   /**
@@ -698,6 +711,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
     "'JetBrainsMono Nerd Font Mono', 'JetBrains Mono Variable', 'Cascadia Mono', 'Cascadia Code', Consolas, 'Lucida Console', 'Segoe UI Symbol', monospace",
   terminalFontSize: 13,
   density: 'normal',
+  agentRuntimeBackend: 'pty',
+  teamSceneV2: false,
   statusMascotVariant: 'vibe',
   claudeCommand: 'claude',
   claudeArgs: '',
@@ -743,6 +758,8 @@ export const RESETTABLE_SETTING_KEYS = [
   'terminalFontFamily',
   'terminalFontSize',
   'density',
+  'agentRuntimeBackend',
+  'teamSceneV2',
   'statusMascotVariant',
   'claudeCommand',
   'claudeArgs',

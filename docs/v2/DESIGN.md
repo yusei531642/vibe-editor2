@@ -3,7 +3,7 @@
 ## Product thesis
 
 vibe-editor 2 is a quiet, focus-first desktop workspace. Claude, Codex, API agents,
-and vibe-team2 share one interaction model: choose a project, describe an outcome,
+and vibe-team share one interaction model: choose a project, describe an outcome,
 and review a durable timeline. Engine differences are capabilities, not separate UIs.
 
 ## Visual contract

@@ -70,6 +70,38 @@ export const jaSettings: Dict = {
   'settings.section.codex.label': 'Codex',
   'settings.section.codex.title': 'Codex',
   'settings.section.codex.desc': '起動コマンドと引数',
+  'settings.section.runtime.label': 'ランタイム',
+  'settings.section.runtime.title': 'エージェントランタイム',
+  'settings.section.runtime.desc': '実行バックエンド、実験フラグ、利用可能な機能',
+  'settings.runtime.title': 'ランタイムガードレール',
+  'settings.runtime.backend.label': '実行バックエンド',
+  'settings.runtime.backend.pty': 'PTY（現在の安定版）',
+  'settings.runtime.backend.auto': '自動選択',
+  'settings.runtime.backend.native': 'Native（実験的）',
+  'settings.runtime.backend.hint':
+    'PTY は現在の実行経路を維持します。自動選択と Native は、必要な capability が揃わない場合に PTY へ安全にフォールバックします。',
+  'settings.runtime.teamSceneV2.label': 'Team Scene v2 を有効化（実験的）',
+  'settings.runtime.teamSceneV2.hint':
+    '既定では無効です。このフラグを有効にした場合のみ、今後の Team Scene v2 機能を表示します。',
+  'settings.runtime.diagnostics.title': 'Capability 診断',
+  'settings.runtime.diagnostics.refresh': '再診断',
+  'settings.runtime.diagnostics.loading': '診断中…',
+  'settings.runtime.diagnostics.error': '診断に失敗しました: {error}',
+  'settings.runtime.diagnostics.selected': '選択されたバックエンド',
+  'settings.runtime.diagnostics.capabilities': '検出された capability',
+  'settings.runtime.reason.explicitPty': 'PTY が明示的に選択されています。',
+  'settings.runtime.reason.explicitNativeAvailable':
+    'Native に必要な capability がすべて利用できます。',
+  'settings.runtime.reason.nativeCapabilitiesUnavailable':
+    'Native に必要な capability が不足しているため、PTY を使用します。',
+  'settings.runtime.reason.autoNativeCapabilitiesAvailable':
+    '自動診断で Native に必要な capability が揃っているため、Native を選択しました。',
+  'settings.runtime.reason.autoPtyFallback':
+    '自動診断で Native の要件を満たさなかったため、PTY を選択しました。',
+  'settings.runtime.capability.ptyExecution': 'PTY 実行',
+  'settings.runtime.capability.nativeProcessExecution': 'Native プロセス実行',
+  'settings.runtime.capability.structuredEventStream': '構造化イベントストリーム',
+  'settings.runtime.capability.cooperativeCancellation': '協調キャンセル',
   // Issue #1068: codex team_send の配送方式トグル
   'settings.codexDelivery.title': 'team_send の配送方式',
   'settings.codexDelivery.label': '配送方式',
@@ -322,7 +354,7 @@ export const jaSettings: Dict = {
   'settings.mcp.manualTitle': '手動で入れる',
   'settings.mcp.manualDesc': '好みのエディタで設定ファイルを開いて、以下の断片をマージしてください。',
   'settings.mcp.manualStep1': '~/.claude.json を開く (無ければ新規作成)。',
-  'settings.mcp.manualStep2': '最上位の "mcpServers" オブジェクトに "vibe-team2" エントリを追加。',
+  'settings.mcp.manualStep2': '最上位の "mcpServers" オブジェクトに "vibe-team" エントリを追加。',
   'settings.mcp.manualStep3': 'Codex を使う場合は ~/.codex/config.toml に同等の [mcp_servers.vibe-team2] を追加。',
   'settings.mcp.copy': 'コピー',
   'settings.mcp.copied': 'コピーしました',

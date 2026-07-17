@@ -25,7 +25,7 @@ Spin up a *team* of AI coding agents. Watch them hand off work in real time. Dro
 
 ## TL;DR
 
-`vibe-editor 2` is a GUI-first workspace for Claude Code, Codex, and vibe-team2.
+`vibe-editor 2` is a GUI-first workspace for Claude Code, Codex, and vibe-team.
 
 It is a **multi-agent dispatcher** for Claude Code and Codex. You tell a **Leader agent** what you want, the Leader **dynamically recruits a team** of workers tuned for the job, messages are **pty-injected directly into each agent's prompt** through an embedded MCP hub (no polling, no file queues, no latency), and you watch + redirect from a single Tauri desktop window — or rearrange agents, files, diffs, and terminals on an **infinite canvas**.
 
@@ -172,7 +172,7 @@ Three-tab sidebar:
 - Tray icon for fast restore
 - `lucide-react` icon set
 - Markdown preview alongside the Monaco editor
-- Self-installing **vibe-team2 Skill** so Claude follows team protocols without manual prompting
+- Self-installing **vibe-team Skill** so Claude follows team protocols without manual prompting
 - Silent **auto-updater** via `tauri-plugin-updater` against GitHub Releases — signed update manifest, resumable downloads
 
 ---
@@ -260,8 +260,8 @@ src/renderer/src/                # React 19 + TypeScript 6, UI only
 ```
 
 - On startup the Rust `TeamHub` opens a local TCP JSON-RPC server with a random port + 24-byte auth token.
-- A tiny `team-bridge.js` is written to `%APPDATA%\vibe-editor2\team-bridge.js` and registered as the `vibe-team2` MCP server in `~/.claude.json` and `~/.codex/config.toml`.
-- When Claude Code spawns `vibe-team2`, the bridge connects to the hub via TCP using the token.
+- A tiny `team-bridge.js` is written to `%APPDATA%\vibe-editor\team-bridge.js` and registered as the `vibe-team` MCP server in `~/.claude.json` and `~/.codex/config.toml`.
+- When Claude Code spawns `vibe-team`, the bridge connects to the hub via TCP using the token.
 - `team_send(to, message)` resolves the target `agentId` → pty and calls `pty.write(message + '\r')` directly **using bracketed paste** so multi-line and Unicode payloads survive ConPTY.
 - Long payloads (>~32 KiB) are rejected at the hub; the worker is told to stash the content into `.vibe-team2/tmp/<id>.md` and send a summary + path instead.
 - On app shutdown the hub stops and MCP config entries are cleaned up (graceful uninstall).

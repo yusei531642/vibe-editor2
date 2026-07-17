@@ -14,6 +14,7 @@
 import { invokeCommand } from './tauri-api/command-error';
 
 import { app } from './tauri-api/app';
+import { agentRuntime } from './tauri-api/agent-runtime';
 import { apiAgents } from './tauri-api/api-agents';
 import { dialog } from './tauri-api/dialog';
 import { files } from './tauri-api/files';
@@ -48,6 +49,7 @@ export const api = {
   ping: (): Promise<string> => invokeCommand('ping'),
 
   app,
+  agentRuntime,
   apiAgents,
   git,
   files,

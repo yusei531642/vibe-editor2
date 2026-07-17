@@ -23,7 +23,8 @@ use crate::commands::error::{CommandError, CommandResult};
 /// Issue #1113 で custom agent descriptor フィールド (engine/env/icon/tags/defaultSkillIds/
 /// skillInjection) を追加し v13。additive-optional だが #641 save-guard が旧 build による
 /// 新フィールド silent drop を防ぐよう版数を上げる。
-pub const SETTINGS_SCHEMA_VERSION: u32 = 13;
+/// Issue #21 で runtime backend / teamSceneV2 を追加し v14。
+pub const SETTINGS_SCHEMA_VERSION: u32 = 14;
 
 /// `~/.vibe-editor2/team-state/*.json` (TeamHub orchestration state) の現行 schema version。
 /// Issue #470 で導入。

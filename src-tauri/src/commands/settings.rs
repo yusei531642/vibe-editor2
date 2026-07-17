@@ -66,6 +66,10 @@ pub struct Settings {
     pub terminal_font_size: f64,
     #[serde(default = "default_density")]
     pub density: String,
+    #[serde(default = "default_agent_runtime_backend")]
+    pub agent_runtime_backend: String,
+    #[serde(default)]
+    pub team_scene_v2: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status_mascot_variant: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -253,6 +257,8 @@ impl Default for Settings {
             terminal_font_family: Some(default_terminal_font_family()),
             terminal_font_size: default_terminal_font_size(),
             density: default_density(),
+            agent_runtime_backend: default_agent_runtime_backend(),
+            team_scene_v2: false,
             status_mascot_variant: Some("vibe".to_string()),
             status_mascot_custom_path: None,
             claude_command: default_claude_command(),
@@ -334,6 +340,10 @@ fn default_terminal_font_size() -> f64 {
 
 fn default_density() -> String {
     "normal".to_string()
+}
+
+fn default_agent_runtime_backend() -> String {
+    "pty".to_string()
 }
 
 fn default_claude_command() -> String {
@@ -563,6 +573,8 @@ mod tests {
         assert_eq!(v["language"], json!("ja"));
         assert_eq!(v["theme"], json!("claude-light"));
         assert_eq!(v["density"], json!("normal"));
+        assert_eq!(v["agentRuntimeBackend"], json!("pty"));
+        assert_eq!(v["teamSceneV2"], json!(false));
         assert_eq!(v["uiFontSize"], json!(14.0));
         assert_eq!(v["editorFontSize"], json!(13.0));
         assert_eq!(v["terminalFontSize"], json!(13.0));
@@ -622,6 +634,8 @@ mod tests {
         assert_eq!(s.language, "ja");
         assert_eq!(s.ui_font_size, 14.0);
         assert_eq!(s.claude_command, "claude");
+        assert_eq!(s.agent_runtime_backend, "pty");
+        assert!(!s.team_scene_v2);
     }
 
     /// Issue #493: 旧バージョン (schemaVersion=0 / 1) からの load も deserialize 失敗しないこと。

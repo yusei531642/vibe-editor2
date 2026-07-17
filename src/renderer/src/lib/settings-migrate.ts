@@ -14,6 +14,7 @@
 import {
   APP_SETTINGS_SCHEMA_VERSION,
   DEFAULT_SETTINGS,
+  type AgentRuntimeBackend,
   type AppSettings,
   type Language,
   type StatusMascotVariant,
@@ -106,7 +107,7 @@ export function migrateSettings(raw: unknown): AppSettings {
   if (!isObject(raw)) {
     return { ...DEFAULT_SETTINGS };
   }
-  let data: Raw = { ...raw };
+  const data: Raw = { ...raw };
   const version = typeof data.schemaVersion === 'number' ? data.schemaVersion : 0;
 
   // --- Version 0 → 1: legacy field names / type coercion ---
@@ -299,6 +300,16 @@ export function migrateSettings(raw: unknown): AppSettings {
   }
   // 改竄や future build 由来で runtime が欠けた entry も毎ロードで安全側へ寄せる。
   data.customAgents = migrateCustomAgentsRuntime(data.customAgents);
+
+  // --- Version 13 → 14: agent runtime backend + Team Scene v2 flag (Issue #21) ---
+  // 現行の PTY 実行経路を既定のまま維持し、実験 UI は opt-in にする。
+  const validRuntimeBackends: AgentRuntimeBackend[] = ['auto', 'native', 'pty'];
+  if (!validRuntimeBackends.includes(data.agentRuntimeBackend as AgentRuntimeBackend)) {
+    data.agentRuntimeBackend = DEFAULT_SETTINGS.agentRuntimeBackend;
+  }
+  if (typeof data.teamSceneV2 !== 'boolean') {
+    data.teamSceneV2 = DEFAULT_SETTINGS.teamSceneV2;
+  }
 
   data.schemaVersion = APP_SETTINGS_SCHEMA_VERSION;
   // 最終マージで欠損フィールドを DEFAULT_SETTINGS で埋める

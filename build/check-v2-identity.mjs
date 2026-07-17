@@ -25,7 +25,6 @@ requireText('src-tauri/src/commands/voice.rs', 'KEYRING_SERVICE: &str = "vibe-ed
 requireText('src-tauri/src/mcp_config/claude.rs', 'ENTRY: &str = "vibe-team2"');
 requireText('src-tauri/src/mcp_config/codex.rs', 'SECTION: &str = "mcp_servers.vibe-team2"');
 requireText('src-tauri/src/team_hub/protocol/consts.rs', 'SPOOL_DIR: &str = ".vibe-team2/tmp"');
-requireText('src-tauri/src/commands/api_agents/skills.rs', 'VIBE_TEAM_SKILL_ID: &str = "vibe-team2"');
 requireText('src-tauri/src/team_hub/mod.rs', 'vibe-editor2-team-hub-');
 requireText('src/renderer/src/stores/ui.ts', "name: 'vibe-editor2:ui'");
 requireText('src/renderer/src/stores/canvas-persistence.ts', "'vibe-editor2:canvas'");

@@ -4,6 +4,7 @@
 // 各 commands/*.rs は IPC 契約 (src/types/ipc.ts) に合わせた #[tauri::command] を提供する。
 // PTY backend (portable-pty + batcher) は src/pty/ に集約。
 
+mod agent_runtime;
 mod commands;
 mod mcp_config;
 mod pty;
@@ -179,6 +180,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             // ---- root ----
             commands::ping,
+            // ---- agent runtime (Issue #21) ----
+            commands::agent_runtime::agent_runtime_diagnostics,
             // ---- app ----
             commands::app::app_get_project_root,
             commands::project_authority::app_restore_authorized_project_root,

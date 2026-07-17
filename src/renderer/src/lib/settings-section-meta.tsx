@@ -1,6 +1,7 @@
 import {
   Bot,
   Code2,
+  Cpu,
   Mic,
   Palette,
   Plug,
@@ -37,6 +38,7 @@ export const SECTION_ICON_TYPES: Record<string, LucideIcon> = {
   fonts: Type,
   claude: Bot,
   codex: Code2,
+  runtime: Cpu,
   roles: Users,
   mcp: Plug,
   voice: Mic,
@@ -58,6 +60,7 @@ export const FIXED_SECTION_IDS = [
   'fonts',
   'claude',
   'codex',
+  'runtime',
   'roles',
   'mcp',
   'voice',

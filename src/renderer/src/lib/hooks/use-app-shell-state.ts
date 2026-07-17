@@ -35,6 +35,8 @@ export type AppShellSettings = Pick<
   | 'terminalFontFamily'
   | 'terminalFontSize'
   | 'density'
+  | 'agentRuntimeBackend'
+  | 'teamSceneV2'
   | 'statusMascotVariant'
   | 'statusMascotCustomPath'
   | 'notepad'
@@ -64,6 +66,8 @@ export function useAppShellState(): AppShellSettings {
     terminalFontFamily: useSettingsValue('terminalFontFamily'),
     terminalFontSize: useSettingsValue('terminalFontSize'),
     density: useSettingsValue('density'),
+    agentRuntimeBackend: useSettingsValue('agentRuntimeBackend'),
+    teamSceneV2: useSettingsValue('teamSceneV2'),
     statusMascotVariant: useSettingsValue('statusMascotVariant'),
     statusMascotCustomPath: useSettingsValue('statusMascotCustomPath'),
     notepad: useSettingsValue('notepad'),

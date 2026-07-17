@@ -22,6 +22,7 @@ import { AgentWizard } from './settings/AgentWizard';
 import { McpSection } from './settings/McpSection';
 import { LogsSection } from './settings/LogsSection';
 import { VoiceSection } from './settings/VoiceSection';
+import { RuntimeSection } from './settings/RuntimeSection';
 
 interface SettingsModalProps {
   open: boolean;
@@ -293,6 +294,8 @@ export function SettingsModal({
         );
       case 'roles':
         return <RoleProfilesSection />;
+      case 'runtime':
+        return <RuntimeSection draft={draft} update={update} />;
       case 'mcp':
         return <McpSection draft={draft} update={update} />;
       case 'voice':

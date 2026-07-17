@@ -71,7 +71,7 @@ fn current_skill_text() -> String {
     out
 }
 
-/// Issue #998: API エージェントが TeamHub 参加時に自動追加する `vibe-team2` skill の
+/// Issue #998: API エージェントが TeamHub 参加時に自動追加する `vibe-team` skill の
 /// バンドル本文。プロジェクトに `.claude/skills/vibe-team2/SKILL.md` がまだ書き出されて
 /// いない (= チーム未起動) 場合のフォールバックとして使う。
 pub(crate) fn bundled_vibe_team_skill_text() -> String {

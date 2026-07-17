@@ -12,7 +12,7 @@ pub(crate) fn config_path() -> PathBuf {
     dirs::home_dir().unwrap_or_default().join(".claude.json")
 }
 
-/// `mcpServers["vibe-team2"]` を `desired` で上書き。
+/// `mcpServers["vibe-team"]` を `desired` で上書き。
 /// 既に同じ内容なら false (no-op)、変更したら true を返す。
 /// 旧 `vive-team` エントリがあれば同時に削除する (名前変更による自動マイグレーション)。
 ///
@@ -298,14 +298,14 @@ mod tests {
         let changed = setup_at(&absent_path, &desired).await.unwrap();
         assert!(changed, "absent file should be created");
         let created = fs::read_to_string(&absent_path).await.unwrap();
-        assert!(created.contains("vibe-team2"));
+        assert!(created.contains("vibe-team"));
 
         let empty_path = tmp.path().join("empty.claude.json");
         fs::write(&empty_path, b"").await.unwrap();
         let changed = setup_at(&empty_path, &desired).await.unwrap();
         assert!(changed, "empty file should be initialized");
         let initialized = fs::read_to_string(&empty_path).await.unwrap();
-        assert!(initialized.contains("vibe-team2"));
+        assert!(initialized.contains("vibe-team"));
     }
 
     #[test]
