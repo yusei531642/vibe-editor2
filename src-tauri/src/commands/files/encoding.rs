@@ -144,7 +144,7 @@ pub fn detect_text_or_binary(bytes: &[u8]) -> (bool, String, String) {
 }
 
 fn utf16_decode(bytes: &[u8], little_endian: bool) -> Option<String> {
-    if bytes.len() % 2 != 0 {
+    if !bytes.len().is_multiple_of(2) {
         return None;
     }
     let mut units = Vec::with_capacity(bytes.len() / 2);
@@ -160,7 +160,7 @@ fn utf16_decode(bytes: &[u8], little_endian: bool) -> Option<String> {
 }
 
 fn utf32_decode(bytes: &[u8], little_endian: bool) -> Option<String> {
-    if bytes.len() % 4 != 0 {
+    if !bytes.len().is_multiple_of(4) {
         return None;
     }
     let mut out = String::with_capacity(bytes.len() / 4);
