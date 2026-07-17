@@ -27,6 +27,15 @@ fn fixture_config(scenario: &str, secret: Option<&str>) -> SidecarLaunchConfig {
     }
 }
 
+#[test]
+fn production_launch_rejects_settings_supplied_claude_wrappers() {
+    let error = match SidecarLaunchConfig::production("/tmp/untrusted-claude-wrapper".into()) {
+        Ok(_) => panic!("custom command unexpectedly entered native provider"),
+        Err(error) => error,
+    };
+    assert_eq!(error.code, "runtime_claude_custom_command_requires_pty");
+}
+
 fn wait_until(mut predicate: impl FnMut() -> bool) {
     let deadline = Instant::now() + Duration::from_secs(3);
     while !predicate() {

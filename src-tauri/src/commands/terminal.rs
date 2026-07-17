@@ -15,6 +15,7 @@ pub(crate) mod write_outcome;
 use crate::pty::SpawnOptions;
 use crate::state::AppState;
 use crate::util::log_redact::redact_home;
+use super::terminal_worktree::terminal_team_agent_pair;
 use codex_prompt::inject_codex_prompt_to_pty;
 pub use create_types::{SavePastedImageResult, TerminalCreateOptions, TerminalCreateResult};
 use tauri::{AppHandle, State};
@@ -162,8 +163,8 @@ pub async fn terminal_create(
     }
     let is_codex_command = command_validation::is_codex_command(&command);
     let runtime_team_agent = opts.team_id.clone().zip(opts.agent_id.clone());
-    match (&opts.team_id, &opts.agent_id) {
-        (Some(team_id), Some(agent_id)) => {
+    match terminal_team_agent_pair(opts.team_id.as_deref(), opts.agent_id.as_deref()) {
+        Ok(Some((team_id, agent_id))) => {
             // 失敗は既存契約どおり Ok(ok:false) で返す。
             if let Err(error) = state
                 .team_hub
@@ -177,11 +178,11 @@ pub async fn terminal_create(
                 });
             }
         }
-        (None, None) => {}
-        _ => {
+        Ok(None) => {}
+        Err(error) => {
             return Ok(TerminalCreateResult {
                 ok: false,
-                error: Some("team_id and agent_id must be provided together".to_string()),
+                error: Some(error.to_string()),
                 ..Default::default()
             });
         }
@@ -294,14 +295,7 @@ pub async fn terminal_create(
         crate::pty::session::resolve_valid_cwd(&opts.cwd, opts.fallback_cwd.as_deref());
     let mut managed_cwd_identity = None;
     if let Some((team_id, agent_id)) = &runtime_team_agent {
-        match super::terminal_worktree::resolve_worker_worktree(
-            &state,
-            opts.role.as_deref(),
-            team_id,
-            agent_id,
-        )
-        .await
-        {
+        match super::terminal_worktree::resolve_worker_worktree(&state, team_id, agent_id).await {
             super::terminal_worktree::WorktreeResolution::Managed(managed_cwd, identity) => {
                 cwd = managed_cwd;
                 warning = None;
@@ -930,6 +924,7 @@ mod managed_worktree_role_tests {
         assert!(!uses_managed_worker_worktree(Some("planner")));
         assert!(!uses_managed_worker_worktree(None));
     }
+
 }
 
 #[cfg(test)]

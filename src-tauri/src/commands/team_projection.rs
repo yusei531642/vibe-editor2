@@ -8,12 +8,10 @@ use crate::team_hub::CallContext;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tauri::{AppHandle, Emitter, State};
-
 const MAX_TEAM_MESSAGE_BYTES: usize = 64 * 1024;
 const MAX_APPROVAL_REQUEST_ID_BYTES: usize = 256;
 const MAX_SNAPSHOT_CURSORS: usize = 512;
 const MAX_CURSOR_TIMESTAMP_BYTES: usize = 128;
-
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TeamRuntimeEventCursor {
@@ -22,14 +20,17 @@ pub struct TeamRuntimeEventCursor {
     sequence: u64,
     timestamp: String,
 }
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TeamProjectionSnapshotRequest {
     team_id: String,
     since_sequence: Vec<TeamRuntimeEventCursor>,
 }
-
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionRestoreSnapshotRequest {
+    project_root: String,
+}
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TeamProjectionSnapshot {
@@ -39,14 +40,12 @@ pub struct TeamProjectionSnapshot {
     retained_event_cursors: Vec<TeamRuntimeEventCursor>,
     runtime_dropped_count: u64,
 }
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TeamMemberCommandRequest {
     team_id: String,
     command: TeamMemberCommand,
 }
-
 #[derive(Debug, Deserialize)]
 #[serde(
     tag = "action",
@@ -73,7 +72,6 @@ enum TeamMemberCommand {
         agent_id: String,
     },
 }
-
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TeamMemberCommandResult {
@@ -207,8 +205,7 @@ pub async fn team_projection_snapshot(
     )?;
     for cursor in &request.since_sequence {
         validate_id("endpoint_id", &cursor.endpoint_id)?;
-        if cursor.epoch == 0
-            || cursor.sequence == 0
+        if cursor.sequence == 0
             || cursor.timestamp.is_empty()
             || cursor.timestamp.chars().any(char::is_control)
         {
@@ -247,20 +244,36 @@ pub async fn team_projection_snapshot(
     })
 }
 
-/// Phase 8 startup sync. The five fields intentionally match `team_projection_snapshot` so the
-/// renderer can switch from durable replay to live polling without an intermediate shape.
+/// Phase 8 startup sync; its shape matches `team_projection_snapshot` for seamless live polling.
 #[tauri::command]
 pub async fn session_restore_snapshot(
     state: State<'_, AppState>,
+    request: SessionRestoreSnapshotRequest,
 ) -> CommandResult<Option<TeamProjectionSnapshot>> {
+    let authorized_root = crate::commands::authz::assert_active_project_root_fresh(
+        &state.project_root,
+        &state.project_root_identity,
+        &request.project_root,
+    )
+    .await?;
+    let project_root = authorized_root.as_str().to_string();
     let manager = state.runtime_manager.clone();
-    let restored = tauri::async_runtime::spawn_blocking(move || manager.restore_latest())
+    let restored = tauri::async_runtime::spawn_blocking(move || {
+        manager.restore_latest(&project_root)
+    })
         .await
         .map_err(|error| CommandError::coded("runtime_restore_task_failed", error.to_string()))?
         .map_err(|error| CommandError::coded("runtime_restore_failed", error))?;
+    crate::commands::authz::assert_active_project_root_fresh(
+        &state.project_root,
+        &state.project_root_identity,
+        &request.project_root,
+    )
+    .await?;
     let Some(team_id) = restored.team_id else {
         return Ok(None);
     };
+    validate_id("team_id", &team_id)?;
     for binding in &restored.bindings {
         let Some(resume_id) = binding.resume_id.clone() else {
             continue;

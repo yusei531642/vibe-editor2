@@ -115,7 +115,7 @@ export async function installMockApi(
       },
       app: {
         checkClaude: async () => ({ ok: true, version: 'mock' }),
-        restoreAuthorizedProjectRoot: async () => '',
+        restoreAuthorizedProjectRoot: async () => restore ? '/mock/project' : '',
         pickAndActivateProjectRoot: async () => null,
         reconfirmProjectRoot: async () => null,
         setWindowTitle: noop,
@@ -125,7 +125,7 @@ export async function installMockApi(
         setRoleProfileSummary: noop
       },
       team: {
-        restoreSnapshot: async () => snapshot,
+        restoreSnapshot: async (_projectRoot: string) => snapshot,
         projectionSnapshot: async () => snapshot,
         memberCommand: async () => ({ action: 'respondApproval', affectedAgentIds: ['leader-e2e'] })
       },

@@ -236,6 +236,24 @@ impl WorktreeManager {
         let _assignment = self.assignment_lock.lock().await;
         let existing = { self.state.lock().await.assignments.get(&key).cloned() };
         if let Some(record) = existing {
+            if record.path.is_dir() {
+                return git_ops::ensure_worktree(&record.path).await;
+            }
+            // worker が managed directory を削除しても assignment と branch は正本に残る。
+            // missing registration を prune し、同じ branch を再 attach して復旧する。
+            let expected_path = self.managed_path(&key).await?;
+            if record.path != expected_path {
+                return Err(CommandError::authz(
+                    "stored worktree path does not match the managed assignment path",
+                ));
+            }
+            git_ops::prune_worktrees(project_root.as_path()).await?;
+            git_ops::add_existing_worktree(
+                project_root.as_path(),
+                &record.path,
+                &record.branch_name,
+            )
+            .await?;
             return git_ops::ensure_worktree(&record.path).await;
         }
         let path = self.managed_path(&key).await?;

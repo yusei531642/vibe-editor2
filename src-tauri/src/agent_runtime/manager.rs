@@ -5,7 +5,8 @@ use super::{
     RuntimeApprovalResponseRequest, RuntimeEventBuffer, RuntimeEventEnvelope, RuntimeEventPayload,
     RuntimeEventPersistence, RuntimeLifecycleState, RuntimeRestoreSnapshot,
     RuntimeSessionForkRequest, RuntimeSessionResumeRequest, RuntimeSessionSpawnRequest,
-    RuntimeSteerRequest, RuntimeTurnSpawnRequest, DEFAULT_RUNTIME_EVENT_BUFFER_CAPACITY,
+    RuntimeSteerRequest, RuntimeTeamBinding, RuntimeTurnSpawnRequest,
+    DEFAULT_RUNTIME_EVENT_BUFFER_CAPACITY,
 };
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -410,42 +411,47 @@ impl RuntimeManager {
         event
     }
 
-    pub fn persist_team_binding(
-        &self,
-        team_id: &str,
-        agent_id: &str,
-        endpoint_id: &str,
-        provider: &str,
-        resume_id: Option<String>,
-        resumable: bool,
-    ) {
+    pub fn persist_team_binding(&self, binding: RuntimeTeamBinding<'_>) {
         let Some(persistence) = &self.persistence else {
             return;
         };
+        let Some(project_root) = binding
+            .project_root
+            .map(str::trim)
+            .filter(|root| !root.is_empty())
+        else {
+            tracing::warn!(
+                team_id = binding.team_id,
+                endpoint_id = binding.endpoint_id,
+                "[runtime-persistence] binding has no authorized project root"
+            );
+            return;
+        };
         let Some((epoch, _)) = recover_mutex(self.sequences.lock())
-            .get(endpoint_id)
+            .get(binding.endpoint_id)
             .copied()
         else {
             tracing::warn!(
-                endpoint_id,
+                endpoint_id = binding.endpoint_id,
                 "[runtime-persistence] binding has no active epoch"
             );
             return;
         };
         persistence.bind(PersistedRuntimeBinding {
-            team_id: team_id.to_string(),
-            agent_id: agent_id.to_string(),
-            endpoint_id: endpoint_id.to_string(),
+            project_root: project_root.to_string(),
+            team_id: binding.team_id.to_string(),
+            agent_id: binding.agent_id.to_string(),
+            endpoint_id: binding.endpoint_id.to_string(),
             epoch,
-            provider: provider.to_string(),
-            resume_id,
-            resumable,
+            provider: binding.provider.to_string(),
+            resume_id: binding.resume_id,
+            resumable: binding.resumable,
         });
     }
 
-    pub fn restore_latest(&self) -> Result<RuntimeRestoreSnapshot, String> {
+    pub fn restore_latest(&self, project_root: &str) -> Result<RuntimeRestoreSnapshot, String> {
         match &self.persistence {
-            Some(persistence) => persistence.restore_latest(),
+            Some(persistence) => persistence.restore_latest(project_root),
             None => Ok(RuntimeRestoreSnapshot::default()),
         }
     }

@@ -6,16 +6,27 @@ use rusqlite::{params, Connection, OptionalExtension};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
 
-const SCHEMA_VERSION: i64 = 1;
+const SCHEMA_VERSION: i64 = 2;
 const DATABASE_NAME: &str = "runtime-events.db";
 
 #[derive(Clone, Debug)]
 pub struct PersistedRuntimeBinding {
+    pub project_root: String,
     pub team_id: String,
     pub agent_id: String,
     pub endpoint_id: String,
     pub epoch: u64,
     pub provider: String,
+    pub resume_id: Option<String>,
+    pub resumable: bool,
+}
+
+pub struct RuntimeTeamBinding<'a> {
+    pub project_root: Option<&'a str>,
+    pub team_id: &'a str,
+    pub agent_id: &'a str,
+    pub endpoint_id: &'a str,
+    pub provider: &'a str,
     pub resume_id: Option<String>,
     pub resumable: bool,
 }
@@ -30,7 +41,10 @@ pub struct RuntimeRestoreSnapshot {
 enum WriterMessage {
     Append(RuntimeEventEnvelope),
     Bind(PersistedRuntimeBinding),
-    Restore(Sender<Result<RuntimeRestoreSnapshot, String>>),
+    Restore {
+        project_root: String,
+        reply: Sender<Result<RuntimeRestoreSnapshot, String>>,
+    },
 }
 
 #[derive(Clone)]
@@ -68,10 +82,13 @@ impl RuntimeEventPersistence {
         }
     }
 
-    pub fn restore_latest(&self) -> Result<RuntimeRestoreSnapshot, String> {
+    pub fn restore_latest(&self, project_root: &str) -> Result<RuntimeRestoreSnapshot, String> {
         let (sender, receiver) = mpsc::channel();
         self.sender
-            .send(WriterMessage::Restore(sender))
+            .send(WriterMessage::Restore {
+                project_root: project_root.to_string(),
+                reply: sender,
+            })
             .map_err(|_| "runtime event writer is unavailable".to_string())?;
         receiver
             .recv()
@@ -86,7 +103,7 @@ fn writer_loop(path: PathBuf, receiver: Receiver<WriterMessage>) {
             let message = format!("runtime database startup failed: {error:#}");
             tracing::warn!("[runtime-persistence] {message}");
             while let Ok(pending) = receiver.recv() {
-                if let WriterMessage::Restore(reply) = pending {
+                if let WriterMessage::Restore { reply, .. } = pending {
                     let _ = reply.send(Err(message.clone()));
                 }
             }
@@ -97,8 +114,12 @@ fn writer_loop(path: PathBuf, receiver: Receiver<WriterMessage>) {
         let result = match message {
             WriterMessage::Append(event) => append_event(&connection, &event),
             WriterMessage::Bind(binding) => bind_session(&connection, &binding),
-            WriterMessage::Restore(reply) => {
-                let result = read_latest(&connection).map_err(|error| error.to_string());
+            WriterMessage::Restore {
+                project_root,
+                reply,
+            } => {
+                let result = read_latest(&connection, &project_root)
+                    .map_err(|error| error.to_string());
                 let _ = reply.send(result);
                 continue;
             }
@@ -162,6 +183,7 @@ fn open_database(path: &Path) -> Result<Connection> {
          CREATE INDEX IF NOT EXISTS runtime_events_team_order
            ON runtime_events(team_id, id);
          CREATE TABLE IF NOT EXISTS runtime_sessions(
+           project_root TEXT NOT NULL,
            team_id TEXT NOT NULL,
            agent_id TEXT NOT NULL,
            endpoint_id TEXT NOT NULL,
@@ -174,7 +196,7 @@ fn open_database(path: &Path) -> Result<Connection> {
            PRIMARY KEY(endpoint_id, epoch)
          );
          CREATE INDEX IF NOT EXISTS runtime_sessions_latest
-           ON runtime_sessions(updated_at DESC);",
+           ON runtime_sessions(project_root, updated_at DESC);",
     )?;
     let version: Option<i64> = connection
         .query_row("SELECT version FROM schema_version LIMIT 1", [], |row| {
@@ -196,7 +218,12 @@ fn open_database(path: &Path) -> Result<Connection> {
 }
 
 fn validate_event_rows(connection: &Connection) -> Result<()> {
-    let mut statement = connection.prepare("SELECT id, envelope_json FROM runtime_events")?;
+    // Startup cost must not grow with append-only history. `quick_check` above validates the
+    // SQLite structure; bounded recent-row parsing catches malformed envelopes without a full
+    // table scan. Older malformed rows remain isolated to the scoped restore that reads them.
+    let mut statement = connection.prepare(
+        "SELECT id, envelope_json FROM runtime_events ORDER BY id DESC LIMIT 256",
+    )?;
     let rows = statement.query_map([], |row| {
         Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
     })?;
@@ -273,13 +300,15 @@ fn bind_session(connection: &Connection, binding: &PersistedRuntimeBinding) -> R
     let transaction = connection.unchecked_transaction()?;
     transaction.execute(
         "INSERT INTO runtime_sessions
-         (team_id, agent_id, endpoint_id, epoch, provider, resume_id, resumable, started_at, updated_at)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)
+         (project_root, team_id, agent_id, endpoint_id, epoch, provider, resume_id, resumable, started_at, updated_at)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)
          ON CONFLICT(endpoint_id, epoch) DO UPDATE SET
-           team_id=excluded.team_id, agent_id=excluded.agent_id,
+           project_root=excluded.project_root, team_id=excluded.team_id,
+           agent_id=excluded.agent_id,
            provider=excluded.provider, resume_id=excluded.resume_id,
            resumable=excluded.resumable, updated_at=excluded.updated_at",
         params![
+            binding.project_root,
             binding.team_id,
             binding.agent_id,
             binding.endpoint_id,
@@ -299,11 +328,12 @@ fn bind_session(connection: &Connection, binding: &PersistedRuntimeBinding) -> R
     Ok(())
 }
 
-fn read_latest(connection: &Connection) -> Result<RuntimeRestoreSnapshot> {
+fn read_latest(connection: &Connection, project_root: &str) -> Result<RuntimeRestoreSnapshot> {
     let team_id: Option<String> = connection
         .query_row(
-            "SELECT team_id FROM runtime_sessions ORDER BY updated_at DESC LIMIT 1",
-            [],
+            "SELECT team_id FROM runtime_sessions
+             WHERE project_root=?1 ORDER BY updated_at DESC LIMIT 1",
+            [project_root],
             |row| row.get(0),
         )
         .optional()?;
@@ -311,18 +341,19 @@ fn read_latest(connection: &Connection) -> Result<RuntimeRestoreSnapshot> {
         return Ok(RuntimeRestoreSnapshot::default());
     };
     let mut binding_statement = connection.prepare(
-        "SELECT team_id, agent_id, endpoint_id, epoch, provider, resume_id, resumable
-         FROM runtime_sessions WHERE team_id=?1 ORDER BY epoch DESC",
+        "SELECT project_root, team_id, agent_id, endpoint_id, epoch, provider, resume_id, resumable
+         FROM runtime_sessions WHERE project_root=?1 AND team_id=?2 ORDER BY epoch DESC",
     )?;
-    let rows = binding_statement.query_map([&team_id], |row| {
+    let rows = binding_statement.query_map(params![project_root, &team_id], |row| {
         Ok(PersistedRuntimeBinding {
-            team_id: row.get(0)?,
-            agent_id: row.get(1)?,
-            endpoint_id: row.get(2)?,
-            epoch: row.get(3)?,
-            provider: row.get(4)?,
-            resume_id: row.get(5)?,
-            resumable: row.get(6)?,
+            project_root: row.get(0)?,
+            team_id: row.get(1)?,
+            agent_id: row.get(2)?,
+            endpoint_id: row.get(3)?,
+            epoch: row.get(4)?,
+            provider: row.get(5)?,
+            resume_id: row.get(6)?,
+            resumable: row.get(7)?,
         })
     })?;
     let mut bindings = Vec::new();
@@ -335,8 +366,14 @@ fn read_latest(connection: &Connection) -> Result<RuntimeRestoreSnapshot> {
     }
     bindings.sort_by(|left, right| left.agent_id.cmp(&right.agent_id));
     let mut event_statement = connection
-        .prepare("SELECT envelope_json FROM runtime_events WHERE team_id=?1 ORDER BY id")?;
-    let event_rows = event_statement.query_map([&team_id], |row| row.get::<_, String>(0))?;
+        .prepare(
+            "SELECT event.envelope_json FROM runtime_events event
+             INNER JOIN runtime_sessions session
+               ON session.endpoint_id=event.endpoint_id AND session.epoch=event.epoch
+             WHERE session.project_root=?1 AND event.team_id=?2 ORDER BY event.id",
+        )?;
+    let event_rows = event_statement
+        .query_map(params![project_root, &team_id], |row| row.get::<_, String>(0))?;
     let mut events = Vec::new();
     for row in event_rows {
         let raw = row?;

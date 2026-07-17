@@ -140,13 +140,17 @@ pub(super) async fn register_codex_endpoint(
                 ),
             ));
         }
+        let project_root = state.team_hub.team_project_root(&team_id).await;
         state.runtime_manager.persist_team_binding(
-            &team_id,
-            &agent_id,
-            &endpoint_id,
-            "codex-native",
-            Some(thread_id.clone()),
-            true,
+            crate::agent_runtime::RuntimeTeamBinding {
+                project_root: project_root.as_deref(),
+                team_id: &team_id,
+                agent_id: &agent_id,
+                endpoint_id: &endpoint_id,
+                provider: "codex-native",
+                resume_id: Some(thread_id.clone()),
+                resumable: true,
+            },
         );
     }
     // start/resume/fork いずれも成功した thread を「観測済み」として記録し、
@@ -266,13 +270,17 @@ pub(super) async fn register_claude_endpoint(
                     ),
                 )
             })?;
+        let project_root = state.team_hub.team_project_root(&team_id).await;
         state.runtime_manager.persist_team_binding(
-            &team_id,
-            &agent_id,
-            &endpoint_id,
-            "claude-native",
-            session_id.clone(),
-            session_id.is_some(),
+            crate::agent_runtime::RuntimeTeamBinding {
+                project_root: project_root.as_deref(),
+                team_id: &team_id,
+                agent_id: &agent_id,
+                endpoint_id: &endpoint_id,
+                provider: "claude-native",
+                resume_id: session_id.clone(),
+                resumable: session_id.is_some(),
+            },
         );
     }
     record_known_thread(&state.known_claude_sessions, session_id.clone());

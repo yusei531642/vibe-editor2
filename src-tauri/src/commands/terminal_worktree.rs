@@ -22,13 +22,33 @@ fn fail(message: String) -> WorktreeResolution {
     })
 }
 
+pub(super) fn terminal_team_agent_pair<'a>(
+    team_id: Option<&'a str>,
+    agent_id: Option<&'a str>,
+) -> Result<Option<(&'a str, &'a str)>, &'static str> {
+    match (team_id, agent_id) {
+        (Some(team_id), Some(agent_id)) => Ok(Some((team_id, agent_id))),
+        // Leader terminal など team context だけを持つ既存経路は runtime binding 対象外。
+        (Some(_), None) | (None, None) => Ok(None),
+        (None, Some(_)) => Err("agent_id requires team_id"),
+    }
+}
+
 pub(super) async fn resolve_worker_worktree(
     state: &tauri::State<'_, AppState>,
-    role: Option<&str>,
     team_id: &str,
     agent_id: &str,
 ) -> WorktreeResolution {
-    if !super::terminal::uses_managed_worker_worktree(role) {
+    // opts.role is renderer-controlled. The Hub binding/lifecycle is the policy authority.
+    let role = match state
+        .team_hub
+        .authorized_team_agent_role(team_id, agent_id)
+        .await
+    {
+        Ok(role) => role,
+        Err(error) => return fail(format!("team role authorization failed: {error}")),
+    };
+    if !super::terminal::uses_managed_worker_worktree(Some(&role)) {
         return WorktreeResolution::PlainCwd;
     }
     let Some(active_root) = crate::state::current_project_root(&state.project_root) else {
@@ -59,5 +79,23 @@ pub(super) async fn resolve_worker_worktree(
             WorktreeResolution::PlainCwd
         }
         Err(error) => fail(format!("worktree assignment failed: {error}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::terminal_team_agent_pair;
+
+    #[test]
+    fn team_only_terminal_remains_valid_but_agent_only_is_rejected() {
+        assert_eq!(terminal_team_agent_pair(Some("team-1"), None), Ok(None));
+        assert_eq!(
+            terminal_team_agent_pair(Some("team-1"), Some("worker-1")),
+            Ok(Some(("team-1", "worker-1")))
+        );
+        assert_eq!(
+            terminal_team_agent_pair(None, Some("worker-1")),
+            Err("agent_id requires team_id")
+        );
     }
 }

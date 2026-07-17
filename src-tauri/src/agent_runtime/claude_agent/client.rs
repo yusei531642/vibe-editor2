@@ -38,6 +38,14 @@ pub struct SidecarLaunchConfig {
 
 impl SidecarLaunchConfig {
     pub fn production(claude_command: String) -> Result<Self, RuntimeAdapterError> {
+        let claude_command =
+            crate::agent_runtime::resolve_native_claude_command(&claude_command).ok_or_else(|| {
+                RuntimeAdapterError::new(
+                    "runtime_claude_custom_command_requires_pty",
+                    "custom Claude commands cannot receive native runtime credentials; use PTY",
+                    false,
+                )
+            })?;
         let program = crate::agent_runtime::resolve_node_executable().ok_or_else(|| {
             RuntimeAdapterError::new(
                 "runtime_claude_node_unavailable",
@@ -53,7 +61,10 @@ impl SidecarLaunchConfig {
             )
         })?;
         let mut environment = safe_parent_environment();
-        environment.push(("VIBE_CLAUDE_COMMAND".to_string(), claude_command));
+        environment.push((
+            "VIBE_CLAUDE_COMMAND".to_string(),
+            claude_command.to_string_lossy().into_owned(),
+        ));
         let mut secret_values = Vec::new();
         for name in credential_environment_names() {
             if let Ok(value) = std::env::var(name) {

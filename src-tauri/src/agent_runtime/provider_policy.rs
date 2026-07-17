@@ -156,24 +156,20 @@ impl ProviderAvailability for SystemProviderAvailability {
             RuntimeProvider::ClaudeNative => {
                 resolve_node_executable().is_some()
                     && resolve_sidecar_entrypoint().is_some()
-                    && command_is_available(&self.claude_command)
+                    && resolve_native_claude_command(&self.claude_command).is_some()
             }
             RuntimeProvider::Api | RuntimeProvider::Pty => true,
         }
     }
 }
 
-fn command_is_available(command: &str) -> bool {
-    let trimmed = command.trim();
-    if trimmed.is_empty() {
-        return false;
+/// Native sidecar may forward credentials only to the default Claude CLI resolved from the
+/// host PATH. A settings-supplied wrapper/path stays on the PTY provider.
+pub fn resolve_native_claude_command(command: &str) -> Option<PathBuf> {
+    if command.trim() != "claude" {
+        return None;
     }
-    let path = Path::new(trimmed);
-    if path.components().count() > 1 || path.is_absolute() {
-        path.is_file()
-    } else {
-        which::which(trimmed).is_ok()
-    }
+    which::which("claude").ok()
 }
 
 pub fn resolve_node_executable() -> Option<PathBuf> {
@@ -183,10 +179,20 @@ pub fn resolve_node_executable() -> Option<PathBuf> {
 pub fn resolve_sidecar_entrypoint() -> Option<PathBuf> {
     let dev =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../src-sidecars/claude-agent/index.mjs");
-    if dev.is_file() {
-        return Some(dev);
-    }
     let executable = std::env::current_exe().ok()?;
+    resolve_sidecar_entrypoint_from(&dev, &executable, cfg!(debug_assertions))
+}
+
+fn resolve_sidecar_entrypoint_from(
+    dev: &Path,
+    executable: &Path,
+    allow_dev_source: bool,
+) -> Option<PathBuf> {
+    // A release binary must never prefer the build machine's source checkout. The sidecar
+    // receives native credentials, so packaged builds resolve only Tauri-bundled resources.
+    if allow_dev_source && dev.is_file() {
+        return Some(dev.to_path_buf());
+    }
     let base = executable.parent()?;
     [
         base.join("sidecars/claude-agent/dist/index.mjs"),
@@ -201,6 +207,7 @@ pub fn resolve_sidecar_entrypoint() -> Option<PathBuf> {
 mod tests {
     use super::*;
     use std::collections::HashSet;
+    use std::fs;
 
     struct Available(HashSet<RuntimeProvider>);
 
@@ -249,5 +256,45 @@ mod tests {
         let selected = select_provider("claude", true, BackendKind::Pty, &available(&[]));
         assert_eq!(selected.provider, RuntimeProvider::Api);
         assert_eq!(selected.reason, ProviderSelectionReason::ApiRuntime);
+    }
+
+    #[test]
+    fn custom_claude_commands_are_not_native_credential_targets() {
+        assert!(resolve_native_claude_command("my-claude-wrapper").is_none());
+        assert!(resolve_native_claude_command("/tmp/claude").is_none());
+        assert!(resolve_native_claude_command("claude --dangerous-flag").is_none());
+    }
+
+    #[test]
+    fn release_sidecar_resolution_never_prefers_the_source_checkout() {
+        let temp = tempfile::tempdir().unwrap();
+        let dev = temp.path().join("source/index.mjs");
+        let executable = temp.path().join("app/vibe-editor");
+        let bundled = temp
+            .path()
+            .join("app/resources/sidecars/claude-agent/dist/index.mjs");
+        fs::create_dir_all(dev.parent().unwrap()).unwrap();
+        fs::create_dir_all(bundled.parent().unwrap()).unwrap();
+        fs::write(&dev, "source").unwrap();
+        fs::write(&bundled, "bundle").unwrap();
+
+        assert_eq!(
+            resolve_sidecar_entrypoint_from(&dev, &executable, false),
+            Some(bundled)
+        );
+    }
+
+    #[test]
+    fn debug_sidecar_resolution_can_use_the_source_checkout() {
+        let temp = tempfile::tempdir().unwrap();
+        let dev = temp.path().join("source/index.mjs");
+        let executable = temp.path().join("app/vibe-editor");
+        fs::create_dir_all(dev.parent().unwrap()).unwrap();
+        fs::write(&dev, "source").unwrap();
+
+        assert_eq!(
+            resolve_sidecar_entrypoint_from(&dev, &executable, true),
+            Some(dev)
+        );
     }
 }

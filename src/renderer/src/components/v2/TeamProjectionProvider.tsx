@@ -335,7 +335,7 @@ export function TeamProjectionProvider({
         thread: { mode: 'resume', threadId: endpoint.sessionId }
       });
     } else if (endpoint.provider === 'claude-native') {
-      await window.api.agentRuntime.registerClaudeEndpoint({
+      await window.api.agentRuntime.reconnectClaude({
         endpointId: endpoint.endpointId,
         teamId: team.id,
         agentId,
