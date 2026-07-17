@@ -177,6 +177,31 @@ async fn team_send_delivers_to_native_and_pty_members_through_agent_mapping() {
 }
 
 #[tokio::test]
+async fn team_members_excludes_disposed_native_endpoint_with_retained_state() {
+    let (hub, _registry, manager) = hub();
+    let team_id = "team-native-members";
+    for (agent_id, endpoint_id) in [
+        ("live-native", "live-native-endpoint"),
+        ("dead-native", "dead-native-endpoint"),
+    ] {
+        let native = native_adapter();
+        assert!(manager
+            .register_endpoint(endpoint_id.into(), native.adapter)
+            .result
+            .is_ok());
+        seed_member(&hub, team_id, agent_id, "worker").await;
+        hub.bind_native_runtime_endpoint(team_id, agent_id, endpoint_id.into(), None)
+            .await
+            .unwrap();
+    }
+
+    assert!(manager.dispose("dead-native-endpoint").result.is_ok());
+
+    let members = hub.team_members(team_id).await;
+    assert_eq!(members, vec![("live-native".into(), "worker".into())]);
+}
+
+#[tokio::test]
 async fn explicit_pty_backend_preserves_legacy_inject_trace_and_skips_native() {
     let (hub, registry, manager) = hub();
     hub.set_runtime_backend_for_test(BackendKind::Pty);
