@@ -87,11 +87,11 @@ fn hub() -> (TeamHub, Arc<SessionRegistry>, Arc<RuntimeManager>) {
 }
 
 async fn seed_member(hub: &TeamHub, team_id: &str, agent_id: &str, role: &str) {
-    hub.state
-        .lock()
-        .await
-        .seed_role_binding(team_id, agent_id, role);
+    let mut state = hub.state.lock().await;
+    state.active_teams.insert(team_id.to_string());
+    state.seed_role_binding(team_id, agent_id, role);
 }
+
 
 fn expected_pty_delivery(from_role: &str, message: &str) -> Vec<u8> {
     let banner = format!("[Team ← {from_role}] ");
@@ -115,6 +115,7 @@ async fn team_send_delivers_to_native_and_pty_members_through_agent_mapping() {
         .register_endpoint("native-endpoint".into(), native.adapter)
         .result
         .is_ok());
+    seed_member(&hub, team_id, native_id, "worker").await;
     hub.bind_native_runtime_endpoint(
         team_id,
         native_id,
@@ -175,6 +176,7 @@ async fn explicit_pty_backend_preserves_legacy_inject_trace_and_skips_native() {
         .register_endpoint("native-dual".into(), native.adapter)
         .result
         .is_ok());
+    seed_member(&hub, team_id, agent_id, "worker").await;
     hub.bind_native_runtime_endpoint(
         team_id,
         agent_id,
@@ -255,6 +257,7 @@ async fn recruit_failure_rolls_back_placeholder_process_endpoint_and_sequence() 
         .register_endpoint("failed-endpoint".into(), native.adapter)
         .result
         .is_ok());
+    seed_member(&hub, team_id, agent_id, "worker").await;
     hub.bind_native_runtime_endpoint(
         team_id,
         agent_id,
@@ -298,6 +301,7 @@ async fn recruit_transitions_preserve_runtime_session_and_task_association() {
     let _ = hub
         .transition_recruit_lifecycle("associated-agent", RecruitLifecycleState::Spawning, None)
         .await;
+    seed_member(&hub, "team-associated", "associated-agent", "worker").await;
     hub.bind_native_runtime_endpoint(
         "team-associated",
         "associated-agent",
@@ -420,4 +424,61 @@ async fn production_timeout_cancellation_keeps_grace_rescue_reachable() {
     let rescued = hub.take_recruit_rescued_events_for_test();
     assert_eq!(rescued.len(), 1);
     assert_eq!(rescued[0].0, agent_id);
+
+    // rescue 後の handshake 成功で lifecycle が Ready まで解決すること
+    // (PR #34 二次レビュー: spawning のまま取り残されない)。
+    assert!(
+        hub.resolve_pending_recruit(agent_id, team_id, "programmer")
+            .await
+    );
+    let lifecycle_state = hub
+        .state
+        .lock()
+        .await
+        .recruit_lifecycles
+        .get(agent_id)
+        .map(|l| l.state);
+    assert_eq!(lifecycle_state, Some(RecruitLifecycleState::Ready));
+}
+
+/// PR #34 一次レビュー 🟡7: bind_native_runtime_endpoint は renderer 由来の
+/// (team_id, agent_id) を fail-closed に検証する。
+#[tokio::test]
+async fn bind_native_endpoint_rejects_unauthorized_team_or_agent() {
+    let (hub, _registry, manager) = hub();
+    let native = native_adapter();
+    assert!(manager
+        .register_endpoint("endpoint-a".into(), native.adapter)
+        .result
+        .is_ok());
+
+    // inactive team は拒否
+    let err = hub
+        .bind_native_runtime_endpoint("ghost-team", "agent-a", "endpoint-a".into(), None)
+        .await
+        .unwrap_err();
+    assert!(err.contains("not active"), "{err}");
+
+    // active team でも非メンバーは拒否
+    seed_member(&hub, "team-authz", "member-a", "worker").await;
+    let err = hub
+        .bind_native_runtime_endpoint("team-authz", "intruder", "endpoint-a".into(), None)
+        .await
+        .unwrap_err();
+    assert!(err.contains("not a member"), "{err}");
+
+    // メンバーへの bind は成功し、live binding の乗っ取りは拒否
+    hub.bind_native_runtime_endpoint("team-authz", "member-a", "endpoint-a".into(), None)
+        .await
+        .unwrap();
+    let other = native_adapter();
+    assert!(manager
+        .register_endpoint("endpoint-b".into(), other.adapter)
+        .result
+        .is_ok());
+    let err = hub
+        .bind_native_runtime_endpoint("team-authz", "member-a", "endpoint-b".into(), None)
+        .await
+        .unwrap_err();
+    assert!(err.contains("already has a live native endpoint"), "{err}");
 }

@@ -235,7 +235,13 @@ impl TeamHub {
                 );
                 s.pending_recruits.remove(agent_id);
                 drop(s);
-                let _ = self.fail_recruit(agent_id, "handshake_grant_expired").await;
+                // handshake path から terminal cleanup (spawn_blocking を含む) を切り離す。
+                // handle_client を跨いだ lock 順序依存を作らない (PR #34 一次レビュー 🟡3)。
+                let hub = self.clone();
+                let agent_id = agent_id.to_string();
+                tokio::spawn(async move {
+                    let _ = hub.fail_recruit(&agent_id, "handshake_grant_expired").await;
+                });
                 return false;
             }
             if p.team_id != team_id {
@@ -306,6 +312,10 @@ impl TeamHub {
         }
         entry.last_handshake_at = Some(now_iso.clone());
         entry.last_seen_at = Some(now_iso);
+        drop(s);
+        // rescue 経由でも placeholder が解決するよう、handshake 成功時に lifecycle を
+        // Ready まで前進させる (冪等、PR #34 二次レビュー)。
+        self.advance_recruit_to_ready(agent_id).await;
         true
     }
 
@@ -314,6 +324,36 @@ impl TeamHub {
     pub async fn cancel_pending_recruit(&self, agent_id: &str) {
         self.cancel_pending_recruit_with_grace(agent_id, recruit_grace_from_env())
             .await;
+    }
+
+    /// terminal cancel を伴う pending キャンセル (PR #34 一次レビュー 🔴2)。
+    ///
+    /// `cancel_pending_recruit_with_grace` と異なり、grace 満了時の pending 除去と
+    /// terminal finalize を **呼び出し側 (recruit_lifecycle) の task** が行うため、
+    /// ここでは除去 task を spawn しない。戻り値で grace の要否を通知する。
+    pub(crate) async fn cancel_pending_recruit_deferring(
+        &self,
+        agent_id: &str,
+    ) -> PendingCancelOutcome {
+        let grace = recruit_grace_from_env();
+        let timed_out_at = Instant::now();
+        let mut s = self.state.lock().await;
+        let Some(pending) = s.pending_recruits.get_mut(agent_id) else {
+            return PendingCancelOutcome::Finalize;
+        };
+        if pending.timed_out_at.is_some() {
+            // 既に grace 中への再要求 (例: grace 中の dismiss) は escalation:
+            // rescue によるユーザー意図の巻き戻しを防ぐため即確定する。
+            s.pending_recruits.remove(agent_id);
+            return PendingCancelOutcome::Finalize;
+        }
+        let _ = pending.ack_tx.take();
+        if grace.is_zero() {
+            s.pending_recruits.remove(agent_id);
+            return PendingCancelOutcome::Finalize;
+        }
+        pending.timed_out_at = Some(timed_out_at);
+        PendingCancelOutcome::GraceScheduled { timed_out_at }
     }
 
     async fn cancel_pending_recruit_with_grace(&self, agent_id: &str, grace: Duration) {
@@ -586,9 +626,17 @@ fn recruit_concurrency_from_env_with_source() -> (usize, RecruitConcurrencySourc
     }
 }
 
+/// `cancel_pending_recruit_deferring` の結果。GraceScheduled の場合、呼び出し側が
+/// grace 満了後に「同一 timeout 起点の pending が残っていれば除去して finalize」する責務を負う。
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum PendingCancelOutcome {
+    GraceScheduled { timed_out_at: Instant },
+    Finalize,
+}
+
 /// Issue #577: timeout 後に遅着 ack を rescue する grace window。
 /// `VIBE_TEAM_RECRUIT_GRACE_MS=0` は旧挙動互換、`>10000` / parse 失敗 / 未設定は default。
-fn recruit_grace_from_env() -> Duration {
+pub(crate) fn recruit_grace_from_env() -> Duration {
     let ms = std::env::var("VIBE_TEAM_RECRUIT_GRACE_MS")
         .ok()
         .and_then(|raw| raw.trim().parse::<u64>().ok())

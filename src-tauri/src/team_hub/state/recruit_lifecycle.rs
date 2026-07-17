@@ -1,5 +1,6 @@
 //! Recruit の明示状態機械と failure / cancellation rollback。
 
+use super::recruit::{recruit_grace_from_env, PendingCancelOutcome};
 use crate::team_hub::events::{RecruitLifecyclePayload, RecruitLifecycleState};
 use crate::team_hub::runtime_endpoint::RuntimeEndpoint;
 use crate::team_hub::TeamHub;
@@ -114,13 +115,25 @@ impl TeamHub {
         next: RecruitLifecycleState,
         reason: Option<String>,
     ) -> bool {
+        self.transition_recruit_lifecycle_with_payload(agent_id, next, reason)
+            .await
+            .is_some()
+    }
+
+    /// 遷移に成功したら emit 済み payload を返す。遷移と同一 lock 内で snapshot を取るため、
+    /// 呼び出し側は再 lock で entry を引き直す必要がない (別 task の retain と競合しても
+    /// panic しない — PR #34 一次レビュー 🔴1)。
+    async fn transition_recruit_lifecycle_with_payload(
+        &self,
+        agent_id: &str,
+        next: RecruitLifecycleState,
+        reason: Option<String>,
+    ) -> Option<RecruitLifecyclePayload> {
         let payload = {
             let mut state = self.state.lock().await;
-            let Some(lifecycle) = state.recruit_lifecycles.get_mut(agent_id) else {
-                return false;
-            };
+            let lifecycle = state.recruit_lifecycles.get_mut(agent_id)?;
             if lifecycle.state == next {
-                return false;
+                return None;
             }
             if !can_transition(lifecycle.state, next) {
                 tracing::warn!(
@@ -129,15 +142,31 @@ impl TeamHub {
                     to = ?next,
                     "[teamhub] rejected recruit lifecycle transition"
                 );
-                return false;
+                return None;
             }
             lifecycle.sequence = next_recruit_sequence();
             lifecycle.state = next;
             lifecycle.reason = reason;
             lifecycle.payload()
         };
-        self.emit_recruit_lifecycle(payload).await;
-        true
+        self.emit_recruit_lifecycle(payload.clone()).await;
+        Some(payload)
+    }
+
+    /// handshake 完了済み member の lifecycle を Ready まで進める (冪等)。
+    ///
+    /// 通常経路では `verify_recruit_liveness` が Ready を打つが、Issue #577 の遅着 ack rescue
+    /// では `team_recruit` が既に timeout で return しているため到達しない。rescue 後の
+    /// handshake 成功時にここで前進させ、placeholder が spawning のまま解決しない事態を防ぐ
+    /// (PR #34 二次レビュー)。既に Ready / terminal の場合は各遷移が拒否されて no-op。
+    pub async fn advance_recruit_to_ready(&self, agent_id: &str) {
+        for next in [
+            RecruitLifecycleState::Spawning,
+            RecruitLifecycleState::Handshaking,
+            RecruitLifecycleState::Ready,
+        ] {
+            let _ = self.transition_recruit_lifecycle(agent_id, next, None).await;
+        }
     }
 
     pub async fn fail_recruit(&self, agent_id: &str, reason: impl Into<String>) -> bool {
@@ -150,15 +179,59 @@ impl TeamHub {
             .await
     }
 
+    /// grace 付き terminal cancel (PR #34 一次レビュー 🔴2)。
+    ///
+    /// terminal cleanup を先に確定させると、Issue #577 の遅着 ack rescue が
+    /// 「endpoint / AgentEntry 破棄済みの zombie member」を復活させてしまう。
+    /// そのため pending の grace 解決を待ってから terminal 遷移を finalize する:
+    /// - grace 中に rescue された場合は terminal 処理を行わない (handshake が続行する)
+    /// - grace 満了 (rescue 無し) / pending 不在 / grace=0 の場合に finalize する
+    /// - 既に grace 中の pending への再要求 (例: grace 中の dismiss) は escalation として
+    ///   pending を即破棄し finalize する (rescue によるユーザー意図の巻き戻しを防ぐ)
     pub async fn cancel_recruit_with_pending_grace(
         &self,
         team_id: &str,
         agent_id: &str,
         reason: impl Into<String>,
     ) {
-        let transitioned = self.cancel_recruit(agent_id, reason).await;
-        self.cancel_pending_recruit(agent_id).await;
-        if !transitioned {
+        let reason = reason.into();
+        match self.cancel_pending_recruit_deferring(agent_id).await {
+            PendingCancelOutcome::GraceScheduled { timed_out_at } => {
+                let hub = self.clone();
+                let team_id = team_id.to_string();
+                let agent_id = agent_id.to_string();
+                tokio::spawn(async move {
+                    tokio::time::sleep(recruit_grace_from_env()).await;
+                    let rescued = {
+                        let mut s = hub.state.lock().await;
+                        match s
+                            .pending_recruits
+                            .get(&agent_id)
+                            .and_then(|p| p.timed_out_at)
+                        {
+                            // 同一 timeout 起点の pending が残っている = rescue されなかった。
+                            Some(ts) if ts == timed_out_at => {
+                                s.pending_recruits.remove(&agent_id);
+                                false
+                            }
+                            // pending が消えている / 別 timeout 起点 = rescue 済みか escalation 済み。
+                            _ => true,
+                        }
+                    };
+                    if !rescued {
+                        hub.finalize_recruit_cancel(&team_id, &agent_id, &reason).await;
+                    }
+                });
+            }
+            PendingCancelOutcome::Finalize => {
+                self.finalize_recruit_cancel(team_id, agent_id, &reason).await;
+            }
+        }
+    }
+
+    async fn finalize_recruit_cancel(&self, team_id: &str, agent_id: &str, reason: &str) {
+        if !self.cancel_recruit(agent_id, reason.to_string()).await {
+            // lifecycle 不在 (再起動後など) でも binding / process は残り得るため回収する。
             self.cleanup_agent_runtime(team_id, agent_id).await;
         }
     }
@@ -177,20 +250,15 @@ impl TeamHub {
             new_agent_id: agent_id.to_string(),
             reason: reason.clone(),
         };
-        if !self
-            .transition_recruit_lifecycle(agent_id, terminal, Some(reason))
+        // 遷移と同一 lock 内で snapshot した payload を使う。遷移直後に別 task
+        // (clear_team の retain / TTL 掃除) が entry を消しても panic しない。
+        let Some(payload) = self
+            .transition_recruit_lifecycle_with_payload(agent_id, terminal, Some(reason))
             .await
-        {
+        else {
             return false;
-        }
-        let (team_id, sequence) = {
-            let state = self.state.lock().await;
-            let lifecycle = state
-                .recruit_lifecycles
-                .get(agent_id)
-                .expect("transitioned recruit lifecycle must still exist");
-            (lifecycle.team_id.clone(), lifecycle.sequence)
         };
+        let (team_id, sequence) = (payload.team_id.clone(), payload.sequence);
         {
             let mut state = self.state.lock().await;
             state

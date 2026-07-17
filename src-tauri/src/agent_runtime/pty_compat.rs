@@ -132,7 +132,17 @@ impl AgentRuntimeAdapter for PtyCompatAdapter {
                     &request.data,
                 )
                 .await
-                .map_err(|error| RuntimeAdapterError::new(error.code(), error.to_string(), true)),
+                .map_err(|error| {
+                    // NoSession / SessionReplaced は endpoint の死を意味する。
+                    // recoverable=false で deliver_team_message に detach させ、
+                    // 再 spawn 時に stale adapter が残らないようにする (PR #34 一次レビュー 🟡6)。
+                    let recoverable = !matches!(
+                        error,
+                        crate::team_hub::inject::InjectError::NoSession
+                            | crate::team_hub::inject::InjectError::SessionReplaced { .. }
+                    );
+                    RuntimeAdapterError::new(error.code(), error.to_string(), recoverable)
+                }),
             }
         })
     }
