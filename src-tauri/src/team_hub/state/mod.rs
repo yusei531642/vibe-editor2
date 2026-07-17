@@ -29,6 +29,7 @@ mod message_flush;
 pub(crate) use message_flush::MessageFlusher;
 mod persistence;
 mod recruit;
+mod recruit_grace;
 mod recruit_lifecycle;
 
 // 旧 `state.rs` が公開していた型を `state` の表層に再エクスポートし、外部

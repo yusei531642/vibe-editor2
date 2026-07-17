@@ -47,7 +47,7 @@ pub(crate) struct HubState {
     /// in-memory only (Hub 再起動で全 clear)。
     pub(crate) agents: super::agent_entry::AgentMap,
     /// agentId -> native / PTY RuntimeEndpoint。TeamHub が配送 backend の差異を所有する。
-    pub(crate) runtime_endpoints: crate::team_hub::runtime_endpoint::RuntimeEndpointMap,
+    pub(crate) runtime_endpoints: crate::team_hub::runtime_endpoint::types::RuntimeEndpointMap,
     /// renderer から同期された role profile 一覧 (team_list_role_profiles で返す)
     pub(crate) role_profile_summary: Vec<RoleProfileSummary>,
     /// Leader が team_create_role / team_recruit(role_definition=...) で動的に生成した

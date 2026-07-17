@@ -1,8 +1,8 @@
 //! Recruit の明示状態機械と failure / cancellation rollback。
 
-use super::recruit::{recruit_grace_from_env, PendingCancelOutcome};
+use super::recruit_grace::{recruit_grace_from_env, PendingCancelOutcome};
 use crate::team_hub::events::{RecruitLifecyclePayload, RecruitLifecycleState};
-use crate::team_hub::runtime_endpoint::RuntimeEndpoint;
+use crate::team_hub::runtime_endpoint::types::RuntimeEndpoint;
 use crate::team_hub::TeamHub;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
