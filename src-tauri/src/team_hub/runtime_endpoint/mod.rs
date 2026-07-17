@@ -253,11 +253,9 @@ impl TeamHub {
                 ));
             }
         }
-        // live な PTY で稼働中のメンバーへの後付け native bind は配送乗っ取りに使える
-        // ため拒否する (PR #34)。native への移行は dismiss → 再 recruit に限定。
+        // live PTY 稼働中への後付け native bind は配送乗っ取りに使えるため拒否 (PR #34)。
         if let Some(existing_pty) = &binding.pty {
-            // liveness は runtime_endpoint_is_live と同一基準: endpoint 登録に加えて
-            // 実 PTY session の存在も要求する (phantom endpoint による恒久拒否を防ぐ、PR #34)。
+            // liveness は runtime_endpoint_is_live と同一基準 (phantom endpoint 対策、PR #34)。
             if self
                 .runtime
                 .manager
