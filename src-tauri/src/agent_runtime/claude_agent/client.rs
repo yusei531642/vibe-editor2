@@ -8,6 +8,8 @@ use crate::agent_runtime::{RuntimeAdapterError, RuntimeEventPayload};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -80,6 +82,7 @@ pub struct SidecarClient {
     pending: PendingMap,
     next_id: AtomicU64,
     expected_exit: Arc<AtomicBool>,
+    reader_failed: Arc<AtomicBool>,
     response_timeout: Duration,
     redactor: Redactor,
 }
@@ -98,6 +101,9 @@ impl SidecarClient {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+        #[cfg(windows)]
+        command.creation_flags(0x0800_0000);
+
         let mut child = command.spawn().map_err(|error| {
             RuntimeAdapterError::new(
                 "runtime_claude_sidecar_spawn_failed",
@@ -112,6 +118,7 @@ impl SidecarClient {
         let pending = Arc::new(Mutex::new(HashMap::new()));
         let expected_exit = Arc::new(AtomicBool::new(false));
         let failure_sent = Arc::new(AtomicBool::new(false));
+        let reader_failed = Arc::new(AtomicBool::new(false));
         let (hello_tx, hello_rx) = mpsc::channel();
 
         spawn_stdout_reader(ReaderContext {
@@ -120,6 +127,7 @@ impl SidecarClient {
             pending: pending.clone(),
             expected_exit: expected_exit.clone(),
             failure_sent: failure_sent.clone(),
+            reader_failed: reader_failed.clone(),
             redactor: redactor.clone(),
             sink: sink.clone(),
             hello: Some(hello_tx),
@@ -133,6 +141,7 @@ impl SidecarClient {
                 pending,
                 next_id: AtomicU64::new(1),
                 expected_exit,
+                reader_failed,
                 response_timeout: config.response_timeout,
                 redactor,
             }),
@@ -200,7 +209,9 @@ impl SidecarClient {
 
     pub fn dispose(&self) {
         self.expected_exit.store(true, Ordering::Release);
-        let _ = self.request("dispose", serde_json::json!({}));
+        if !self.reader_failed.load(Ordering::Acquire) {
+            let _ = self.request("dispose", serde_json::json!({}));
+        }
         *lock(&self.stdin) = None;
         terminate_child(&self.child);
     }
@@ -219,6 +230,7 @@ struct ReaderContext {
     pending: PendingMap,
     expected_exit: Arc<AtomicBool>,
     failure_sent: Arc<AtomicBool>,
+    reader_failed: Arc<AtomicBool>,
     redactor: Redactor,
     sink: ClientEventSink,
     hello: Option<mpsc::Sender<Result<(), RuntimeAdapterError>>>,
@@ -333,6 +345,7 @@ fn notify_failure(
     hello: &mut Option<mpsc::Sender<Result<(), RuntimeAdapterError>>>,
     error: RuntimeAdapterError,
 ) {
+    context.reader_failed.store(true, Ordering::Release);
     let was_handshaking = hello.is_some();
     if let Some(sender) = hello.take() {
         let _ = sender.send(Err(error.clone()));

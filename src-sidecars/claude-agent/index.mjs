@@ -1,4 +1,5 @@
 import readline from 'node:readline';
+import { randomUUID } from 'node:crypto';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 
 const PROTOCOL = 'vibe-claude-agent';
@@ -42,7 +43,7 @@ function approvalReason(toolName, options) {
 }
 
 function canUseTool(toolName, _input, options) {
-  const requestId = options.requestId || options.toolUseID;
+  const requestId = options.requestId || options.toolUseID || randomUUID();
   event({
     type: 'approvalRequest',
     requestId,
@@ -235,6 +236,7 @@ async function handle(request) {
       return;
     case 'steer':
       await interruptActive();
+      await state.activeTask?.catch(() => {});
       await startTurn(String(params.input ?? ''));
       response(id, { accepted: true });
       return;

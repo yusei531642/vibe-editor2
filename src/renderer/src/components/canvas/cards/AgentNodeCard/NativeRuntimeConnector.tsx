@@ -48,7 +48,7 @@ export function NativeRuntimeConnector({
         return;
       }
       if (provider === 'claude-native') {
-        await window.api.agentRuntime.registerClaudeEndpoint({
+        await window.api.agentRuntime.reconnectClaude({
           endpointId,
           teamId: payload.teamId,
           agentId: payload.agentId,
@@ -56,7 +56,7 @@ export function NativeRuntimeConnector({
           session: { mode: 'start' }
         });
       } else {
-        await window.api.agentRuntime.registerCodexEndpoint({
+        await window.api.agentRuntime.reconnectCodex({
           endpointId,
           teamId: payload.teamId,
           agentId: payload.agentId,

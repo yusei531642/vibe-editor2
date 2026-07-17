@@ -21,6 +21,10 @@ readline.createInterface({ input: process.stdin, crlfDelay: Infinity }).on('line
     ok(request.id, { sessionId: request.params.sessionId });
   } else if (['turn', 'write', 'inject', 'steer'].includes(request.method)) {
     ok(request.id, { accepted: true });
+    if (scenario === 'invalid-json') {
+      process.stdout.write('invalid-json\n');
+      return;
+    }
     event({ type: 'session', sessionId: 'claude-fixture-session' });
     if (scenario === 'secret') {
       event({ type: 'messageComplete', message: `credential=${process.env.TEST_SECRET}` });
