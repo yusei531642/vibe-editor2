@@ -308,31 +308,42 @@ impl TeamHub {
         team_id: &str,
         agent_id: &str,
     ) -> crate::commands::error::CommandResult<()> {
+        self.authorized_team_agent_role(team_id, agent_id)
+            .await
+            .map(|_| ())
+    }
+
+    /// Issue #27: worker isolation policy must use the Hub-owned role, never renderer input.
+    pub async fn authorized_team_agent_role(
+        &self,
+        team_id: &str,
+        agent_id: &str,
+    ) -> crate::commands::error::CommandResult<String> {
         crate::commands::validation::validate_id_segment("team_id", team_id)?;
         crate::commands::validation::validate_id_segment("agent_id", agent_id)?;
         crate::commands::authz::assert_active_team(self, team_id).await?;
-        let (recruited_here, is_member) = {
+        let role = {
             let state = self.state.lock().await;
-            let recruited_here = state
-                .recruit_lifecycles
-                .get(agent_id)
-                .is_some_and(|lifecycle| {
-                    lifecycle.team_id == team_id
-                        && !matches!(
-                            lifecycle.state,
-                            crate::team_hub::events::RecruitLifecycleState::Failed
-                                | crate::team_hub::events::RecruitLifecycleState::Cancelled
-                        )
-                });
-            (recruited_here, state.bound_role(team_id, agent_id).is_some())
+            state.bound_role(team_id, agent_id).or_else(|| {
+                state
+                    .recruit_lifecycles
+                    .get(agent_id)
+                    .filter(|lifecycle| {
+                        lifecycle.team_id == team_id
+                            && !matches!(
+                                lifecycle.state,
+                                crate::team_hub::events::RecruitLifecycleState::Failed
+                                    | crate::team_hub::events::RecruitLifecycleState::Cancelled
+                            )
+                    })
+                    .map(|lifecycle| lifecycle.role_profile_id.clone())
+            })
         };
-        if recruited_here || is_member {
-            Ok(())
-        } else {
-            Err(crate::commands::error::CommandError::authz(
+        role.ok_or_else(|| {
+            crate::commands::error::CommandError::authz(
                 "agent is not an active member of this team",
-            ))
-        }
+            )
+        })
     }
 
     pub async fn associate_task_runtime(
