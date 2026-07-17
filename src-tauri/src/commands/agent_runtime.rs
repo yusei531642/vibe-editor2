@@ -106,8 +106,22 @@ pub struct CodexRuntimeEndpointResult {
     pub thread_id: String,
 }
 
+/// TeamHub が内部管理する endpoint id の予約 prefix。renderer からの
+/// register / dispose / write 等で内部 endpoint を乗っ取れないよう fail-closed に拒否する
+/// (PR #34 四次レビュー: `team-pty-{agentId}` は予測可能なため名前空間を分離する)。
+const RESERVED_ENDPOINT_PREFIXES: [&str; 1] = ["team-pty-"];
+
 fn validate_endpoint_id(endpoint_id: &str) -> CommandResult<()> {
-    crate::commands::validation::validate_id_segment("endpoint_id", endpoint_id).map(|_| ())
+    crate::commands::validation::validate_id_segment("endpoint_id", endpoint_id)?;
+    if RESERVED_ENDPOINT_PREFIXES
+        .iter()
+        .any(|prefix| endpoint_id.starts_with(prefix))
+    {
+        return Err(CommandError::authz(format!(
+            "endpoint_id '{endpoint_id}' uses a reserved internal namespace"
+        )));
+    }
+    Ok(())
 }
 
 fn validate_runtime_input(input: &str) -> CommandResult<()> {
