@@ -253,6 +253,24 @@ impl TeamHub {
                 ));
             }
         }
+        // live な PTY endpoint で稼働中のメンバーへ native を後付け bind することも拒否する。
+        // auto/native precedence は native を優先するため、renderer からの後付け bind は
+        // 既存 PTY worker の配送乗っ取りに使えてしまう (PR #34 レビュー)。native への移行は
+        // dismiss → 再 recruit の明示フローに限定する。
+        if let Some(existing_pty) = &binding.pty {
+            if self
+                .runtime
+                .manager
+                .registry()
+                .resolve(&existing_pty.endpoint_id)
+                .is_some()
+            {
+                return Err(format!(
+                    "agent '{agent_id}' is already running on a live PTY endpoint '{}'",
+                    existing_pty.endpoint_id
+                ));
+            }
+        }
         binding.native = Some(endpoint.clone());
         state.attach_runtime_to_recruit(team_id, agent_id, &endpoint);
         Ok(())

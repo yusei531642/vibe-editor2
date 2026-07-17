@@ -269,8 +269,15 @@ pub async fn team_create_leader(
     // handshake 完了待機 (新 leader の MCP bridge が hub に繋いでくる)
     // Issue #811: timeout 値は `recruit_handshake_timeout_duration()` (env override 込み、default 60s)。
     let handshake_timeout = recruit_handshake_timeout_duration();
+    let _ = hub
+        .transition_recruit_lifecycle(&new_agent_id, RecruitLifecycleState::Handshaking, None)
+        .await;
     match tokio::time::timeout(handshake_timeout, rx).await {
         Ok(Ok(outcome)) => {
+            // team_recruit の verify_recruit_liveness 相当: handshake 成功で Ready へ。
+            let _ = hub
+                .transition_recruit_lifecycle(&new_agent_id, RecruitLifecycleState::Ready, None)
+                .await;
             let diag = hub.get_member_diagnostics(&ctx.team_id, &outcome.agent_id).await;
             let recruited_at = diag
                 .as_ref()
