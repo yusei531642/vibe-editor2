@@ -405,7 +405,7 @@ fn run_watcher_loop(
                 // 最初にキャッシュされる OS FS cache にヒットする)。
                 let mut retry_ids = HashSet::new();
                 for candidate in new_ids {
-                    let candidate_path = dir.join(format!("{}.jsonl", candidate));
+                    let candidate_path = dir.join(format!("{candidate}.jsonl"));
                     match process_candidate(
                         &app,
                         &terminal_id,
@@ -582,14 +582,12 @@ mod tests {
         // ことを保証する (= 短命 PTY 連発時の watcher 終息が早くなる)。
         assert!(
             WATCHER_POLL_INTERVAL <= Duration::from_millis(200),
-            "poll interval は旧 500ms より十分短くあるべき: {:?}",
-            WATCHER_POLL_INTERVAL
+            "poll interval は旧 500ms より十分短くあるべき: {WATCHER_POLL_INTERVAL:?}"
         );
         // 0 / 1ms みたいな busy-loop には絶対しない (CPU 暴走防止)
         assert!(
             WATCHER_POLL_INTERVAL >= Duration::from_millis(10),
-            "0ms / busy-loop は CPU 暴走 — 最低 10ms は確保: {:?}",
-            WATCHER_POLL_INTERVAL
+            "0ms / busy-loop は CPU 暴走 — 最低 10ms は確保: {WATCHER_POLL_INTERVAL:?}"
         );
     }
 
@@ -601,8 +599,7 @@ mod tests {
     fn watcher_max_lifetime_is_at_least_30_seconds() {
         assert!(
             WATCHER_MAX_LIFETIME >= Duration::from_secs(30),
-            "max lifetime が短すぎると Claude 起動が遅い環境で検出漏れする: {:?}",
-            WATCHER_MAX_LIFETIME
+            "max lifetime が短すぎると Claude 起動が遅い環境で検出漏れする: {WATCHER_MAX_LIFETIME:?}"
         );
     }
 }

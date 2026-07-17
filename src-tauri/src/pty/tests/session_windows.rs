@@ -105,7 +105,7 @@ mod inject_tests {
         for cmd in ["", "nonexistent-shell"] {
             let mut buf: Vec<u8> = Vec::new();
             let res = maybe_inject_windows_utf8_init(&mut buf, cmd, true).unwrap();
-            assert!(res.is_none(), "expected no-op for {:?}", cmd);
+            assert!(res.is_none(), "expected no-op for {cmd:?}");
         }
     }
 

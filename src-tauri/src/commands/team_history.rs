@@ -546,7 +546,7 @@ mod tests {
     fn make_entry(id: &str, project: &str, last_used_at: &str) -> TeamHistoryEntry {
         TeamHistoryEntry {
             id: id.to_string(),
-            name: format!("team-{}", id),
+            name: format!("team-{id}"),
             project_root: project.to_string(),
             created_at: last_used_at.to_string(),
             last_used_at: last_used_at.to_string(),
@@ -576,7 +576,7 @@ mod tests {
         // summary 相当は orchestration.blocked_reason に詰めて差分を作る。
         if !summary.is_empty() {
             e.orchestration = Some(TeamOrchestrationSummary {
-                state_path: format!("/tmp/{}.json", id),
+                state_path: format!("/tmp/{id}.json"),
                 blocked_reason: Some(summary.to_string()),
                 updated_at: last_used_at.to_string(),
                 ..Default::default()

@@ -87,8 +87,7 @@ pub async fn files_read_image(
         return FileImageReadResult {
             ok: false,
             error: Some(format!(
-                "image exceeds {} byte safety limit",
-                MAX_IMAGE_PREVIEW_BYTES
+                "image exceeds {MAX_IMAGE_PREVIEW_BYTES} byte safety limit"
             )),
             ..Default::default()
         };

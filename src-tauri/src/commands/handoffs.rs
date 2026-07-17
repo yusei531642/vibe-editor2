@@ -219,19 +219,19 @@ fn render_markdown(h: &HandoffCheckpoint) -> String {
     out.push_str(&format!("- Status: {}\n", h.status));
     out.push_str(&format!("- Created: {}\n", h.created_at));
     if let Some(team_id) = &h.team_id {
-        out.push_str(&format!("- Team: {}\n", team_id));
+        out.push_str(&format!("- Team: {team_id}\n"));
     }
     if let Some(agent_id) = &h.from_agent_id {
-        out.push_str(&format!("- From agent: {}\n", agent_id));
+        out.push_str(&format!("- From agent: {agent_id}\n"));
     }
     if let Some(role) = &h.from_role {
-        out.push_str(&format!("- From role: {}\n", role));
+        out.push_str(&format!("- From role: {role}\n"));
     }
     if let Some(session_id) = &h.source_session_id {
-        out.push_str(&format!("- Source session: {}\n", session_id));
+        out.push_str(&format!("- Source session: {session_id}\n"));
     }
     if let Some(replacement) = &h.replacement_for_agent_id {
-        out.push_str(&format!("- Replacement for: {}\n", replacement));
+        out.push_str(&format!("- Replacement for: {replacement}\n"));
     }
     out.push_str("\n## Summary\n\n");
     out.push_str(h.content.summary.trim());

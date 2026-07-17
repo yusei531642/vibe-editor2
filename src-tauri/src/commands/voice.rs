@@ -179,7 +179,7 @@ pub async fn voice_realtime_create_session(
     let client = reqwest::Client::new();
     let res = client
         .post(OPENAI_REALTIME_CLIENT_SECRETS_URL)
-        .header("Authorization", format!("Bearer {}", api_key))
+        .header("Authorization", format!("Bearer {api_key}"))
         .header("Content-Type", "application/json")
         .json(&request_body)
         .send()
@@ -204,8 +204,7 @@ pub async fn voice_realtime_create_session(
             truncated
         );
         return Err(CommandError::internal(format!(
-            "OpenAI {} error: {}",
-            status, truncated
+            "OpenAI {status} error: {truncated}"
         )));
     }
 
@@ -285,8 +284,7 @@ RULES:\n\
 - As soon as the user gives a clear instruction, call `send_to_leader` with the \
   message text. Do NOT ask for verbal confirmation.\n\
 - A short acknowledgment after sending is welcome (e.g., \"Sent.\") but keep it brief.\n\
-- The user is in the middle of coding; do not slow them down with extra dialogue.",
-            language = language
+- The user is in the middle of coding; do not slow them down with extra dialogue."
         )
     } else {
         format!(
@@ -299,8 +297,7 @@ RULES:\n\
 - If the user asks for any destructive action (`git push`, `rm`, `deploy`, etc.), repeat back \
   the EXACT command and ask for explicit confirmation.\n\
 - Do not call `send_to_leader` unless the user clearly confirmed (e.g., \"yes\", \"送信して\", \"OK\").\n\
-- Keep responses concise. The user is in the middle of coding.",
-            language = language
+- Keep responses concise. The user is in the middle of coding."
         )
     }
 }
@@ -378,7 +375,7 @@ pub async fn voice_get_active_target(
 
     // display name (UI 表示用)。先頭 8 文字だけ取り出して短い id を見せる。
     let short_id: String = agent_id.chars().take(8).collect();
-    let display_name = format!("Leader ({} / {})", role, short_id);
+    let display_name = format!("Leader ({role} / {short_id})");
 
     Ok(Some(VoiceTarget {
         team_id,

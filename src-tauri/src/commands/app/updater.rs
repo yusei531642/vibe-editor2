@@ -165,7 +165,7 @@ fn parse_iso8601_to_ms(s: &str) -> Option<i64> {
         let until_z = stripped.strip_suffix('Z')?;
         // 1〜9 桁許容、3 桁に丸める
         let trimmed: String = until_z.chars().take(3).collect();
-        let pad = format!("{:0<3}", trimmed);
+        let pad = format!("{trimmed:0<3}");
         ms = pad.parse().ok()?;
     } else if rest != "Z" {
         return None;
