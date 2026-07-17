@@ -17,7 +17,9 @@ mod event;
 mod event_buffer;
 #[cfg_attr(not(unix), allow(dead_code))] // unix-gated codex 経路からのみ使用
 mod manager;
+mod persistence;
 mod provider_policy;
+mod registry;
 #[cfg_attr(not(unix), allow(dead_code))] // unix-gated codex 経路からのみ使用
 mod pty_compat;
 
@@ -33,14 +35,16 @@ pub use event::{
 };
 pub use event_buffer::{RuntimeEventBuffer, DEFAULT_RUNTIME_EVENT_BUFFER_CAPACITY};
 #[allow(unused_imports)]
-pub use manager::{RuntimeEndpointRegistry, RuntimeManager, RuntimeOperation};
-pub use pty_compat::PtyCompatAdapter;
+pub use manager::{RuntimeManager, RuntimeOperation};
+pub use persistence::{PersistedRuntimeBinding, RuntimeEventPersistence, RuntimeRestoreSnapshot};
+pub use registry::RuntimeEndpointRegistry;
 pub use provider_policy::{
     capabilities_for, provider_declarations, resolve_native_claude_command,
     resolve_node_executable, resolve_sidecar_entrypoint, select_provider, ProviderAvailability,
     ProviderSelection, RuntimeProvider,
     RuntimeProviderDeclaration, SystemProviderAvailability,
 };
+pub use pty_compat::PtyCompatAdapter;
 
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU8, Ordering};

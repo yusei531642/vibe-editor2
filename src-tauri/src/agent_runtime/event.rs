@@ -107,6 +107,9 @@ impl RuntimeEventPayload {
 /// inconsistency between the two discriminators.
 pub struct RuntimeEventEnvelope {
     pub endpoint_id: String,
+    /// endpoint registration unit. sequence is monotonic only within this epoch.
+    #[ts(type = "number")]
+    pub epoch: u64,
     /// JSON/JS renderer では number として扱う。endpoint ごとの process-local counter なので
     /// JavaScript の safe integer 上限へ到達する前に session lifetime が終わる。
     #[ts(type = "number")]
@@ -117,9 +120,15 @@ pub struct RuntimeEventEnvelope {
 }
 
 impl RuntimeEventEnvelope {
-    pub fn new(endpoint_id: String, sequence: u64, payload: RuntimeEventPayload) -> Self {
+    pub fn new(
+        endpoint_id: String,
+        epoch: u64,
+        sequence: u64,
+        payload: RuntimeEventPayload,
+    ) -> Self {
         Self {
             endpoint_id,
+            epoch,
             sequence,
             kind: payload.kind(),
             payload,
@@ -137,6 +146,7 @@ mod wire_tests {
     fn runtime_event_envelope_serializes_to_locked_camel_case_shape() {
         let mut event = RuntimeEventEnvelope::new(
             "endpoint-1".to_string(),
+            3,
             7,
             RuntimeEventPayload::Lifecycle {
                 state: RuntimeLifecycleState::Ready,
@@ -149,6 +159,7 @@ mod wire_tests {
             serde_json::to_value(event).unwrap(),
             json!({
                 "endpointId": "endpoint-1",
+                "epoch": 3,
                 "sequence": 7,
                 "kind": "lifecycle",
                 "payload": { "type": "lifecycle", "state": "ready", "detail": null },

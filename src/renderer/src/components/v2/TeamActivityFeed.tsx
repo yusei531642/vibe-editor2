@@ -1,4 +1,12 @@
-import { Activity, AlertCircle, CheckCheck, ListTodo, MessageSquareReply, UserPlus } from 'lucide-react';
+import {
+  Activity,
+  AlertCircle,
+  CheckCheck,
+  ListTodo,
+  MessageSquare,
+  MessageSquareReply,
+  UserPlus
+} from 'lucide-react';
 import { useT } from '../../lib/i18n';
 import { useTeamProjection } from './TeamProjectionProvider';
 
@@ -7,6 +15,7 @@ const ICONS = {
   task: ListTodo,
   report: MessageSquareReply,
   approval: CheckCheck,
+  message: MessageSquare,
   error: AlertCircle
 };
 

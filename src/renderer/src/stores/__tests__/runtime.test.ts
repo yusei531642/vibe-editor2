@@ -12,11 +12,13 @@ import {
 function event(
   sequence: number,
   payload: RuntimeEventPayload,
-  endpointId = 'endpoint-1'
+  endpointId = 'endpoint-1',
+  epoch = 1
 ): RuntimeEventEnvelope {
   const kind = payload.type;
   return {
     endpointId,
+    epoch,
     sequence,
     kind,
     payload,
@@ -136,7 +138,7 @@ describe('runtime projection store', () => {
     store.projectEvent(event(3, { type: 'messageComplete', message: 'old-message' }));
 
     // detach 後の再登録: Rust 側 counter は 1 から振り直される。
-    store.projectEvent(event(1, { type: 'lifecycle', state: 'spawning', detail: null }));
+    store.projectEvent(event(1, { type: 'lifecycle', state: 'spawning', detail: null }, 'endpoint-1', 2));
 
     const projection = useRuntimeStore.getState().byEndpoint['endpoint-1'];
     expect(projection.lastSequence).toBe(1);

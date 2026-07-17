@@ -1,13 +1,15 @@
 //! Endpoint registry and runtime operation coordinator.
 
 use super::{
-    AgentRuntimeAdapter, RuntimeAdapterError, RuntimeApprovalResponseRequest, RuntimeEventBuffer,
-    RuntimeEventEnvelope, RuntimeEventPayload, RuntimeLifecycleState, RuntimeSessionForkRequest,
-    RuntimeSessionResumeRequest, RuntimeSessionSpawnRequest, RuntimeSteerRequest,
-    RuntimeTurnSpawnRequest, DEFAULT_RUNTIME_EVENT_BUFFER_CAPACITY,
+    AgentRuntimeAdapter, PersistedRuntimeBinding, RuntimeAdapterError, RuntimeEndpointRegistry,
+    RuntimeApprovalResponseRequest, RuntimeEventBuffer, RuntimeEventEnvelope, RuntimeEventPayload,
+    RuntimeEventPersistence, RuntimeLifecycleState, RuntimeRestoreSnapshot,
+    RuntimeSessionForkRequest, RuntimeSessionResumeRequest, RuntimeSessionSpawnRequest,
+    RuntimeSteerRequest, RuntimeTurnSpawnRequest, DEFAULT_RUNTIME_EVENT_BUFFER_CAPACITY,
 };
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 fn recover_mutex<'a, T>(
     result: Result<MutexGuard<'a, T>, PoisonError<MutexGuard<'a, T>>>,
@@ -18,98 +20,6 @@ fn recover_mutex<'a, T>(
     })
 }
 
-pub struct RuntimeEndpointRegistry {
-    endpoints: RwLock<HashMap<String, Arc<dyn AgentRuntimeAdapter>>>,
-}
-
-impl RuntimeEndpointRegistry {
-    pub fn new() -> Self {
-        Self {
-            endpoints: RwLock::new(HashMap::new()),
-        }
-    }
-
-    pub fn register(
-        &self,
-        endpoint_id: String,
-        adapter: Arc<dyn AgentRuntimeAdapter>,
-    ) -> Result<(), RuntimeAdapterError> {
-        let mut endpoints = self
-            .endpoints
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if endpoints.contains_key(&endpoint_id) {
-            return Err(RuntimeAdapterError::new(
-                "runtime_endpoint_exists",
-                format!("runtime endpoint '{endpoint_id}' is already registered"),
-                true,
-            ));
-        }
-        endpoints.insert(endpoint_id, adapter);
-        Ok(())
-    }
-
-    pub fn resolve(&self, endpoint_id: &str) -> Option<Arc<dyn AgentRuntimeAdapter>> {
-        self.endpoints
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .get(endpoint_id)
-            .cloned()
-    }
-
-    pub fn remove(&self, endpoint_id: &str) -> Option<Arc<dyn AgentRuntimeAdapter>> {
-        self.endpoints
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .remove(endpoint_id)
-    }
-
-    pub fn dispose(&self, endpoint_id: &str) -> Result<(), RuntimeAdapterError> {
-        let adapter = self.remove(endpoint_id).ok_or_else(|| {
-            RuntimeAdapterError::new(
-                "runtime_endpoint_not_found",
-                format!("runtime endpoint '{endpoint_id}' was not found"),
-                true,
-            )
-        })?;
-        adapter.dispose()
-    }
-
-    pub fn dispose_all(&self) {
-        let adapters: Vec<_> = self
-            .endpoints
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .drain()
-            .map(|(_, adapter)| adapter)
-            .collect();
-        for adapter in adapters {
-            if let Err(error) = adapter.dispose() {
-                tracing::warn!(code = %error.code, "[runtime] endpoint dispose failed: {error}");
-            }
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn len(&self) -> usize {
-        self.endpoints
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .len()
-    }
-
-    #[allow(dead_code)]
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-}
-
-impl Default for RuntimeEndpointRegistry {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 pub struct RuntimeOperation {
     pub events: Vec<RuntimeEventEnvelope>,
     pub result: Result<(), RuntimeAdapterError>,
@@ -117,8 +27,10 @@ pub struct RuntimeOperation {
 
 pub struct RuntimeManager {
     registry: RuntimeEndpointRegistry,
-    sequences: Mutex<HashMap<String, u64>>,
+    sequences: Mutex<HashMap<String, (u64, u64)>>,
+    next_epoch: AtomicU64,
     event_buffer: Mutex<RuntimeEventBuffer>,
+    persistence: Option<RuntimeEventPersistence>,
 }
 
 impl RuntimeManager {
@@ -130,7 +42,29 @@ impl RuntimeManager {
         Self {
             registry: RuntimeEndpointRegistry::new(),
             sequences: Mutex::new(HashMap::new()),
+            next_epoch: AtomicU64::new(epoch_seed()),
             event_buffer: Mutex::new(RuntimeEventBuffer::new(capacity)),
+            persistence: None,
+        }
+    }
+
+    #[cfg_attr(test, allow(dead_code))]
+    pub fn persistent_default() -> Self {
+        let persistence = match RuntimeEventPersistence::start_default() {
+            Ok(persistence) => Some(persistence),
+            Err(error) => {
+                tracing::warn!("[runtime-persistence] disabled after startup failure: {error:#}");
+                None
+            }
+        };
+        Self {
+            registry: RuntimeEndpointRegistry::new(),
+            sequences: Mutex::new(HashMap::new()),
+            next_epoch: AtomicU64::new(epoch_seed()),
+            event_buffer: Mutex::new(RuntimeEventBuffer::new(
+                DEFAULT_RUNTIME_EVENT_BUFFER_CAPACITY,
+            )),
+            persistence,
         }
     }
 
@@ -188,6 +122,8 @@ impl RuntimeManager {
                 result: Err(error),
             };
         }
+        let epoch = self.next_epoch.fetch_add(1, Ordering::Relaxed);
+        recover_mutex(self.sequences.lock()).insert(endpoint_id.clone(), (epoch, 0));
 
         // registry insert と spawn_session 完了の間には、別 thread が endpoint を resolve して
         // write を開始できる race window がある。現行 PTY adapter は既存 session を wrap する
@@ -426,6 +362,7 @@ impl RuntimeManager {
     ) -> RuntimeEventEnvelope {
         let event = RuntimeEventEnvelope::new(
             endpoint_id.to_string(),
+            0,
             1,
             RuntimeEventPayload::Error {
                 code: error.code.clone(),
@@ -434,6 +371,9 @@ impl RuntimeManager {
             },
         );
         recover_mutex(self.event_buffer.lock()).push(event.clone());
+        if let Some(persistence) = &self.persistence {
+            persistence.append(event.clone());
+        }
         event
     }
 
@@ -447,15 +387,67 @@ impl RuntimeManager {
         endpoint_id: &str,
         payload: RuntimeEventPayload,
     ) -> RuntimeEventEnvelope {
-        let sequence = {
+        let event = {
             let mut sequences = recover_mutex(self.sequences.lock());
-            let current = sequences.entry(endpoint_id.to_string()).or_insert(0);
-            *current = current.saturating_add(1);
-            *current
+            let current = sequences
+                .entry(endpoint_id.to_string())
+                .or_insert_with(|| (self.next_epoch.fetch_add(1, Ordering::Relaxed), 0));
+            current.1 = current.1.saturating_add(1);
+            let event = RuntimeEventEnvelope::new(
+                endpoint_id.to_string(),
+                current.0,
+                current.1,
+                payload,
+            );
+            // sequence lock 内で enqueue して、同一 endpoint の永続順も sequence 順に固定する。
+            // enqueue は unbounded channel send のみで、SQLite I/O は writer thread が担う。
+            if let Some(persistence) = &self.persistence {
+                persistence.append(event.clone());
+            }
+            recover_mutex(self.event_buffer.lock()).push(event.clone());
+            event
         };
-        let event = RuntimeEventEnvelope::new(endpoint_id.to_string(), sequence, payload);
-        recover_mutex(self.event_buffer.lock()).push(event.clone());
         event
+    }
+
+    pub fn persist_team_binding(
+        &self,
+        team_id: &str,
+        agent_id: &str,
+        endpoint_id: &str,
+        provider: &str,
+        resume_id: Option<String>,
+        resumable: bool,
+    ) {
+        let Some(persistence) = &self.persistence else {
+            return;
+        };
+        let Some((epoch, _)) = recover_mutex(self.sequences.lock())
+            .get(endpoint_id)
+            .copied()
+        else {
+            tracing::warn!(
+                endpoint_id,
+                "[runtime-persistence] binding has no active epoch"
+            );
+            return;
+        };
+        persistence.bind(PersistedRuntimeBinding {
+            team_id: team_id.to_string(),
+            agent_id: agent_id.to_string(),
+            endpoint_id: endpoint_id.to_string(),
+            epoch,
+            provider: provider.to_string(),
+            resume_id,
+            resumable,
+        });
+    }
+
+    pub fn restore_latest(&self) -> Result<RuntimeRestoreSnapshot, String> {
+        match &self.persistence {
+            Some(persistence) => persistence.restore_latest(),
+            None => Ok(RuntimeRestoreSnapshot::default()),
+        }
     }
 
     #[allow(dead_code)]
@@ -472,6 +464,15 @@ impl RuntimeManager {
     pub fn tracked_sequence_count(&self) -> usize {
         recover_mutex(self.sequences.lock()).len()
     }
+}
+
+fn epoch_seed() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_micros()
+        .min(u64::MAX as u128) as u64
 }
 
 impl Default for RuntimeManager {
