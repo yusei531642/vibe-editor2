@@ -21,6 +21,7 @@ pub async fn deliver_message(
 ) -> Result<(), InjectError> {
     // Issue #1068: 設定で PTY を強制している場合は app-server 経路を完全にスキップする。
     let backend = hub.selected_runtime_backend();
+    let mut native_error: Option<InjectError> = None;
     if let Some(result) = hub
         .try_deliver_native_message(team_id, agent_id, from_role, text, backend)
         .await
@@ -30,11 +31,14 @@ pub async fn deliver_message(
             // native 失敗時も即 PTY へ落とさず、下の legacy app-server 経路を
             // 試してから PTY fallback する (Issue #1062 の app-server 優先契約、
             // PR #34 一次レビュー 🟡5)。
-            Err(error) => tracing::warn!(
-                agent_id,
-                code = error.code(),
-                "[teamhub] native delivery failed; trying legacy app-server then PTY"
-            ),
+            Err(error) => {
+                tracing::warn!(
+                    agent_id,
+                    code = error.code(),
+                    "[teamhub] native delivery failed; trying legacy app-server then PTY"
+                );
+                native_error = Some(error);
+            }
         }
     }
     if !hub.prefers_legacy_codex_pty() {
@@ -49,6 +53,15 @@ pub async fn deliver_message(
                     return Ok(());
                 }
             }
+        }
+    }
+    // native 失敗 & PTY session を持たない member (app-server 経由の native worker) で
+    // 無条件に PTY へ落とすと、PtyCompatAdapter 登録が lifecycle.endpoint_id を
+    // `team-pty-{agentId}` へ上書きした挙句 `inject_no_session` で失敗し、元の native
+    // エラーコードを潰す (PR #34 二次レビュー 🟡)。PTY session が実在する場合のみ fallback。
+    if let Some(error) = native_error {
+        if hub.registry.get_by_agent(agent_id).is_none() {
+            return Err(error);
         }
     }
     // app-server 未対応 / 失敗時は下の PTY 注入へフォールバック。
