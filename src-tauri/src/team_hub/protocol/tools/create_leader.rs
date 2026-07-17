@@ -20,7 +20,12 @@ use super::super::permissions::{check_permission, Permission};
 use super::error::RecruitError;
 use super::recruit::{recruit_ack_timeout, recruit_handshake_timeout_duration};
 
-/// 失敗経路の共通後始末: lifecycle terminal + pending grace + runtime 回収。
+/// leader lifecycle の遷移 (失敗は無視: 状態機械側で不正遷移を reject する)。
+async fn leader_lifecycle(hub: &TeamHub, agent_id: &str, state: RecruitLifecycleState) {
+    let _ = hub.transition_recruit_lifecycle(agent_id, state, None).await;
+}
+
+/// 失敗経路の共通後始末 (lifecycle terminal + pending grace + runtime 回収)。
 async fn cancel_leader_recruit(hub: &TeamHub, team_id: &str, agent_id: &str) {
     hub.cancel_recruit_with_pending_grace(team_id, agent_id, "create_leader_cancelled")
         .await;
@@ -144,8 +149,7 @@ pub async fn team_create_leader(
     };
     let rx = channels.handshake;
     let ack_rx = channels.ack;
-    // leader も recruit lifecycle を登録する (team_recruit と対称)。無いと
-    // bind_native_runtime_endpoint の認可が leader の native endpoint を拒否する (PR #34)。
+    // leader も lifecycle 登録 (team_recruit と対称、無いと native bind 認可が leader を拒否)。
     hub.begin_recruit_lifecycle(&ctx.team_id, &new_agent_id, &role_profile_id)
         .await;
 
@@ -190,9 +194,7 @@ pub async fn team_create_leader(
                  team_id={team_id} elapsed_ms={elapsed_ms}",
                 team_id = ctx.team_id,
             );
-            let _ = hub
-                .transition_recruit_lifecycle(&new_agent_id, RecruitLifecycleState::Spawning, None)
-                .await;
+            leader_lifecycle(hub, &new_agent_id, RecruitLifecycleState::Spawning).await;
         }
         Ok(Ok(ack)) => {
             cancel_leader_recruit(hub, &ctx.team_id, &new_agent_id).await;
@@ -269,15 +271,11 @@ pub async fn team_create_leader(
     // handshake 完了待機 (新 leader の MCP bridge が hub に繋いでくる)
     // Issue #811: timeout 値は `recruit_handshake_timeout_duration()` (env override 込み、default 60s)。
     let handshake_timeout = recruit_handshake_timeout_duration();
-    let _ = hub
-        .transition_recruit_lifecycle(&new_agent_id, RecruitLifecycleState::Handshaking, None)
-        .await;
+    leader_lifecycle(hub, &new_agent_id, RecruitLifecycleState::Handshaking).await;
     match tokio::time::timeout(handshake_timeout, rx).await {
         Ok(Ok(outcome)) => {
-            // team_recruit の verify_recruit_liveness 相当: handshake 成功で Ready へ。
-            let _ = hub
-                .transition_recruit_lifecycle(&new_agent_id, RecruitLifecycleState::Ready, None)
-                .await;
+            // handshake 成功 = leader ready (team_recruit の liveness 検証相当)。
+            leader_lifecycle(hub, &new_agent_id, RecruitLifecycleState::Ready).await;
             let diag = hub.get_member_diagnostics(&ctx.team_id, &outcome.agent_id).await;
             let recruited_at = diag
                 .as_ref()

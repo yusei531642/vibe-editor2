@@ -253,10 +253,8 @@ impl TeamHub {
                 ));
             }
         }
-        // live な PTY endpoint で稼働中のメンバーへ native を後付け bind することも拒否する。
-        // auto/native precedence は native を優先するため、renderer からの後付け bind は
-        // 既存 PTY worker の配送乗っ取りに使えてしまう (PR #34 レビュー)。native への移行は
-        // dismiss → 再 recruit の明示フローに限定する。
+        // live な PTY で稼働中のメンバーへの後付け native bind は配送乗っ取りに使える
+        // ため拒否する (PR #34)。native への移行は dismiss → 再 recruit に限定。
         if let Some(existing_pty) = &binding.pty {
             if self
                 .runtime
