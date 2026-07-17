@@ -205,9 +205,43 @@ impl TeamHub {
                     let rescued = {
                         let mut s = hub.state.lock().await;
                         match s.pending_recruits.get(&agent_id) {
-                            // ack rescue 済み (handshake 待ち): terminal cancel せず
-                            // handshake timeout 側の経路に委ねる (PR #34 レビュー)。
-                            Some(p) if p.rescued_at.is_some() => true,
+                            // ack rescue 済み (handshake 待ち): terminal cancel はしないが、
+                            // handshake が来ないまま放置されると孤児 pending が singleton 判定を
+                            // 塞ぎ続ける (Issue #122/#173 系)。grant TTL 満了で回収する
+                            // follow-up task を張る (PR #34 レビュー)。
+                            Some(p) if p.rescued_at.is_some() => {
+                                let rescued_at = p.rescued_at;
+                                let hub = hub.clone();
+                                let team_id = team_id.clone();
+                                let agent_id_owned = agent_id.clone();
+                                let reason = reason.clone();
+                                tokio::spawn(async move {
+                                    tokio::time::sleep(
+                                        super::recruit::handshake_grant_ttl_from_env(),
+                                    )
+                                    .await;
+                                    let expired = {
+                                        let mut s = hub.state.lock().await;
+                                        match s.pending_recruits.get(&agent_id_owned) {
+                                            // 同一 rescue 起点のまま handshake 未到達 = 期限切れ。
+                                            Some(p) if p.rescued_at == rescued_at => {
+                                                s.pending_recruits.remove(&agent_id_owned);
+                                                true
+                                            }
+                                            _ => false,
+                                        }
+                                    };
+                                    if expired {
+                                        hub.finalize_recruit_cancel(
+                                            &team_id,
+                                            &agent_id_owned,
+                                            &reason,
+                                        )
+                                        .await;
+                                    }
+                                });
+                                true
+                            }
                             // 同一 timeout 起点の pending が残っている = rescue されなかった。
                             Some(p) if p.timed_out_at == Some(timed_out_at) => {
                                 s.pending_recruits.remove(&agent_id);
