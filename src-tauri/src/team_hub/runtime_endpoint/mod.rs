@@ -252,6 +252,19 @@ impl TeamHub {
     }
 
     pub async fn team_members(&self, team_id: &str) -> Vec<(String, String)> {
+        let mut members = {
+            let state = self.state.lock().await;
+            state.team_member_roles(team_id)
+        };
+        for member in self.registry.list_team_members(team_id) {
+            if !members.iter().any(|(agent_id, _)| agent_id == &member.0) {
+                members.push(member);
+            }
+        }
+        members
+    }
+
+    pub(crate) async fn live_team_members(&self, team_id: &str) -> Vec<(String, String)> {
         let mut members: Vec<(String, String)> = {
             let state = self.state.lock().await;
             state
