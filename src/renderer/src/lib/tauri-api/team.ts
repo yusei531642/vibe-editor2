@@ -92,8 +92,8 @@ export const team = {
   projectionSnapshot: (request: TeamProjectionSnapshotRequest): Promise<TeamProjectionSnapshot> =>
     invokeCommand('team_projection_snapshot', { request }),
   /** Phase 8: latest durable team runtime replay, using the same five-point snapshot shape. */
-  restoreSnapshot: (): Promise<TeamProjectionSnapshot | null> =>
-    invokeCommand('session_restore_snapshot'),
+  restoreSnapshot: (projectRoot: string): Promise<TeamProjectionSnapshot | null> =>
+    invokeCommand('session_restore_snapshot', { request: { projectRoot } }),
   /** Issue #26: TeamHub の active leader 権限で認可済み member を操作する。 */
   memberCommand: (request: TeamMemberCommandRequest): Promise<TeamMemberCommandResult> =>
     invokeCommand('team_member_command', { request })

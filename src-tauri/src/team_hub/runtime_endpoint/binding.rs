@@ -138,13 +138,17 @@ impl TeamHub {
         binding.pty = Some(endpoint.clone());
         state.attach_runtime_to_recruit(team_id, agent_id, &endpoint);
         drop(state);
+        let project_root = self.team_project_root(team_id).await;
         self.runtime.manager.persist_team_binding(
-            team_id,
-            agent_id,
-            &endpoint_id,
-            "pty",
-            endpoint.session_id.clone(),
-            false,
+            crate::agent_runtime::RuntimeTeamBinding {
+                project_root: project_root.as_deref(),
+                team_id,
+                agent_id,
+                endpoint_id: &endpoint_id,
+                provider: "pty",
+                resume_id: endpoint.session_id.clone(),
+                resumable: false,
+            },
         );
         Ok(endpoint_id)
     }

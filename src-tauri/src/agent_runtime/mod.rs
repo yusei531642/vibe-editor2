@@ -36,7 +36,9 @@ pub use event::{
 pub use event_buffer::{RuntimeEventBuffer, DEFAULT_RUNTIME_EVENT_BUFFER_CAPACITY};
 #[allow(unused_imports)]
 pub use manager::{RuntimeManager, RuntimeOperation};
-pub use persistence::{PersistedRuntimeBinding, RuntimeEventPersistence, RuntimeRestoreSnapshot};
+pub use persistence::{
+    PersistedRuntimeBinding, RuntimeEventPersistence, RuntimeRestoreSnapshot, RuntimeTeamBinding,
+};
 pub use registry::RuntimeEndpointRegistry;
 pub use provider_policy::{
     capabilities_for, provider_declarations, resolve_native_claude_command,

@@ -56,13 +56,17 @@ export function useTeamState(opts: UseTeamStateOptions): UseTeamStateResult {
   const [teams, setTeams] = useState<Team[]>([]);
   const restoredSnapshot = useSessionRestoreStore((state) => state.snapshot);
   const setRestoredSnapshot = useSessionRestoreStore((state) => state.setSnapshot);
-  const restoreRequestedRef = useRef(false);
+  const restoreRequestedProjectRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (restoreRequestedRef.current || !window.api.team?.restoreSnapshot) return;
-    restoreRequestedRef.current = true;
-    void window.api.team.restoreSnapshot().then((snapshot) => {
-      if (!snapshot) return;
+    const projectRoot = opts.projectRoot;
+    if (!projectRoot || restoreRequestedProjectRef.current === projectRoot
+      || !window.api.team?.restoreSnapshot) return;
+    restoreRequestedProjectRef.current = projectRoot;
+    setRestoredSnapshot(null);
+    void window.api.team.restoreSnapshot(projectRoot).then((snapshot) => {
+      // A slower restore from the previous project must never activate its team in the new one.
+      if (optsRef.current.projectRoot !== projectRoot || !snapshot) return;
       useRuntimeStore.getState().clear();
       useRuntimeStore.getState().projectEvents(snapshot.runtimeEvents);
       setRestoredSnapshot(snapshot);
@@ -72,7 +76,7 @@ export function useTeamState(opts: UseTeamStateOptions): UseTeamStateResult {
     }).catch((error) => {
       console.warn('[session-restore] snapshot failed:', error);
     });
-  }, [setRestoredSnapshot]);
+  }, [opts.projectRoot, setRestoredSnapshot]);
 
   useEffect(() => {
     if (!opts.projectRoot || !restoredSnapshot) return;
