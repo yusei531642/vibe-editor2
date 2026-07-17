@@ -279,12 +279,26 @@ pub(super) async fn list_worktree_metadata(
         // 一時的 I/O 失敗で登録済み worktree が一覧から欠けると、reconcile が生きている
         // assignment を drop してしまう。canonicalize 失敗は list 全体のエラーとして扱い、
         // 呼び出し側 (reconcile) を中止させる (PR #37 レビュー: drop より skip を優先)。
-        let canonical = tokio::fs::canonicalize(&raw_path).await.map_err(|error| {
-            crate::commands::error::CommandError::internal(format!(
-                "failed to canonicalize worktree path {}: {error}",
-                raw_path.display()
-            ))
-        })?;
+        // 例外: `git worktree list` はディレクトリが消えた prunable worktree も列挙し
+        // 続けるため、ENOENT だけは「実体が無い登録」として skip する。これを全体エラーに
+        // すると、worker がディレクトリを消した瞬間から reconcile / adopt / assign が
+        // プロジェクト全体で恒久失敗する (PR #37 三次レビュー 🟡)。
+        let canonical = match tokio::fs::canonicalize(&raw_path).await {
+            Ok(path) => path,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                tracing::warn!(
+                    path = %raw_path.display(),
+                    "[worktree] skipping registered worktree whose directory no longer exists"
+                );
+                continue;
+            }
+            Err(error) => {
+                return Err(crate::commands::error::CommandError::internal(format!(
+                    "failed to canonicalize worktree path {}: {error}",
+                    raw_path.display()
+                )))
+            }
+        };
         if let (Some(head), Some(branch)) = (head, branch) {
             worktrees.push(WorktreeMetadata {
                 path: canonical,

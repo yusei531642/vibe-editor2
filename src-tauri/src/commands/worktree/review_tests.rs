@@ -1,6 +1,25 @@
 use super::tests::{write, GitFixture};
 use super::WorktreeManager;
 
+/// PR #37 三次レビュー 🟡: `git worktree list` はディレクトリが消えた prunable
+/// worktree も列挙し続ける。ENOENT を list 全体のエラーにすると、以降の reconcile /
+/// assign がプロジェクト全体で恒久失敗するため、該当エントリのみ skip する。
+#[tokio::test]
+async fn deleted_worktree_directory_does_not_poison_listing_or_new_assignments() {
+    let fixture = GitFixture::new();
+    let doomed = fixture.assign("worker-1").await;
+    tokio::fs::remove_dir_all(&doomed).await.expect("simulate worker deleting its worktree");
+
+    let listed = super::git_ops::list_worktree_metadata(fixture.project.as_path())
+        .await
+        .expect("prunable エントリは skip して list は成功する");
+    assert!(!listed.iter().any(|metadata| metadata.path == doomed));
+
+    // 消えた worktree が居ても新規 member の割当は成立する
+    let fresh = fixture.assign("worker-2").await;
+    assert!(fresh.exists());
+}
+
 #[tokio::test]
 async fn base_dirty_error_explicitly_mentions_untracked_files() {
     let fixture = GitFixture::new();
