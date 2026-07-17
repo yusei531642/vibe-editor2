@@ -483,3 +483,34 @@ async fn bind_native_endpoint_rejects_unauthorized_team_or_agent() {
         .unwrap_err();
     assert!(err.contains("already has a live native endpoint"), "{err}");
 }
+
+/// PR #34 レビュー: dismiss は grace/rescue の対象外。handshake 窓での dismiss 後に
+/// 遅着 handshake が来ても member として復活しない。
+#[tokio::test]
+async fn dismiss_during_handshake_window_cannot_be_resurrected() {
+    let (hub, _registry, _manager) = hub();
+    let team_id = "team-dismiss-window";
+    let agent_id = "window-agent";
+    let _channels = hub
+        .try_register_pending_recruit(
+            agent_id.into(),
+            team_id.into(),
+            "programmer".into(),
+            "leader".into(),
+            false,
+            &[],
+        )
+        .await
+        .unwrap();
+    hub.begin_recruit_lifecycle(team_id, agent_id, "programmer").await;
+    seed_member(&hub, team_id, agent_id, "programmer").await;
+
+    hub.cancel_recruit_immediately(team_id, agent_id, "dismissed").await;
+
+    // 遅着 handshake は pending が既に無いため拒否される (復活しない)。
+    assert!(!hub.resolve_pending_recruit(agent_id, team_id, "programmer").await);
+    let state = hub.state.lock().await;
+    assert!(!state.pending_recruits.contains_key(agent_id));
+    let lifecycle = state.recruit_lifecycles.get(agent_id).map(|l| l.state);
+    assert_eq!(lifecycle, Some(RecruitLifecycleState::Cancelled));
+}

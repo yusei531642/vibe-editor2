@@ -74,7 +74,9 @@ pub async fn team_dismiss(
     let released_lock_count = hub
         .release_all_file_locks_for_agent(&ctx.team_id, &agent_id)
         .await;
-    hub.cancel_recruit_with_pending_grace(&ctx.team_id, &agent_id, "dismissed")
+    // dismiss はユーザー意図の除去なので grace / rescue の対象外: 即時 terminal 確定。
+    // grace を挟むと handshake 窓の worker が Ready で復活し得る (PR #34 レビュー)。
+    hub.cancel_recruit_immediately(&ctx.team_id, &agent_id, "dismissed")
         .await;
     if released_lock_count > 0 {
         tracing::debug!(

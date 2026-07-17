@@ -229,6 +229,19 @@ impl TeamHub {
         }
     }
 
+    /// grace を一切挟まない即時 terminal cancel。dismiss などユーザー意図の除去は
+    /// 遅着 handshake / rescue によって巻き戻されてはならない (PR #34 レビュー):
+    /// pending を即破棄してから terminal を確定する。
+    pub async fn cancel_recruit_immediately(
+        &self,
+        team_id: &str,
+        agent_id: &str,
+        reason: impl Into<String>,
+    ) {
+        self.discard_pending_recruit(agent_id).await;
+        self.finalize_recruit_cancel(team_id, agent_id, &reason.into()).await;
+    }
+
     async fn finalize_recruit_cancel(&self, team_id: &str, agent_id: &str, reason: &str) {
         if !self.cancel_recruit(agent_id, reason.to_string()).await {
             // lifecycle 不在 (再起動後など) でも binding / process は残り得るため回収する。
