@@ -285,6 +285,11 @@ impl TeamHub {
     }
 
     /// Issue #27: renderer-supplied pair を active team + current member binding へ fail-closed に限定する。
+    ///
+    /// spawn 前の pre-check (terminal_create / worktree assign) から呼ばれるため、まだ PTY も
+    /// hub handshake も無い「recruit 進行中」の agent も許容する。判定基準は bind 側の
+    /// `authorize_runtime_endpoint_binding` (binding.rs) と同一に保つ — ここだけ厳しくすると
+    /// 新規 recruit の初回 spawn が authz で落ちる (PR #37 レビュー 🟡)。
     pub async fn authorize_team_agent_binding(
         &self,
         team_id: &str,
@@ -293,11 +298,26 @@ impl TeamHub {
         crate::commands::validation::validate_id_segment("team_id", team_id)?;
         crate::commands::validation::validate_id_segment("agent_id", agent_id)?;
         crate::commands::authz::assert_active_team(self, team_id).await?;
-        if self
-            .team_members(team_id)
-            .await
-            .iter()
-            .any(|(id, _)| id == agent_id)
+        let recruited_here = {
+            let state = self.state.lock().await;
+            state
+                .recruit_lifecycles
+                .get(agent_id)
+                .is_some_and(|lifecycle| {
+                    lifecycle.team_id == team_id
+                        && !matches!(
+                            lifecycle.state,
+                            crate::team_hub::events::RecruitLifecycleState::Failed
+                                | crate::team_hub::events::RecruitLifecycleState::Cancelled
+                        )
+                })
+        };
+        if recruited_here
+            || self
+                .team_members(team_id)
+                .await
+                .iter()
+                .any(|(id, _)| id == agent_id)
         {
             Ok(())
         } else {

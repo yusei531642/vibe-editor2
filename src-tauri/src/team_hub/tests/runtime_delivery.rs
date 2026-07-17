@@ -419,6 +419,35 @@ async fn recruit_sequence_is_monotonic_and_rejected_terminal_has_no_state() {
     assert!(spawning < rerequested);
 }
 
+/// PR #37 レビュー 🟡: spawn 前 pre-check (terminal_create / worktree assign) は
+/// PTY も hub handshake も無い「recruit 進行中」の agent を許容する。判定基準は
+/// bind 側 authorize_runtime_endpoint_binding と同一。
+#[tokio::test]
+async fn authorize_team_agent_binding_allows_recruit_in_progress_member() {
+    let (hub, _registry, _manager) = hub();
+    {
+        let mut state = hub.state.lock().await;
+        state.active_teams.insert("team-precheck".into());
+    }
+    hub.begin_recruit_lifecycle("team-precheck", "fresh-recruit", "programmer")
+        .await;
+
+    hub.authorize_team_agent_binding("team-precheck", "fresh-recruit")
+        .await
+        .expect("recruit 進行中の agent は spawn 前 pre-check を通過する");
+    // 非メンバー・非 recruit は従来どおり拒否
+    assert!(hub
+        .authorize_team_agent_binding("team-precheck", "stranger")
+        .await
+        .is_err());
+    // terminal 状態 (Cancelled) の recruit は許容しない
+    assert!(hub.cancel_recruit("fresh-recruit", "dismissed").await);
+    assert!(hub
+        .authorize_team_agent_binding("team-precheck", "fresh-recruit")
+        .await
+        .is_err());
+}
+
 /// PR #34 一次レビュー 🟡7: bind_native_runtime_endpoint は renderer 由来の
 /// (team_id, agent_id) を fail-closed に検証する。
 #[tokio::test]
