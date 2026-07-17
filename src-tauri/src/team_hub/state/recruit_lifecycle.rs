@@ -169,6 +169,18 @@ impl TeamHub {
         }
     }
 
+    /// pending grant を即破棄してから Failed を確定する。terminal cleanup 中の遅着
+    /// handshake が member を復活させないよう、`cancel_recruit_immediately` と同じ順序を
+    /// 全 failure 経路で共有する (PR #34 レビュー)。
+    pub async fn fail_recruit_immediately(
+        &self,
+        agent_id: &str,
+        reason: impl Into<String>,
+    ) -> bool {
+        self.discard_pending_recruit(agent_id).await;
+        self.fail_recruit(agent_id, reason).await
+    }
+
     pub async fn fail_recruit(&self, agent_id: &str, reason: impl Into<String>) -> bool {
         self.finish_recruit_terminal(agent_id, RecruitLifecycleState::Failed, reason.into())
             .await
@@ -204,13 +216,46 @@ impl TeamHub {
                     tokio::time::sleep(recruit_grace_from_env()).await;
                     let rescued = {
                         let mut s = hub.state.lock().await;
-                        match s
-                            .pending_recruits
-                            .get(&agent_id)
-                            .and_then(|p| p.timed_out_at)
-                        {
+                        match s.pending_recruits.get(&agent_id) {
+                            // ack rescue 済み (handshake 待ち): terminal cancel はしないが、
+                            // handshake が来ないまま放置されると孤児 pending が singleton 判定を
+                            // 塞ぎ続ける (Issue #122/#173 系)。grant TTL 満了で回収する
+                            // follow-up task を張る (PR #34 レビュー)。
+                            Some(p) if p.rescued_at.is_some() => {
+                                let rescued_at = p.rescued_at;
+                                let hub = hub.clone();
+                                let team_id = team_id.clone();
+                                let agent_id_owned = agent_id.clone();
+                                let reason = reason.clone();
+                                tokio::spawn(async move {
+                                    tokio::time::sleep(
+                                        super::recruit::handshake_grant_ttl_from_env(),
+                                    )
+                                    .await;
+                                    let expired = {
+                                        let mut s = hub.state.lock().await;
+                                        match s.pending_recruits.get(&agent_id_owned) {
+                                            // 同一 rescue 起点のまま handshake 未到達 = 期限切れ。
+                                            Some(p) if p.rescued_at == rescued_at => {
+                                                s.pending_recruits.remove(&agent_id_owned);
+                                                true
+                                            }
+                                            _ => false,
+                                        }
+                                    };
+                                    if expired {
+                                        hub.finalize_recruit_cancel(
+                                            &team_id,
+                                            &agent_id_owned,
+                                            &reason,
+                                        )
+                                        .await;
+                                    }
+                                });
+                                true
+                            }
                             // 同一 timeout 起点の pending が残っている = rescue されなかった。
-                            Some(ts) if ts == timed_out_at => {
+                            Some(p) if p.timed_out_at == Some(timed_out_at) => {
                                 s.pending_recruits.remove(&agent_id);
                                 false
                             }
@@ -227,6 +272,19 @@ impl TeamHub {
                 self.finalize_recruit_cancel(team_id, agent_id, &reason).await;
             }
         }
+    }
+
+    /// grace を一切挟まない即時 terminal cancel。dismiss などユーザー意図の除去は
+    /// 遅着 handshake / rescue によって巻き戻されてはならない (PR #34 レビュー):
+    /// pending を即破棄してから terminal を確定する。
+    pub async fn cancel_recruit_immediately(
+        &self,
+        team_id: &str,
+        agent_id: &str,
+        reason: impl Into<String>,
+    ) {
+        self.discard_pending_recruit(agent_id).await;
+        self.finalize_recruit_cancel(team_id, agent_id, &reason.into()).await;
     }
 
     async fn finalize_recruit_cancel(&self, team_id: &str, agent_id: &str, reason: &str) {

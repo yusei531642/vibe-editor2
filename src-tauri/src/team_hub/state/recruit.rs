@@ -63,6 +63,9 @@ pub struct PendingRecruit {
     pub ack_done: AtomicBool,
     /// Issue #577: ack timeout 済みだが grace window 中で、遅着 ack を rescue できる状態。
     pub timed_out_at: Option<Instant>,
+    /// 遅着 ack が rescue された時刻。grace 満了 task はこれが Some なら terminal cancel を
+    /// スキップし、handshake timeout 側の経路に委ねる (PR #34 レビュー)。
+    pub rescued_at: Option<Instant>,
     /// Issue #742 (Security): この recruit grant を発行した時刻。
     /// `resolve_pending_recruit` の handshake で `issued_at.elapsed()` が
     /// `HANDSHAKE_GRANT_TTL` を超えていたら「期限切れ token」として reject する
@@ -161,6 +164,7 @@ impl TeamHub {
                 ack_tx: Some(ack_tx),
                 ack_done: AtomicBool::new(false),
                 timed_out_at: None,
+            rescued_at: None,
                 // Issue #742: grant 発行時刻。handshake TTL 検証の起点。
                 issued_at: Instant::now(),
             },
@@ -224,6 +228,7 @@ impl TeamHub {
         let mut s = self.state.lock().await;
         // Issue #742: pending grant が存在するなら TTL / team_id / role を順に検証する。
         let mut consumed_pending = false;
+        let mut rescued_handshake = false;
         if let Some(p) = s.pending_recruits.get(agent_id) {
             // TTL 超過 = 期限切れ token。stale entry を除去してから reject する
             // (recruit 側 cancel 経路が拾えなかった残骸を handshake 側でも掃除)。
@@ -264,6 +269,9 @@ impl TeamHub {
             }
             // single-use: 成功確定なので grant を消費 (remove) する。
             let p = s.pending_recruits.remove(agent_id).expect("just checked");
+            // timed_out_at 付き = Issue #577 の遅着 ack rescue 経路 (team_recruit は
+            // 既に timeout で return 済みで verify_recruit_liveness に到達しない)。
+            rescued_handshake = p.timed_out_at.is_some();
             let _ = p.tx.send(RecruitOutcome {
                 agent_id: agent_id.to_string(),
                 role_profile_id: role_profile_id.to_string(),
@@ -313,9 +321,13 @@ impl TeamHub {
         entry.last_handshake_at = Some(now_iso.clone());
         entry.last_seen_at = Some(now_iso);
         drop(s);
-        // rescue 経由でも placeholder が解決するよう、handshake 成功時に lifecycle を
-        // Ready まで前進させる (冪等、PR #34 二次レビュー)。
-        self.advance_recruit_to_ready(agent_id).await;
+        // rescue 経路 (team_recruit が timeout 済みで verify_recruit_liveness に到達しない)
+        // に限って lifecycle を Ready まで前進させる。通常経路では liveness 検証を通った
+        // verify_recruit_liveness だけが Ready を出す (PR #34 レビュー: ready の意味を
+        // 「runtime endpoint が live」に保つ)。
+        if rescued_handshake {
+            self.advance_recruit_to_ready(agent_id).await;
+        }
         true
     }
 
@@ -445,6 +457,7 @@ impl TeamHub {
             return Err(AckError::AlreadyAcked);
         }
         if let Some(timed_out_at) = pending.timed_out_at {
+            pending.rescued_at = Some(Instant::now());
             // timeout 後 grace 中の遅着 ack。ack waiter は既に close 済みなので送信せず、
             // renderer 側へ rescue event を出してカード維持を観測可能にする。
             let _ = pending.ack_tx.take();

@@ -1,12 +1,13 @@
 //! TeamHub が所有する agentId -> runtime endpoint 対応と統合配送。
 
+mod binding;
 pub(crate) mod types;
 #[cfg(test)]
 mod test_support;
 
 use types::*;
 use crate::agent_runtime::{
-    BackendKind, PtyCompatAdapter, RuntimeDeliveryRequest, RuntimeEventEnvelope, RuntimeManager,
+    BackendKind, RuntimeDeliveryRequest, RuntimeEventEnvelope, RuntimeManager,
 };
 use crate::pty::SessionRegistry;
 use crate::team_hub::inject::InjectError;
@@ -103,169 +104,6 @@ impl TeamHub {
         }
     }
 
-    pub async fn bind_pty_runtime_endpoint(
-        &self,
-        team_id: &str,
-        agent_id: &str,
-        session_id: Option<String>,
-    ) -> Result<String, String> {
-        let _binding_guard = self.runtime.pty_binding_lock.lock().await;
-        let endpoint_id = pty_endpoint_id(agent_id);
-        let already_bound = {
-            let state = self.state.lock().await;
-            state
-                .runtime_endpoints
-                .get(&key(team_id, agent_id))
-                .and_then(|binding| binding.pty.as_ref())
-                .is_some_and(|endpoint| {
-                    endpoint.endpoint_id == endpoint_id
-                        && self
-                            .runtime
-                            .manager
-                            .registry()
-                            .resolve(&endpoint_id)
-                            .is_some()
-                })
-        };
-        if !already_bound {
-            if self
-                .runtime
-                .manager
-                .registry()
-                .resolve(&endpoint_id)
-                .is_some()
-            {
-                let operation = self.runtime.manager.dispose(&endpoint_id);
-                self.emit_runtime_events(&operation.events).await;
-            }
-            let adapter = Arc::new(PtyCompatAdapter::for_team_agent(
-                self.registry.clone(),
-                agent_id,
-            ));
-            let operation = self.runtime.manager.register_endpoint(endpoint_id.clone(), adapter);
-            self.emit_runtime_events(&operation.events).await;
-            operation
-                .result
-                .map_err(|error| format!("{}: {}", error.code, error.message))?;
-        }
-
-        let endpoint = RuntimeEndpoint {
-            endpoint_id: endpoint_id.clone(),
-            backend: RuntimeEndpointBackend::Pty,
-            session_id,
-        };
-        let mut state = self.state.lock().await;
-        let binding = state
-            .runtime_endpoints
-            .entry(key(team_id, agent_id))
-            .or_default();
-        binding.pty = Some(endpoint.clone());
-        state.attach_runtime_to_recruit(team_id, agent_id, &endpoint);
-        Ok(endpoint_id)
-    }
-
-    pub async fn bind_native_runtime_endpoint(
-        &self,
-        team_id: &str,
-        agent_id: &str,
-        endpoint_id: String,
-        session_id: Option<String>,
-    ) -> Result<(), String> {
-        if self
-            .runtime
-            .manager
-            .registry()
-            .resolve(&endpoint_id)
-            .is_none()
-        {
-            return Err(format!(
-                "runtime endpoint '{endpoint_id}' is not registered"
-            ));
-        }
-        // 認可 (PR #34 一次レビュー 🟡7): renderer 由来の (team_id, agent_id) は信頼境界外。
-        // active な team の実在メンバーであることを fail-closed に検証し、live な native
-        // binding の上書き (既存 worker の配送乗っ取り) を拒否する。
-        let is_member = self
-            .registry
-            .list_team_members(team_id)
-            .iter()
-            .any(|(member_agent_id, _)| member_agent_id == agent_id);
-        let endpoint = RuntimeEndpoint {
-            endpoint_id,
-            backend: RuntimeEndpointBackend::Native,
-            session_id,
-        };
-        let mut state = self.state.lock().await;
-        if !state.active_teams.contains(team_id) {
-            return Err(format!("team '{team_id}' is not active"));
-        }
-        let recruited_here = state
-            .recruit_lifecycles
-            .get(agent_id)
-            .is_some_and(|lifecycle| {
-                lifecycle.team_id == team_id
-                    && !matches!(
-                        lifecycle.state,
-                        crate::team_hub::events::RecruitLifecycleState::Failed
-                            | crate::team_hub::events::RecruitLifecycleState::Cancelled
-                    )
-            });
-        if !is_member
-            && !recruited_here
-            && !state
-                .agents
-                .contains_key(&(team_id.to_string(), agent_id.to_string()))
-        {
-            return Err(format!(
-                "agent '{agent_id}' is not a member of team '{team_id}'"
-            ));
-        }
-        let binding = state
-            .runtime_endpoints
-            .entry(key(team_id, agent_id))
-            .or_default();
-        if let Some(existing) = &binding.native {
-            if existing.endpoint_id != endpoint.endpoint_id
-                && self
-                    .runtime
-                    .manager
-                    .registry()
-                    .resolve(&existing.endpoint_id)
-                    .is_some()
-            {
-                return Err(format!(
-                    "agent '{agent_id}' already has a live native endpoint '{}'",
-                    existing.endpoint_id
-                ));
-            }
-        }
-        binding.native = Some(endpoint.clone());
-        state.attach_runtime_to_recruit(team_id, agent_id, &endpoint);
-        Ok(())
-    }
-
-    pub(crate) fn selected_runtime_backend(&self) -> BackendKind {
-        self.runtime
-            .backend_override
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .unwrap_or_else(crate::agent_runtime::requested_backend)
-    }
-
-
-    pub(crate) fn prefers_legacy_codex_pty(&self) -> bool {
-        #[cfg(test)]
-        if let Some(delivery) = *self
-            .runtime
-            .codex_delivery_override
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-        {
-            return delivery == crate::team_hub::codex_delivery::CodexDelivery::Pty;
-        }
-        crate::team_hub::codex_delivery::prefers_pty()
-    }
-
     pub(crate) async fn try_deliver_native_message(
         &self,
         team_id: &str,
@@ -333,7 +171,7 @@ impl TeamHub {
                 .and_then(|endpoint| endpoint.session_id.clone())
         };
         let endpoint_id = self
-            .bind_pty_runtime_endpoint(team_id, agent_id, session_id)
+            .bind_pty_runtime_endpoint_for_delivery(team_id, agent_id, session_id)
             .await
             .map_err(|message| {
                 InjectError::WriteInitialFailed(format!(
@@ -394,6 +232,8 @@ impl TeamHub {
                 .as_ref()
                 .is_some_and(|endpoint| endpoint.endpoint_id == endpoint_id)
             {
+                // reconnect の has_prior_native 判定用に endpoint id を履歴として残す。
+                binding.prior_native_endpoint = Some(endpoint_id.to_string());
                 binding.native = None;
             }
         }

@@ -1,6 +1,6 @@
 //! (teamId, agentId) ごとの runtime endpoint binding の型定義。
-//! 実装 (bind / deliver / cleanup) は runtime_endpoint.rs / runtime_cleanup.rs 側にある。
-//! runtime_endpoint.rs の 500 行 ratchet を守るため型だけを分離した。
+//! 実装 (bind / deliver / cleanup) は runtime_endpoint/mod.rs / runtime_cleanup.rs 側にある。
+//! runtime_endpoint/mod.rs の 500 行 ratchet を守るため型だけを分離した。
 
 use std::collections::HashMap;
 
@@ -20,6 +20,9 @@ pub(crate) struct RuntimeEndpoint {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) struct AgentRuntimeBinding {
     pub native: Option<RuntimeEndpoint>,
+    /// prune 済み (dead) native endpoint の履歴。reconnect の「過去に native だった」判定に
+    /// 使い、spawn-phase gate を免除する (PR #34 レビュー: prune 後の reconnect 復帰不能防止)。
+    pub prior_native_endpoint: Option<String>,
     pub pty: Option<RuntimeEndpoint>,
     pub task_ids: Vec<u32>,
 }
