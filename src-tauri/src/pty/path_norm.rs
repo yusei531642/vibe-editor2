@@ -5,6 +5,19 @@
 
 use std::path::Path;
 
+/// Canonical Windows paths may carry the verbatim prefix (`\\?\`). ConPTY consumers expect
+/// the ordinary display form, while filesystem identity checks keep using the canonical path.
+pub fn display_path(path: &Path) -> String {
+    strip_windows_verbatim_prefix(&path.to_string_lossy())
+}
+
+fn strip_windows_verbatim_prefix(raw: &str) -> String {
+    if let Some(rest) = raw.strip_prefix(r"\\?\UNC\") {
+        return format!(r"\\{rest}");
+    }
+    raw.strip_prefix(r"\\?\").unwrap_or(raw).to_string()
+}
+
 /// Claude Code が使う encoding: 非 ASCII 英数字を `-` に置換する。
 /// `~/.claude/projects/<encode_project_path(root)>/` ディレクトリ名の生成に使う。
 ///
@@ -55,7 +68,10 @@ mod tests {
     #[test]
     fn encode_collision_is_still_possible() {
         // Issue #31 の論点: 単純置換の欠点を明示する回帰テスト
-        assert_eq!(encode_project_path("C:\\repo-a"), encode_project_path("C--repo-a"));
+        assert_eq!(
+            encode_project_path("C:\\repo-a"),
+            encode_project_path("C--repo-a")
+        );
     }
 
     #[test]
@@ -66,10 +82,26 @@ mod tests {
         );
     }
 
+    #[test]
+    fn strips_windows_verbatim_prefix_for_spawn_display() {
+        assert_eq!(
+            strip_windows_verbatim_prefix(r"\\?\C:\repo\worker"),
+            r"C:\repo\worker"
+        );
+        assert_eq!(
+            strip_windows_verbatim_prefix(r"\\?\UNC\server\share\worker"),
+            r"\\server\share\worker"
+        );
+        assert_eq!(strip_windows_verbatim_prefix("/tmp/repo"), "/tmp/repo");
+    }
+
     #[cfg(windows)]
     #[test]
     fn windows_case_insensitive_normalization() {
-        assert_eq!(normalize_project_root("D:/Repo"), normalize_project_root("d:\\repo"));
+        assert_eq!(
+            normalize_project_root("D:/Repo"),
+            normalize_project_root("d:\\repo")
+        );
     }
 
     /// Issue #662: cross-OS で `~/.claude/projects/<encoded>/` のディレクトリ名が
@@ -102,7 +134,10 @@ mod tests {
         // 末尾 slash も `-` (encode 関数は trim しない: 上位で normalize する)
         assert_eq!(encode_project_path("/tmp/repo/"), "-tmp-repo-");
         // 大小区別は保持される (`F` と `f` を別 encoded ディレクトリにする)
-        assert_ne!(encode_project_path("F:\\repo"), encode_project_path("f:\\repo"));
+        assert_ne!(
+            encode_project_path("F:\\repo"),
+            encode_project_path("f:\\repo")
+        );
     }
 
     #[test]

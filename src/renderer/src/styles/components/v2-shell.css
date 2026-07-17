@@ -333,7 +333,7 @@ button.v2-context-item:hover span { text-decoration: underline; text-underline-o
 .v2-drawer h2 { margin: 0 0 12px; color: #7b7974; font-size: 12px; font-weight: 500; }
 .v2-drawer p { color: #7b7974; font-size: 14px; }
 .v2-drawer-row { width: 100%; min-height: 42px; display: flex; align-items: center; gap: 10px; overflow: hidden; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
-.v2-inspector-tabs { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 16px; border-bottom: 1px solid rgba(31, 30, 29, .12); }
+.v2-inspector-tabs { display: grid; grid-template-columns: repeat(5, 1fr); margin-top: 16px; border-bottom: 1px solid rgba(31, 30, 29, .12); }
 .v2-inspector-tabs button { min-height: 40px; color: #7b7974; font-size: 12px; }
 .v2-inspector-tabs [aria-selected='true'] { color: inherit; border-bottom: 2px solid #d97757; }
 .v2-compat-terminal { width: 100%; min-height: 44px; margin-top: 28px; border: 1px solid rgba(31, 30, 29, .14); border-radius: 6px; }

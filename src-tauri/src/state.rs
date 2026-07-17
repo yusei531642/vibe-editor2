@@ -2,6 +2,7 @@
 
 use crate::agent_runtime::RuntimeManager;
 use crate::commands::project_authority::ProjectRootIdentity;
+use crate::commands::worktree::WorktreeManager;
 use crate::pty::{InFlightTracker, SessionRegistry};
 use crate::task_supervisor::TaskSupervisor;
 use crate::team_hub::TeamHub;
@@ -42,6 +43,8 @@ pub struct AppState {
     /// を await して in-flight task の自然完了を待ってから kill_all() を呼ぶため、SessionHandle
     /// の Mutex poison / 半端 inject による不正出力 / reader thread 解放漏れの race を防ぐ。
     pub pty_inflight: Arc<InFlightTracker>,
+    /// Issue #27: worktree assignment / reviewed merge queue の Rust-side source of truth。
+    pub worktree_manager: Arc<WorktreeManager>,
 }
 
 /// Issue #739: `ArcSwapOption<String>` から現在の project_root を `Option<String>` として
@@ -92,6 +95,7 @@ impl AppState {
             runtime_manager.clone(),
             pty_inflight.clone(),
         );
+        let worktree_manager = Arc::new(WorktreeManager::new());
         Self {
             project_root: ArcSwapOption::from(None),
             project_root_identity: ArcSwapOption::from(None),
@@ -101,6 +105,7 @@ impl AppState {
             team_hub,
             task_supervisor,
             pty_inflight,
+            worktree_manager,
         }
     }
 }

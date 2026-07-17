@@ -12,7 +12,7 @@ function agent(backend: 'native' | 'pty'): TeamAgentProjection {
       sessionId: null, taskIds: [], live: true
     },
     runtime: null, changedFiles: [], latestTool: null, latestDiff: null, latestUsage: null,
-    approvals: [], worktree: { state: 'phase6', label: 'Phase 6' }
+    approvals: [], worktree: null
   };
 }
 

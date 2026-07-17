@@ -43,7 +43,8 @@ impl TeamHub {
         let _binding_guard = self.runtime.pty_binding_lock.lock().await;
         // 認可 (PR #34 レビュー): terminal_create 経由の (team_id, agent_id) も renderer 由来。
         // native bind と同一の fail-closed 検証を通す。
-        self.authorize_team_agent_binding(team_id, agent_id).await?;
+        self.authorize_runtime_endpoint_binding(team_id, agent_id)
+            .await?;
         // native bind 側と対称の乗っ取り防止: live な native endpoint を持つ member への
         // PTY bind (terminal_create 経由の上書き) は拒否する (PR #34 レビュー)。
         if reject_live_native {
@@ -121,7 +122,7 @@ impl TeamHub {
 
     /// (team_id, agent_id) が active team の既存 active member または非 terminal recruit
     /// lifecycle であることを検証する。renderer が直前に作った PTY session は認可根拠にしない。
-    async fn authorize_team_agent_binding(
+    async fn authorize_runtime_endpoint_binding(
         &self,
         team_id: &str,
         agent_id: &str,
@@ -175,7 +176,8 @@ impl TeamHub {
         // 認可 (PR #34 一次レビュー 🟡7): renderer 由来の (team_id, agent_id) は信頼境界外。
         // active な team の実在メンバーであることを fail-closed に検証し、live な native
         // binding の上書き (既存 worker の配送乗っ取り) を拒否する。
-        self.authorize_team_agent_binding(team_id, agent_id).await?;
+        self.authorize_runtime_endpoint_binding(team_id, agent_id)
+            .await?;
         let endpoint = RuntimeEndpoint {
             endpoint_id,
             backend: RuntimeEndpointBackend::Native,

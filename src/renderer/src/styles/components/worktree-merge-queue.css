@@ -1,0 +1,29 @@
+.worktree-inspector { display: grid; gap: 12px; }
+.worktree-inspector > dl,
+.merge-queue-panel dl { display: grid; gap: 6px; margin: 0; }
+.worktree-inspector > dl div,
+.merge-queue-panel dl div { display: grid; grid-template-columns: minmax(90px, auto) minmax(0, 1fr); gap: 8px; }
+.worktree-inspector dt,
+.merge-queue-panel dt { color: var(--fg-subtle); font-size: 11px; }
+.worktree-inspector dd,
+.merge-queue-panel dd { min-width: 0; margin: 0; overflow-wrap: anywhere; font-family: var(--mono-font); }
+.worktree-inspector > button,
+.worktree-inspector form button,
+.merge-queue-panel button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 10px; }
+.worktree-inspector form { display: grid; gap: 6px; }
+.worktree-inspector textarea { min-height: 88px; resize: vertical; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-base); color: var(--fg); }
+.merge-queue-panel { display: grid; gap: 10px; padding-top: 12px; border-top: 1px solid var(--border); }
+.merge-queue-panel > header,
+.merge-queue-panel > header div { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.merge-queue-panel > header small { color: var(--fg-subtle); }
+.merge-queue-panel ol { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.merge-queue-panel li { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-base); }
+.merge-queue-panel__heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.merge-queue-panel__heading span { color: var(--fg-muted); font-size: 11px; }
+.merge-queue-panel li > p { margin: 0; overflow-wrap: anywhere; color: var(--fg-muted); }
+.merge-queue-panel li > pre { margin: 0; white-space: pre-wrap; }
+.merge-queue-panel__actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.merge-queue-panel button:disabled { cursor: not-allowed; opacity: .45; }
+.merge-conflict-inspector { display: grid; gap: 8px; padding: 10px; border-inline-start: 3px solid var(--danger); background: color-mix(in srgb, var(--danger) 7%, transparent); }
+.merge-conflict-inspector > svg { color: var(--danger); }
+.merge-queue-panel__empty { color: var(--fg-muted); }

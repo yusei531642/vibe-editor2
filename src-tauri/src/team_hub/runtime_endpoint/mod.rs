@@ -6,7 +6,6 @@ mod snapshot;
 #[cfg(test)]
 mod test_support;
 
-use types::*;
 use crate::agent_runtime::{
     BackendKind, RuntimeDeliveryRequest, RuntimeEventEnvelope, RuntimeManager,
 };
@@ -19,7 +18,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::Emitter;
 use tokio::sync::Mutex;
-
+use types::*;
 
 #[derive(Clone)]
 pub(crate) struct RuntimeRouting {
@@ -296,6 +295,55 @@ impl TeamHub {
             }
         }
         members
+    }
+
+    /// Issue #27: renderer-supplied pair を active team + current member binding へ fail-closed に限定する。
+    ///
+    /// spawn 前の pre-check (terminal_create / worktree assign) から呼ばれるため、まだ PTY も
+    /// hub handshake も無い「recruit 進行中」の agent も許容する。判定基準は bind 側の
+    /// `authorize_runtime_endpoint_binding` (binding.rs) と同一に保つ — ここだけ厳しくすると
+    /// 新規 recruit の初回 spawn が authz で落ちる (PR #37 レビュー 🟡)。
+    pub async fn authorize_team_agent_binding(
+        &self,
+        team_id: &str,
+        agent_id: &str,
+    ) -> crate::commands::error::CommandResult<()> {
+        self.authorized_team_agent_role(team_id, agent_id)
+            .await
+            .map(|_| ())
+    }
+
+    /// Issue #27: worker isolation policy must use the Hub-owned role, never renderer input.
+    pub async fn authorized_team_agent_role(
+        &self,
+        team_id: &str,
+        agent_id: &str,
+    ) -> crate::commands::error::CommandResult<String> {
+        crate::commands::validation::validate_id_segment("team_id", team_id)?;
+        crate::commands::validation::validate_id_segment("agent_id", agent_id)?;
+        crate::commands::authz::assert_active_team(self, team_id).await?;
+        let role = {
+            let state = self.state.lock().await;
+            state.bound_role(team_id, agent_id).or_else(|| {
+                state
+                    .recruit_lifecycles
+                    .get(agent_id)
+                    .filter(|lifecycle| {
+                        lifecycle.team_id == team_id
+                            && !matches!(
+                                lifecycle.state,
+                                crate::team_hub::events::RecruitLifecycleState::Failed
+                                    | crate::team_hub::events::RecruitLifecycleState::Cancelled
+                            )
+                    })
+                    .map(|lifecycle| lifecycle.role_profile_id.clone())
+            })
+        };
+        role.ok_or_else(|| {
+            crate::commands::error::CommandError::authz(
+                "agent is not an active member of this team",
+            )
+        })
     }
 
     pub async fn associate_task_runtime(
