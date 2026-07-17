@@ -14,6 +14,21 @@ impl WorktreeManager {
         project_root: &crate::commands::authz::ProjectRoot,
         team_id: &str,
     ) -> CommandResult<WorktreeManagerSnapshot> {
+        // 非 git / detached HEAD / git 不在では毎 poll をエラーにせず「未対応」snapshot を返す
+        // (PR #37 レビュー: terminal 側 fallback と同じ環境判定)。
+        match super::git_ops::supports_worktree_project(project_root.as_path()).await {
+            Ok(true) => {}
+            Ok(false) | Err(_) => {
+                return Ok(WorktreeManagerSnapshot {
+                    team_id: team_id.to_string(),
+                    supported: false,
+                    assignments: Vec::new(),
+                    candidates: Vec::new(),
+                    review_required: true,
+                    integration_in_progress: false,
+                });
+            }
+        }
         self.prepare_project(project_root).await?;
         let project_key = Self::project_key(project_root.as_path());
         let (assignments, mut candidates) = {
@@ -82,6 +97,7 @@ impl WorktreeManager {
         candidates.sort_by_key(|candidate| candidate.queue_position);
         Ok(WorktreeManagerSnapshot {
             team_id: team_id.to_string(),
+            supported: true,
             assignments: views,
             candidates,
             review_required: true,

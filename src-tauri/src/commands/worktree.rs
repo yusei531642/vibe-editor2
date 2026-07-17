@@ -121,6 +121,9 @@ pub struct MergeCandidateSnapshot {
 #[serde(rename_all = "camelCase")]
 pub struct WorktreeManagerSnapshot {
     pub team_id: String,
+    /// 非 git プロジェクト / detached HEAD / git 不在では false。renderer は
+    /// poll を止めて「worktree 未対応」表示に切り替える (PR #37 レビュー)。
+    pub supported: bool,
     pub assignments: Vec<WorktreeAssignmentSnapshot>,
     pub candidates: Vec<MergeCandidateSnapshot>,
     pub review_required: bool,

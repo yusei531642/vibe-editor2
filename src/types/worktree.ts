@@ -41,6 +41,8 @@ export interface MergeCandidateSnapshot {
 
 export interface WorktreeManagerSnapshot {
   teamId: string;
+  /** 非 git プロジェクト等では false (worktree 機能は未対応表示にする)。 */
+  supported: boolean;
   assignments: WorktreeAssignmentSnapshot[];
   candidates: MergeCandidateSnapshot[];
   reviewRequired: true;
