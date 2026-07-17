@@ -24,6 +24,13 @@ requireMatch(release, /git merge-base --is-ancestor "\$\{GITHUB_SHA\}" origin\/m
 requireMatch(release, /^\s{2}quality-gate:\s*\r?\n(?:.|\r?\n)*?uses: \.\/\.github\/workflows\/ci\.yml/m, 'release.yml must call the reusable CI workflow');
 requireMatch(release, /^\s{2}build:\s*\r?\n\s{4}needs:\s*\r?\n\s{6}- validate-release-ref\s*\r?\n\s{6}- quality-gate\s*$/m, 'build must depend on ref validation and the quality gate');
 requireMatch(release, /- Linux:\s+`\.AppImage` \/ `\.deb` \/ `\.rpm`/, 'release body must list the RPM artifact');
+requireMatch(release, /group:\s*release-pipeline/, 'release runs must be serialized before publishing the updater channel');
+requireMatch(release, /^\s{2}publish-release-and-update-channel:\s*$/m, 'release.yml must publish the release and fixed updater channel');
+requireMatch(release, /publish-release-and-update-channel:\s*\r?\n\s{4}needs:\s*\r?\n\s{6}- validate-release-ref\s*\r?\n\s{6}- quality-gate\s*\r?\n\s{6}- build/m, 'release and updater publication must depend on every release gate');
+requireMatch(release, /gh release download "\$\{GITHUB_REF_NAME\}"/, 'updater channel must use the manifest from the current release');
+requireMatch(release, /-F draft=false/, 'the completed draft release must be published before the updater channel');
+requireMatch(release, /-f branch=update-channel/, 'updater manifest must be published to the fixed channel branch');
+requireMatch(release, /raw\.githubusercontent\.com\/\$\{GITHUB_REPOSITORY\}\/update-channel\/latest\.json/, 'the public updater channel must be verified');
 requireMatch(
   release,
   /prerelease:\s*\$\{\{\s*contains\(github\.ref_name,\s*'-'\)\s*\}\}/,
@@ -34,6 +41,12 @@ const signingStep = release.indexOf('TAURI_SIGNING_PRIVATE_KEY:');
 const buildJob = release.indexOf('\n  build:');
 if (signingStep === -1 || buildJob === -1 || signingStep < buildJob) {
   failures.push('signing credentials must only be used inside the gated build job');
+}
+
+const publishReleaseStep = release.indexOf('-F draft=false');
+const publishChannelStep = release.indexOf('-f branch=update-channel');
+if (publishReleaseStep === -1 || publishChannelStep === -1 || publishReleaseStep > publishChannelStep) {
+  failures.push('the release must become public before the updater channel is advanced');
 }
 
 if (failures.length > 0) {

@@ -68,6 +68,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
+        "https://raw.githubusercontent.com/yusei531642/vibe-editor2/update-channel/latest.json",
         "https://github.com/yusei531642/vibe-editor2/releases/latest/download/latest.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlDMDFBMUUyQzBGRTU5REEKUldUYVdmN0E0cUVCbkdxZENiZllHUURBWWxIQWtBdHMvYkVvelJhcFFLSFF0SHN2c2tLclRXUzkK"

@@ -8,7 +8,8 @@
 #   - Windows: .exe (NSIS インストーラ)
 #   - macOS:   .dmg (universal2 — Apple Silicon + Intel)
 #   - Linux:   .AppImage / .deb / .rpm
-# を upload する。確認後、Releases ページで手動 publish する。
+# を upload する。全 OS の build / SBOM / provenance が成功した場合だけ release を
+# 公開し、その後で固定 updater channel を更新する。
 name: release
 
 on:
@@ -18,7 +19,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-pipeline
   cancel-in-progress: false
 
 permissions:
@@ -143,7 +144,7 @@ jobs:
             - macOS:   `.dmg` (universal2 — Apple Silicon + Intel)
             - Linux:   `.AppImage` / `.deb` / `.rpm`
 
-            動作確認後にこの draft を publish してください。
+            全 OS の build・SBOM・provenance 成功後に自動公開されます。
           releaseDraft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           includeUpdaterJson: true
@@ -168,3 +169,88 @@ jobs:
         with:
           subject-path: ${{ matrix.attest_subjects }}
           sbom-path: ${{ github.workspace }}/${{ matrix.sbom_file }}
+
+  publish-release-and-update-channel:
+    needs:
+      - validate-release-ref
+      - quality-gate
+      - build
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download signed update manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p "${RUNNER_TEMP}/update-channel"
+          gh release download "${GITHUB_REF_NAME}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --pattern latest.json \
+            --dir "${RUNNER_TEMP}/update-channel"
+
+      - name: Validate update manifest
+        env:
+          MANIFEST_PATH: ${{ runner.temp }}/update-channel/latest.json
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const manifest = JSON.parse(fs.readFileSync(process.env.MANIFEST_PATH, 'utf8'));
+          const expectedVersion = process.env.GITHUB_REF_NAME.replace(/^v/, '');
+          const platforms = Object.values(manifest.platforms ?? {});
+          if (manifest.version !== expectedVersion) {
+            throw new Error(`manifest version ${manifest.version} != tag ${expectedVersion}`);
+          }
+          if (platforms.length === 0 || platforms.some(({ url, signature }) => !url || !signature)) {
+            throw new Error('manifest must contain signed updater assets');
+          }
+          NODE
+
+      - name: Publish completed release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          release_id="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}" \
+            --jq .id)"
+          prerelease=false
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+            prerelease=true
+          fi
+          gh api --method PATCH \
+            "repos/${GITHUB_REPOSITORY}/releases/${release_id}" \
+            -F draft=false \
+            -F prerelease="${prerelease}" \
+            --silent
+
+      - name: Publish fixed updater channel
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MANIFEST_PATH: ${{ runner.temp }}/update-channel/latest.json
+        run: |
+          content="$(base64 -w0 "${MANIFEST_PATH}")"
+          current_sha="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/contents/latest.json?ref=update-channel" \
+            --jq .sha)"
+          gh api --method PUT \
+            "repos/${GITHUB_REPOSITORY}/contents/latest.json" \
+            -f message="chore(release): publish ${GITHUB_REF_NAME} updater channel" \
+            -f content="${content}" \
+            -f sha="${current_sha}" \
+            -f branch=update-channel \
+            --silent
+
+      - name: Verify public updater channel
+        run: |
+          curl --fail --silent --show-error --location \
+            "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/update-channel/latest.json?release=${GITHUB_REF_NAME}" \
+            --output "${RUNNER_TEMP}/public-latest.json"
+          EXPECTED_VERSION="${GITHUB_REF_NAME#v}" \
+            MANIFEST_PATH="${RUNNER_TEMP}/public-latest.json" \
+            node <<'NODE'
+          const fs = require('node:fs');
+          const manifest = JSON.parse(fs.readFileSync(process.env.MANIFEST_PATH, 'utf8'));
+          if (manifest.version !== process.env.EXPECTED_VERSION) {
+            throw new Error(`public channel version ${manifest.version} != ${process.env.EXPECTED_VERSION}`);
+          }
+          NODE
