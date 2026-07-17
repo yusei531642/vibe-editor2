@@ -37,7 +37,16 @@ export function projectRecruitLifecycle(
   if (action.type === 'request') {
     const payload = action.payload;
     const current = state[payload.newAgentId];
-    if (current) return state;
+    // 進行中 entry は維持するが、terminal / 撤収中の残骸は新 epoch で上書きする
+    // (cancelled が書いた MAX_SAFE_INTEGER sequence を持ち越さない、PR #35 レビュー)。
+    if (
+      current &&
+      !current.exiting &&
+      current.state !== 'failed' &&
+      current.state !== 'cancelled'
+    ) {
+      return state;
+    }
     return {
       ...state,
       [payload.newAgentId]: {
@@ -113,8 +122,16 @@ export function useRecruitLifecycleProjection(): RecruitProjection[] {
     const sequences = latestSequence.current;
     const unlistens = [
       subscribeEvent<RecruitRequestPayload>('team:recruit-request', (payload) => {
-        if (!sequences.has(payload.newAgentId)) {
-          sequences.set(payload.newAgentId, -1);
+        // 新しい recruit-request は新 epoch: 同一 agentId の再採用が前回の
+        // sequence (特に cancelled 時の MAX_SAFE_INTEGER 番兵) にブロックされないよう
+        // 必ず reset する (PR #35 レビュー)。
+        sequences.set(payload.newAgentId, -1);
+        // 前回 failed/cancelled の withdraw timer が残っていると、新 epoch の card を
+        // WITHDRAW_MS 後に消してしまうため解除する (PR #35 レビュー)。
+        const pendingTimer = timers.get(payload.newAgentId);
+        if (pendingTimer !== undefined) {
+          window.clearTimeout(pendingTimer);
+          timers.delete(payload.newAgentId);
         }
         dispatch({ type: 'request', payload });
       }),
@@ -129,6 +146,7 @@ export function useRecruitLifecycleProjection(): RecruitProjection[] {
         if (payload.state === 'failed' || payload.state === 'cancelled') {
           const timer = window.setTimeout(() => {
             timers.delete(payload.agentId);
+            sequences.delete(payload.agentId);
             dispatch({ type: 'remove', agentId: payload.agentId });
           }, WITHDRAW_MS);
           timers.set(payload.agentId, timer);
@@ -141,6 +159,7 @@ export function useRecruitLifecycleProjection(): RecruitProjection[] {
         if (oldTimer !== undefined) window.clearTimeout(oldTimer);
         const timer = window.setTimeout(() => {
           timers.delete(payload.newAgentId);
+          sequences.delete(payload.newAgentId);
           dispatch({ type: 'remove', agentId: payload.newAgentId });
         }, WITHDRAW_MS);
         timers.set(payload.newAgentId, timer);

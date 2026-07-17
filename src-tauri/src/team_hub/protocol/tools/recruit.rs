@@ -540,8 +540,7 @@ pub async fn team_recruit(
             dynamic_role: dynamic_role_payload,
         };
         if let Err(e) = app.emit("team:recruit-request", payload) {
-            let _ = hub.fail_recruit(&new_agent_id, "recruit_emit_failed").await;
-            hub.discard_pending_recruit(&new_agent_id).await;
+            let _ = hub.fail_recruit_immediately(&new_agent_id, "recruit_emit_failed").await;
             return Err(RecruitError::new(
                 "recruit_emit_failed",
                 format!("failed to emit recruit-request: {e}"),
@@ -549,9 +548,8 @@ pub async fn team_recruit(
         }
     } else {
         let _ = hub
-            .fail_recruit(&new_agent_id, "renderer_unavailable")
+            .fail_recruit_immediately(&new_agent_id, "renderer_unavailable")
             .await;
-        hub.discard_pending_recruit(&new_agent_id).await;
         return Err(RecruitError::new(
             "recruit_renderer_unavailable",
             "renderer not available (canvas mode required)",
@@ -590,8 +588,7 @@ pub async fn team_recruit(
                     .unwrap_or_else(|| "unknown".to_string());
                 // 旧実装は `team:recruit-cancelled` の reason に ack.phase を載せていた。
                 // renderer の wire 契約を維持するため phase を reason として使う (PR #34 二次レビュー)。
-                let _ = hub.fail_recruit(&new_agent_id, phase_str.clone()).await;
-                hub.discard_pending_recruit(&new_agent_id).await;
+                let _ = hub.fail_recruit_immediately(&new_agent_id, phase_str.clone()).await;
                 let reason = ack.reason.unwrap_or_default();
                 let message = if reason.is_empty() {
                     format!("recruit failed (phase={phase_str})")
@@ -722,8 +719,7 @@ pub async fn team_recruit(
         }
         Err(_) => {
             // timeout
-            let _ = hub.fail_recruit(&new_agent_id, "handshake_timeout").await;
-            hub.discard_pending_recruit(&new_agent_id).await;
+            let _ = hub.fail_recruit_immediately(&new_agent_id, "handshake_timeout").await;
             // renderer にも cancel イベントを emit してカードを撤収させる
             // Issue #342 Phase 1: 構造化エラー化
             // Issue #811: env override で延長可能であることを message に明示する
