@@ -15,7 +15,7 @@ requireText('package.json', '"name": "vibe-editor2"');
 requireText('package.json', '"version": "2.0.0-alpha.0"');
 requireText('src-tauri/Cargo.toml', 'name = "vibe-editor2"');
 requireText('src-tauri/Cargo.toml', 'name = "vibe_editor2_lib"');
-requireText('src-tauri/tauri.conf.json', '"identifier": "com.vibe-editor2.app"');
+requireText('src-tauri/tauri.conf.json', '"identifier": "com.yuseilab.vibe-editor2"');
 requireText('src-tauri/tauri.conf.json', 'yusei531642/vibe-editor2/releases');
 forbidText('src-tauri/tauri.conf.json', 'yusei531642/vibe-editor/releases');
 requireText('src-tauri/src/util/config_paths.rs', 'h.join(".vibe-editor2")');

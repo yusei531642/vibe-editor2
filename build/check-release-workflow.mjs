@@ -24,6 +24,11 @@ requireMatch(release, /git merge-base --is-ancestor "\$\{GITHUB_SHA\}" origin\/m
 requireMatch(release, /^\s{2}quality-gate:\s*\r?\n(?:.|\r?\n)*?uses: \.\/\.github\/workflows\/ci\.yml/m, 'release.yml must call the reusable CI workflow');
 requireMatch(release, /^\s{2}build:\s*\r?\n\s{4}needs:\s*\r?\n\s{6}- validate-release-ref\s*\r?\n\s{6}- quality-gate\s*$/m, 'build must depend on ref validation and the quality gate');
 requireMatch(release, /- Linux:\s+`\.AppImage` \/ `\.deb` \/ `\.rpm`/, 'release body must list the RPM artifact');
+requireMatch(
+  release,
+  /prerelease:\s*\$\{\{\s*contains\(github\.ref_name,\s*'-'\)\s*\}\}/,
+  'pre-release tags must create GitHub prereleases',
+);
 
 const signingStep = release.indexOf('TAURI_SIGNING_PRIVATE_KEY:');
 const buildJob = release.indexOf('\n  build:');
