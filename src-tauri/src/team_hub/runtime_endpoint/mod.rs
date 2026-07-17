@@ -232,6 +232,8 @@ impl TeamHub {
                 .as_ref()
                 .is_some_and(|endpoint| endpoint.endpoint_id == endpoint_id)
             {
+                // reconnect の has_prior_native 判定用に endpoint id を履歴として残す。
+                binding.prior_native_endpoint = Some(endpoint_id.to_string());
                 binding.native = None;
             }
         }

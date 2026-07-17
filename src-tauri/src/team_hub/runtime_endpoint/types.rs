@@ -20,6 +20,9 @@ pub(crate) struct RuntimeEndpoint {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) struct AgentRuntimeBinding {
     pub native: Option<RuntimeEndpoint>,
+    /// prune 済み (dead) native endpoint の履歴。reconnect の「過去に native だった」判定に
+    /// 使い、spawn-phase gate を免除する (PR #34 レビュー: prune 後の reconnect 復帰不能防止)。
+    pub prior_native_endpoint: Option<String>,
     pub pty: Option<RuntimeEndpoint>,
     pub task_ids: Vec<u32>,
 }

@@ -144,7 +144,9 @@ impl TeamHub {
         let has_prior_native = state
             .runtime_endpoints
             .get(&key(team_id, agent_id))
-            .is_some_and(|binding| binding.native.is_some());
+            .is_some_and(|binding| {
+                binding.native.is_some() || binding.prior_native_endpoint.is_some()
+            });
         if !has_prior_native {
             let spawning = state.recruit_lifecycles.get(agent_id).is_some_and(|l| {
                 l.team_id == team_id
