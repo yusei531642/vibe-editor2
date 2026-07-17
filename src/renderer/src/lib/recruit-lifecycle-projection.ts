@@ -113,6 +113,13 @@ export function useRecruitLifecycleProjection(): RecruitProjection[] {
         // sequence (特に cancelled 時の MAX_SAFE_INTEGER 番兵) にブロックされないよう
         // 必ず reset する (PR #35 レビュー)。
         sequences.set(payload.newAgentId, -1);
+        // 前回 failed/cancelled の withdraw timer が残っていると、新 epoch の card を
+        // WITHDRAW_MS 後に消してしまうため解除する (PR #35 レビュー)。
+        const pendingTimer = timers.get(payload.newAgentId);
+        if (pendingTimer !== undefined) {
+          window.clearTimeout(pendingTimer);
+          timers.delete(payload.newAgentId);
+        }
         dispatch({ type: 'request', payload });
       }),
       subscribeEvent<RecruitLifecyclePayload>('team:recruit-lifecycle', (payload) => {
