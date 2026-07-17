@@ -17,6 +17,7 @@ export interface HandoffEdgeData extends Record<string, unknown> {
   color?: string;
   preview?: string;
   fromRole?: string;
+  semantic?: 'delegation' | 'report';
 }
 
 function HandoffEdgeImpl({
@@ -40,6 +41,7 @@ function HandoffEdgeImpl({
   const d = data as HandoffEdgeData | undefined;
   const color = d?.color ?? '#7a7afd';
   const preview = d?.preview ?? '';
+  const semantic = d?.semantic;
 
   // @keyframes handoff-flow は canvas.css に集約済み (旧実装は edge mount のたびに
   // 同一内容の <style> を吐いていた)。インライン style は色依存ぶんだけ残す。
@@ -50,21 +52,26 @@ function HandoffEdgeImpl({
         path={path}
         style={{
           stroke: color,
-          strokeWidth: 2.5,
+          strokeWidth: semantic ? 1.5 : 2.5,
           strokeDasharray: '6 8',
-          filter: `drop-shadow(0 0 6px ${color}88)`,
-          animation: 'handoff-flow 0.8s linear infinite'
+          filter: semantic ? 'none' : `drop-shadow(0 0 6px ${color}88)`,
+          animation: semantic ? 'none' : 'handoff-flow 0.8s linear infinite'
         }}
       />
       {preview && (
         <EdgeLabelRenderer>
           <div
             className="canvas-handoff-edge__label"
+            data-semantic={semantic}
             style={{
               transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
-              background: `${color}1a`,
+              background: semantic
+                ? `color-mix(in srgb, ${color} 10%, transparent)`
+                : `${color}1a`,
               color,
-              border: `1px solid ${color}66`,
+              border: semantic
+                ? `1px solid color-mix(in srgb, ${color} 40%, transparent)`
+                : `1px solid ${color}66`,
               // Glass CSS contract (`.tc__hud` 以外で backdrop-filter 禁止) に従い
               // インライン style 側で blur をかける。一時 edge ラベルなので影響軽微。
               backdropFilter: 'blur(4px)'

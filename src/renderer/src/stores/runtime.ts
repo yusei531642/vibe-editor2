@@ -57,6 +57,9 @@ export interface RuntimeEndpointProjection {
   /** Endpoint failure/dispose can leave entries stale; Phase 5 Approval Center must discard
    * pending approvals when lifecycle becomes `failed` or `exited`. */
   approvalRequests: RuntimeApprovalRequest[];
+  /** Inspector Raw tab の canonical envelope stream。 */
+  eventHistory: RuntimeEventEnvelope[];
+  eventTruncatedCount: number;
   /** History caps で先頭から破棄した entry の累計。 */
   truncatedCount: number;
   missingSequences: RuntimeSequenceGap[];
@@ -66,6 +69,7 @@ export interface RuntimeEndpointProjection {
 interface RuntimeProjectionState {
   byEndpoint: Record<string, RuntimeEndpointProjection>;
   projectEvent: (event: RuntimeEventEnvelope) => void;
+  resolveApproval: (endpointId: string, requestId: string) => void;
   clearEndpoint: (endpointId: string) => void;
   clear: () => void;
 }
@@ -85,6 +89,8 @@ function emptyProjection(endpointId: string): RuntimeEndpointProjection {
     diffs: [],
     usage: [],
     approvalRequests: [],
+    eventHistory: [],
+    eventTruncatedCount: 0,
     truncatedCount: 0,
     missingSequences: [],
     outOfOrderCount: 0
@@ -127,7 +133,14 @@ function applyPayload(
   projection: RuntimeEndpointProjection,
   event: RuntimeEventEnvelope
 ): RuntimeEndpointProjection {
-  const base = { ...projection, lastSequence: event.sequence, lastKind: event.kind };
+  const history = appendCapped(projection.eventHistory, event);
+  const base = {
+    ...projection,
+    lastSequence: event.sequence,
+    lastKind: event.kind,
+    eventHistory: history.items,
+    eventTruncatedCount: projection.eventTruncatedCount + history.truncated
+  };
   switch (event.payload.type) {
     case 'messageDelta':
       return { ...base, ...appendDelta(projection, event.payload.delta) };
@@ -182,12 +195,16 @@ function applyPayload(
       }
     case 'approvalRequest':
       {
-        const capped = appendCapped(projection.approvalRequests, {
-          requestId: event.payload.requestId,
-          method: event.payload.method,
-          reason: event.payload.reason,
-          command: event.payload.command,
-          cwd: event.payload.cwd
+        const payload = event.payload;
+        const withoutDuplicate = projection.approvalRequests.filter(
+          (request) => request.requestId !== payload.requestId
+        );
+        const capped = appendCapped(withoutDuplicate, {
+          requestId: payload.requestId,
+          method: payload.method,
+          reason: payload.reason,
+          command: payload.command,
+          cwd: payload.cwd
         });
         return {
           ...base,
@@ -196,7 +213,14 @@ function applyPayload(
         };
       }
     case 'lifecycle':
-      return { ...base, lifecycle: event.payload.state };
+      return {
+        ...base,
+        lifecycle: event.payload.state,
+        approvalRequests:
+          event.payload.state === 'failed' || event.payload.state === 'exited'
+            ? []
+            : projection.approvalRequests
+      };
     case 'error':
       {
         const capped = appendCapped(projection.errors, {
@@ -255,6 +279,21 @@ export const useRuntimeStore = create<RuntimeProjectionState>((set) => ({
       const previous = state.byEndpoint[event.endpointId] ?? emptyProjection(event.endpointId);
       const next = project(previous, event);
       return { byEndpoint: { ...state.byEndpoint, [event.endpointId]: next } };
+    }),
+  resolveApproval: (endpointId, requestId) =>
+    set((state) => {
+      const projection = state.byEndpoint[endpointId];
+      if (!projection) return state;
+      const approvalRequests = projection.approvalRequests.filter(
+        (request) => request.requestId !== requestId
+      );
+      if (approvalRequests.length === projection.approvalRequests.length) return state;
+      return {
+        byEndpoint: {
+          ...state.byEndpoint,
+          [endpointId]: { ...projection, approvalRequests }
+        }
+      };
     }),
   clearEndpoint: (endpointId) =>
     set((state) => {

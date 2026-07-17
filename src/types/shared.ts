@@ -1,6 +1,7 @@
 // main/preload/renderer で共有する型定義
 import type { FileLockConflictSnapshot } from './generated/team-events';
 import type { AgentRuntimeBackend } from './agent-runtime';
+export type { TeamMemberCommand, TeamMemberCommandRequest, TeamMemberCommandResult, TeamProjectionSnapshot, TeamRuntimeEndpointSnapshot } from './team-projection';
 export type { TerminalWriteOutcome, TerminalWriteResult } from './terminal-write';
 export type ThemeName =
   | 'claude-dark'

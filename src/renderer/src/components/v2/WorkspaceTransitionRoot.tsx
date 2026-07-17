@@ -8,6 +8,7 @@ import {
 import { MessagesSquare, Network } from 'lucide-react';
 import { V2Shell } from './V2Shell';
 import { TeamWorkspaceScene } from './TeamWorkspaceScene';
+import { TeamProjectionProvider } from './TeamProjectionProvider';
 import { useTeam } from '../../lib/app-state-context';
 import { useT } from '../../lib/i18n';
 import { useRecruitListener } from '../../lib/use-recruit-listener';
@@ -204,7 +205,7 @@ function EnabledWorkspaceTransitionRoot({
   const focusInactive = !transitioning && committedScene !== 'focus';
   const teamInactive = !transitioning && committedScene !== 'team';
 
-  return (
+  const workspace = (
     <main
       className="workspace-transition-root"
       data-scene={desiredScene}
@@ -258,6 +259,11 @@ function EnabledWorkspaceTransitionRoot({
         />
       ) : null}
     </main>
+  );
+  return hasTeamSession ? (
+    <TeamProjectionProvider team={team}>{workspace}</TeamProjectionProvider>
+  ) : (
+    workspace
   );
 }
 

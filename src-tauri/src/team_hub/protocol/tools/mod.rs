@@ -42,6 +42,25 @@ pub use status::team_status;
 pub use switch_leader::team_switch_leader;
 pub use update_task::team_update_task;
 
+/// Issue #26: renderer の Team Command Bar が既存 TeamHub tool 経路を共有する薄い seam。
+/// caller は active team / active leader / target member の authz を完了してから呼ぶ。
+pub(crate) async fn call_renderer_tool(
+    hub: &crate::team_hub::TeamHub,
+    ctx: &crate::team_hub::CallContext,
+    name: &str,
+    args: &serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    match name {
+        "team_send" => send::team_send(hub, ctx, args)
+            .await
+            .map_err(|error| format!("{error:?}")),
+        "team_dismiss" => dismiss::team_dismiss(hub, ctx, args)
+            .await
+            .map_err(|error| error.to_json_value().to_string()),
+        other => Err(format!("renderer tool is not allowed: {other}")),
+    }
+}
+
 /// Issue #1004: API エージェント (socket を持たない pull 型 virtual member) が tool として
 /// team 系操作を実行するための単一 dispatch シーム。read / send / info の 3 つだけを公開し、
 /// 各 tool の異なるエラー型 (`ToolError` / `SendError`) を文字列に正規化してツール結果として

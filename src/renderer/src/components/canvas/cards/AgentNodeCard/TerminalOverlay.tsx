@@ -63,6 +63,8 @@ export interface TerminalOverlayProps {
   codexInstructions?: string;
   /** Issue #359: 新セッション起動時に初手で送るプロンプト */
   initialMessage?: string;
+  /** Inspector の明示 action 後だけ terminal UI を keyboard / AT に公開する。 */
+  expanded?: boolean;
   /** ヘッダー行に表示する pty 状態を CardFrame に上げる */
   onStatus: (status: TerminalRuntimeStatus) => void;
   /** 出力アクティビティ → CardFrame の StatusBadge に反映。
@@ -83,6 +85,7 @@ export function TerminalOverlay({
   claudeInstructions,
   codexInstructions,
   initialMessage,
+  expanded = true,
   onStatus,
   onActivity
 }: TerminalOverlayProps): JSX.Element {
@@ -192,6 +195,8 @@ export function TerminalOverlay({
     <div
       className="nodrag nowheel canvas-agent-card__term"
       ref={termContainerRef}
+      inert={expanded ? undefined : true}
+      aria-hidden={expanded ? undefined : 'true'}
     >
       <TerminalView
         ref={termRef}

@@ -74,6 +74,8 @@ import { CardHandoff } from './CardHandoff';
 import { CardInject } from './CardInject';
 import { CardSummary, type CardSummaryHealth } from './CardSummary';
 import { useProject } from '../../../../lib/app-state-context';
+import { AgentCardRuntime } from './AgentCardRuntime';
+import { useTeamProjection } from '../../../v2/TeamProjectionProvider';
 
 // Issue #732: `NodeProps` を `Node<CardDataOf<'agent'>>` で具体化することで
 // `data.payload` が `AgentPayload` として読め、`unknown` からの inline cast が不要になる。
@@ -377,6 +379,10 @@ function AgentNodeCardImpl({
     [health]
   );
   const terminalStatus = useMemo(() => formatTerminalRuntimeStatus(status, t), [status, t]);
+  const { projection: teamProjection, terminalAgentId } = useTeamProjection();
+  const terminalOpen =
+    teamProjection.teamId === '' ||
+    Boolean(payload.agentId && terminalAgentId === payload.agentId);
 
   const handleClose = useCallback(
     () => void confirmRemoveCard(id),
@@ -398,7 +404,7 @@ function AgentNodeCardImpl({
         style={{ background: accent, width: 10, height: 10 }}
       />
       <div
-        className="canvas-agent-card"
+        className={`canvas-agent-card${terminalOpen ? ' canvas-agent-card--terminal-open' : ''}`}
         style={cardStyle}
         data-workspace-leader={roleProfileId === 'leader' ? '' : undefined}
         data-workspace-team-id={roleProfileId === 'leader' ? payload.teamId : undefined}
@@ -447,6 +453,7 @@ function AgentNodeCardImpl({
           showToast={showToast}
           t={t}
         />
+        <AgentCardRuntime agentId={payload.agentId} />
         <TerminalOverlay
           cardId={id}
           termRef={termRef}
@@ -459,6 +466,7 @@ function AgentNodeCardImpl({
           claudeInstructions={claudeInstructions}
           codexInstructions={codexInstructions}
           initialMessage={payload.initialMessage}
+          expanded={terminalOpen}
           onStatus={setStatus}
           onActivity={setActivity}
         />

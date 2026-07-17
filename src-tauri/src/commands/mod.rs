@@ -32,6 +32,7 @@ pub mod team_diagnostics;
 pub mod team_history;
 pub mod team_inject;
 pub mod team_presets;
+pub mod team_projection;
 pub mod team_state;
 pub mod terminal;
 pub mod terminal_tabs;

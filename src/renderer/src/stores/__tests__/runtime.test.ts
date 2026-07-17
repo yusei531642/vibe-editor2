@@ -144,4 +144,49 @@ describe('runtime projection store', () => {
     expect(projection.deltaChunks).toHaveLength(0);
     expect(projection.outOfOrderCount).toBe(0);
   });
+
+  it('discards approvals when an endpoint fails or exits', () => {
+    const store = useRuntimeStore.getState();
+    store.projectEvent(event(1, {
+      type: 'approvalRequest',
+      requestId: 'stale-1',
+      method: 'command/requestApproval',
+      reason: null,
+      command: 'npm test',
+      cwd: null
+    }));
+    store.projectEvent(event(2, { type: 'lifecycle', state: 'failed', detail: 'crashed' }));
+    expect(useRuntimeStore.getState().byEndpoint['endpoint-1'].approvalRequests).toEqual([]);
+
+    store.projectEvent(event(3, {
+      type: 'approvalRequest',
+      requestId: 'stale-2',
+      method: 'command/requestApproval',
+      reason: null,
+      command: 'npm test',
+      cwd: null
+    }));
+    store.projectEvent(event(4, { type: 'lifecycle', state: 'exited', detail: null }));
+    expect(useRuntimeStore.getState().byEndpoint['endpoint-1'].approvalRequests).toEqual([]);
+  });
+
+  it('removes a responded approval without disturbing other pending requests', () => {
+    const store = useRuntimeStore.getState();
+    for (const [sequence, requestId] of [[1, 'one'], [2, 'two']] as const) {
+      store.projectEvent(event(sequence, {
+        type: 'approvalRequest',
+        requestId,
+        method: 'command/requestApproval',
+        reason: null,
+        command: null,
+        cwd: null
+      }));
+    }
+    store.resolveApproval('endpoint-1', 'one');
+    expect(
+      useRuntimeStore.getState().byEndpoint['endpoint-1'].approvalRequests.map(
+        (request) => request.requestId
+      )
+    ).toEqual(['two']);
+  });
 });

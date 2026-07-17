@@ -133,6 +133,7 @@ Tauri ベースのGUI-first Claude Code / Codex / vibe-teamエディタ。正確
 | Ctrl+Shift+Tab | 前のタブ |
 | Ctrl+W | タブを閉じる |
 | Ctrl+Shift+T | 閉じたタブを復元 |
+| Ctrl+Shift+A / Cmd+Shift+A | Team Approval Center を開く |
 
 ## 注意
 - Rust 依存は `src-tauri/Cargo.toml` 管理。`node-pty` 系の `electron-rebuild` は不要

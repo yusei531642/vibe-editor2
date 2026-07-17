@@ -1,6 +1,7 @@
 //! TeamHub が所有する agentId -> runtime endpoint 対応と統合配送。
 
 pub(crate) mod types;
+mod snapshot;
 #[cfg(test)]
 mod test_support;
 

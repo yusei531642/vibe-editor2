@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Bot, CircleAlert, LoaderCircle, UserRound } from 'lucide-react';
 import { Canvas, type CanvasActions } from '../canvas/Canvas';
 import { useProject } from '../../lib/app-state-context';
@@ -7,15 +7,25 @@ import {
   agentPayloadOf,
   useCanvasStore
 } from '../../stores/canvas';
-import { useRecruitLifecycleProjection } from '../../lib/recruit-lifecycle-projection';
 import type { Team } from '../../../../types/shared';
+import type { RecruitProjection } from '../../lib/recruit-lifecycle-projection';
+import { TeamCommandBar } from './TeamCommandBar';
+import { ApprovalCenter } from './ApprovalCenter';
+import { TeamInspector } from './TeamInspector';
+import { TeamActivityFeed } from './TeamActivityFeed';
+import { useTeamProjection } from './TeamProjectionProvider';
 import '../../styles/components/canvas.css';
 import '../../styles/components/canvas-agent-card.css';
+import '../../styles/components/team-control.css';
 
 function RecruitLifecycleLayer({ teamId }: { teamId?: string }): JSX.Element {
-  const recruits = useRecruitLifecycleProjection().filter(
-    (recruit) => teamId === undefined || recruit.teamId === teamId
-  );
+  const { projection } = useTeamProjection();
+  const recruits = projection.agents
+    .map((agent) => agent.recruit)
+    .filter(
+      (recruit): recruit is RecruitProjection =>
+        recruit !== null && (teamId === undefined || recruit.teamId === teamId)
+    );
   const t = useT();
 
   return (
@@ -51,6 +61,9 @@ export function TeamWorkspaceScene({ team }: { team: Team }): JSX.Element {
   const { projectRoot } = useProject();
   const t = useT();
   const addCard = useCanvasStore((state) => state.addCard);
+  const pulseEdge = useCanvasStore((state) => state.pulseEdge);
+  const { projection } = useTeamProjection();
+  const seenSemanticEdges = useRef(new Set<string>());
   const hasLeader = useCanvasStore((state) =>
     state.nodes.some((node) => {
       const payload = agentPayloadOf(node.data);
@@ -125,6 +138,59 @@ export function TeamWorkspaceScene({ team }: { team: Team }): JSX.Element {
     [addCard, projectRoot, t, team.id, team.name]
   );
 
+  useEffect(() => {
+    const nodes = useCanvasStore.getState().nodes;
+    const teamNodes = nodes.filter((node) => agentPayloadOf(node.data)?.teamId === team.id);
+    const leader = teamNodes.find((node) => {
+      const payload = agentPayloadOf(node.data);
+      return (payload?.roleProfileId ?? payload?.role) === 'leader';
+    });
+    if (!leader) return;
+    for (const task of projection.tasks) {
+      const edgeId = `delegation:${team.id}:${task.id}`;
+      if (seenSemanticEdges.current.has(edgeId)) continue;
+      const target = teamNodes.find((node) => {
+        const payload = agentPayloadOf(node.data);
+        return payload?.agentId === task.assignedTo || payload?.roleProfileId === task.assignedTo;
+      });
+      if (!target || target.id === leader.id) continue;
+      seenSemanticEdges.current.add(edgeId);
+      pulseEdge({
+        id: edgeId,
+        source: leader.id,
+        target: target.id,
+        type: 'handoff',
+        data: {
+          semantic: 'delegation',
+          preview: `Task #${task.id}`,
+          fromRole: 'leader',
+          color: 'var(--accent)'
+        }
+      }, 60_000);
+    }
+    for (const report of projection.reports) {
+      const edgeId = `report:${team.id}:${report.id}`;
+      if (seenSemanticEdges.current.has(edgeId)) continue;
+      const source = teamNodes.find(
+        (node) => agentPayloadOf(node.data)?.agentId === report.fromAgentId
+      );
+      if (!source || source.id === leader.id) continue;
+      seenSemanticEdges.current.add(edgeId);
+      pulseEdge({
+        id: edgeId,
+        source: source.id,
+        target: leader.id,
+        type: 'handoff',
+        data: {
+          semantic: 'report',
+          preview: report.summary,
+          fromRole: 'report',
+          color: 'var(--success)'
+        }
+      }, 60_000);
+    }
+  }, [projection.reports, projection.tasks, pulseEdge, team.id]);
+
   return (
     <section className="workspace-team-scene" aria-label={t('v2.team.canvas')}>
       <header className="workspace-team-scene__header">
@@ -134,6 +200,7 @@ export function TeamWorkspaceScene({ team }: { team: Team }): JSX.Element {
         </div>
         <span>{t('v2.team.canvas')}</span>
       </header>
+      <TeamCommandBar />
       <div className="workspace-team-scene__canvas">
         <Canvas actions={actions} />
       </div>
@@ -152,6 +219,9 @@ export function TeamWorkspaceScene({ team }: { team: Team }): JSX.Element {
         </div>
       ) : null}
       <RecruitLifecycleLayer teamId={team.id} />
+      <TeamActivityFeed />
+      <TeamInspector />
+      <ApprovalCenter />
     </section>
   );
 }

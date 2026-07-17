@@ -7,7 +7,6 @@
 //   ローカル IPC (Unix domain socket / Windows named pipe) 接続を受ける
 // - JSON-RPC line protocol (初期化 / tools/list / tools/call) を処理
 // - team_send 等のツール呼び出しを PTY に直接 write 注入する (64B / 15ms)
-
 // Issue #1062: codex 公式 app-server JSON-RPC (turn/start / turn/steer) 配送クライアント。
 // unix domain socket 上の WebSocket に直結するため unix 専用 (Windows は当面 PTY 注入のまま)。
 #[cfg(unix)]
@@ -32,6 +31,7 @@ pub mod redeliver;
 pub mod role_lint;
 mod runtime_endpoint;
 mod runtime_cleanup;
+pub(crate) use runtime_endpoint::types::TeamRuntimeEndpointSnapshot;
 // Issue #512: 32 KiB 超の payload を `<project_root>/.vibe-team2/tmp/<short_id>.md` に書き出して
 // inject 本文を「summary + attached: <path>」に置換する spool 機構。
 pub mod spool;
