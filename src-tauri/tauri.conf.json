@@ -54,7 +54,7 @@
     "shortDescription": "AI エージェント時代のエディタ",
     "longDescription": "Claude Code / Codex / vibe-teamを同じGUIで操作するエージェントエディタ。",
     "resources": {
-      "../src-sidecars/claude-agent": "sidecars/claude-agent"
+      "../src-sidecars/claude-agent/dist/index.mjs": "sidecars/claude-agent/dist/index.mjs"
     },
     "windows": {
       "nsis": {

@@ -41,6 +41,11 @@ export const agentRuntime = {
   ): Promise<CodexRuntimeEndpointResult> =>
     invokeCommand('agent_runtime_reconnect_codex', { request }),
 
+  reconnectClaude: (
+    request: RegisterClaudeRuntimeEndpointRequest
+  ): Promise<ClaudeRuntimeEndpointResult> =>
+    invokeCommand('agent_runtime_reconnect_claude', { request }),
+
   spawnTurn: (request: RuntimeTurnRequest): Promise<RuntimeEndpointResult> =>
     invokeCommand('agent_runtime_spawn_turn', { request }),
 

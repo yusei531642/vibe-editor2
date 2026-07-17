@@ -27,6 +27,11 @@ describe('ProviderBadge', () => {
     expect(screen.getByLabelText('native unavailable, fallback: claude→pty')).toBeVisible();
   });
 
+  it('renders no badge while the provider is unresolved', () => {
+    const { container } = render(<ProviderBadge />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it('does not claim fallback for an explicitly selected PTY runtime', () => {
     render(<ProviderBadge provider="pty" />);
     expect(screen.queryByText(/fallback/)).toBeNull();

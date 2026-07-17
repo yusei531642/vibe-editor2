@@ -37,7 +37,8 @@ pub use manager::{RuntimeEndpointRegistry, RuntimeManager, RuntimeOperation};
 pub use pty_compat::PtyCompatAdapter;
 pub use provider_policy::{
     capabilities_for, provider_declarations, resolve_node_executable,
-    resolve_sidecar_entrypoint, select_provider, ProviderSelection, RuntimeProvider,
+    resolve_sidecar_entrypoint, select_provider, ProviderAvailability, ProviderSelection,
+    RuntimeProvider,
     RuntimeProviderDeclaration, SystemProviderAvailability,
 };
 
