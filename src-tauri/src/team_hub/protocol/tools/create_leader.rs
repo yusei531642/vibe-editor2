@@ -8,6 +8,7 @@
 //! 旧 leader はこの tool で新 leader を作ったあと `team_switch_leader` で
 //! active leader を切り替え、自身のカードを retire する流れを想定する。
 
+use crate::team_hub::events::RecruitLifecycleState;
 use crate::team_hub::{CallContext, EnginePolicy, EnginePolicyKind, TeamHub};
 use serde_json::{json, Value};
 use std::time::Instant;
@@ -18,6 +19,12 @@ use super::super::consts::RECRUIT_HANDSHAKE_TIMEOUT_MAX_SECS;
 use super::super::permissions::{check_permission, Permission};
 use super::error::RecruitError;
 use super::recruit::{recruit_ack_timeout, recruit_handshake_timeout_duration};
+
+/// 失敗経路の共通後始末: lifecycle terminal + pending grace + runtime 回収。
+async fn cancel_leader_recruit(hub: &TeamHub, team_id: &str, agent_id: &str) {
+    hub.cancel_recruit_with_pending_grace(team_id, agent_id, "create_leader_cancelled")
+        .await;
+}
 
 /// `team_create_leader` — 引き継ぎ用に同 teamId へ追加の leader カードを spawn する。
 ///
@@ -137,6 +144,10 @@ pub async fn team_create_leader(
     };
     let rx = channels.handshake;
     let ack_rx = channels.ack;
+    // leader も recruit lifecycle を登録する (team_recruit と対称)。無いと
+    // bind_native_runtime_endpoint の認可が leader の native endpoint を拒否する (PR #34)。
+    hub.begin_recruit_lifecycle(&ctx.team_id, &new_agent_id, &role_profile_id)
+        .await;
 
     let app = hub.app_handle.lock().await.clone();
     if let Some(app) = &app {
@@ -154,14 +165,14 @@ pub async fn team_create_leader(
             dynamic_role: None,
         };
         if let Err(e) = app.emit("team:recruit-request", payload) {
-            hub.cancel_pending_recruit(&new_agent_id).await;
+            cancel_leader_recruit(hub, &ctx.team_id, &new_agent_id).await;
             return Err(RecruitError::new(
                 "create_leader_emit_failed",
                 format!("failed to emit recruit-request: {e}"),
             ));
         }
     } else {
-        hub.cancel_pending_recruit(&new_agent_id).await;
+        cancel_leader_recruit(hub, &ctx.team_id, &new_agent_id).await;
         return Err(RecruitError::new(
             "create_leader_renderer_unavailable",
             "renderer not available (canvas mode required)",
@@ -179,9 +190,12 @@ pub async fn team_create_leader(
                  team_id={team_id} elapsed_ms={elapsed_ms}",
                 team_id = ctx.team_id,
             );
+            let _ = hub
+                .transition_recruit_lifecycle(&new_agent_id, RecruitLifecycleState::Spawning, None)
+                .await;
         }
         Ok(Ok(ack)) => {
-            hub.cancel_pending_recruit(&new_agent_id).await;
+            cancel_leader_recruit(hub, &ctx.team_id, &new_agent_id).await;
             let phase_str = ack
                 .phase
                 .map(|p| p.as_str().to_string())
@@ -208,7 +222,7 @@ pub async fn team_create_leader(
             });
         }
         Ok(Err(_)) => {
-            hub.cancel_pending_recruit(&new_agent_id).await;
+            cancel_leader_recruit(hub, &ctx.team_id, &new_agent_id).await;
             if let Some(app) = &app {
                 let payload = crate::team_hub::events::RecruitCancelledPayload {
                     new_agent_id: new_agent_id.clone(),
@@ -231,7 +245,7 @@ pub async fn team_create_leader(
                  team_id={team_id} elapsed_ms={elapsed_ms}",
                 team_id = ctx.team_id,
             );
-                hub.cancel_pending_recruit(&new_agent_id).await;
+                cancel_leader_recruit(hub, &ctx.team_id, &new_agent_id).await;
                 if let Some(app) = &app {
                     let payload = crate::team_hub::events::RecruitCancelledPayload {
                         new_agent_id: new_agent_id.clone(),
@@ -287,7 +301,7 @@ pub async fn team_create_leader(
             }))
         }
         Ok(Err(_)) => {
-            hub.cancel_pending_recruit(&new_agent_id).await;
+            cancel_leader_recruit(hub, &ctx.team_id, &new_agent_id).await;
             Err(RecruitError {
                 code: "create_leader_cancelled".into(),
                 message: "create_leader cancelled before handshake".into(),
@@ -297,7 +311,7 @@ pub async fn team_create_leader(
             })
         }
         Err(_) => {
-            hub.cancel_pending_recruit(&new_agent_id).await;
+            cancel_leader_recruit(hub, &ctx.team_id, &new_agent_id).await;
             if let Some(app) = &app {
                 let payload = crate::team_hub::events::RecruitCancelledPayload {
                     new_agent_id: new_agent_id.clone(),
