@@ -100,9 +100,10 @@ export function useRecruitLifecycleProjection(): RecruitProjection[] {
     const sequences = latestSequence.current;
     const unlistens = [
       subscribeEvent<RecruitRequestPayload>('team:recruit-request', (payload) => {
-        if (!sequences.has(payload.newAgentId)) {
-          sequences.set(payload.newAgentId, -1);
-        }
+        // 新しい recruit-request は新 epoch: 同一 agentId の再採用が前回の
+        // sequence (特に cancelled 時の MAX_SAFE_INTEGER 番兵) にブロックされないよう
+        // 必ず reset する (PR #35 レビュー)。
+        sequences.set(payload.newAgentId, -1);
         dispatch({ type: 'request', payload });
       }),
       subscribeEvent<RecruitLifecyclePayload>('team:recruit-lifecycle', (payload) => {
@@ -116,6 +117,7 @@ export function useRecruitLifecycleProjection(): RecruitProjection[] {
         if (payload.state === 'failed' || payload.state === 'cancelled') {
           const timer = window.setTimeout(() => {
             timers.delete(payload.agentId);
+            sequences.delete(payload.agentId);
             dispatch({ type: 'remove', agentId: payload.agentId });
           }, WITHDRAW_MS);
           timers.set(payload.agentId, timer);
@@ -128,6 +130,7 @@ export function useRecruitLifecycleProjection(): RecruitProjection[] {
         if (oldTimer !== undefined) window.clearTimeout(oldTimer);
         const timer = window.setTimeout(() => {
           timers.delete(payload.newAgentId);
+          sequences.delete(payload.newAgentId);
           dispatch({ type: 'remove', agentId: payload.newAgentId });
         }, WITHDRAW_MS);
         timers.set(payload.newAgentId, timer);
