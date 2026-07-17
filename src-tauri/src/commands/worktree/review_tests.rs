@@ -8,12 +8,23 @@ use super::WorktreeManager;
 async fn deleted_worktree_directory_does_not_poison_listing_or_new_assignments() {
     let fixture = GitFixture::new();
     let doomed = fixture.assign("worker-1").await;
+    fixture.commit_file(&doomed, "survives.txt", "preserved branch content\n");
     tokio::fs::remove_dir_all(&doomed).await.expect("simulate worker deleting its worktree");
 
     let listed = super::git_ops::list_worktree_metadata(fixture.project.as_path())
         .await
         .expect("prunable エントリは skip して list は成功する");
     assert!(!listed.iter().any(|metadata| metadata.path == doomed));
+
+    fixture
+        .manager
+        .ensure_assigned(&fixture.project, "team-1", "worker-1")
+        .await
+        .expect("missing registration を prune して同じ branch を再 attach する");
+    assert_eq!(
+        std::fs::read_to_string(doomed.join("survives.txt")).unwrap(),
+        "preserved branch content\n"
+    );
 
     // 消えた worktree が居ても新規 member の割当は成立する
     let fresh = fixture.assign("worker-2").await;

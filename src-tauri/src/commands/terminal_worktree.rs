@@ -22,6 +22,18 @@ fn fail(message: String) -> WorktreeResolution {
     })
 }
 
+pub(super) fn terminal_team_agent_pair<'a>(
+    team_id: Option<&'a str>,
+    agent_id: Option<&'a str>,
+) -> Result<Option<(&'a str, &'a str)>, &'static str> {
+    match (team_id, agent_id) {
+        (Some(team_id), Some(agent_id)) => Ok(Some((team_id, agent_id))),
+        // Leader terminal など team context だけを持つ既存経路は runtime binding 対象外。
+        (Some(_), None) | (None, None) => Ok(None),
+        (None, Some(_)) => Err("agent_id requires team_id"),
+    }
+}
+
 pub(super) async fn resolve_worker_worktree(
     state: &tauri::State<'_, AppState>,
     role: Option<&str>,
@@ -59,5 +71,23 @@ pub(super) async fn resolve_worker_worktree(
             WorktreeResolution::PlainCwd
         }
         Err(error) => fail(format!("worktree assignment failed: {error}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::terminal_team_agent_pair;
+
+    #[test]
+    fn team_only_terminal_remains_valid_but_agent_only_is_rejected() {
+        assert_eq!(terminal_team_agent_pair(Some("team-1"), None), Ok(None));
+        assert_eq!(
+            terminal_team_agent_pair(Some("team-1"), Some("worker-1")),
+            Ok(Some(("team-1", "worker-1")))
+        );
+        assert_eq!(
+            terminal_team_agent_pair(None, Some("worker-1")),
+            Err("agent_id requires team_id")
+        );
     }
 }
