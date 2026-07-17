@@ -20,6 +20,8 @@ fn hub() -> (TeamHub, Arc<SessionRegistry>) {
 
 async fn seed_members(hub: &TeamHub, team_id: &str, agent_id: &str) {
     let mut state = hub.state.lock().await;
+    // bind_pty_runtime_endpoint の authz (active team + membership) を満たす。
+    state.active_teams.insert(team_id.to_string());
     state.seed_role_binding(team_id, "leader-member", "leader");
     state.seed_role_binding(team_id, agent_id, "worker");
 }

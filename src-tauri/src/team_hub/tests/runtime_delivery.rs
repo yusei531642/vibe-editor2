@@ -221,6 +221,7 @@ async fn explicit_pty_backend_preserves_legacy_inject_trace_and_skips_native() {
 #[tokio::test]
 async fn concurrent_pty_binding_registers_one_live_endpoint() {
     let (hub, _registry, manager) = hub();
+    seed_member(&hub, "team-race", "race-member", "worker").await;
     let first = hub.bind_pty_runtime_endpoint("team-race", "race-member", None);
     let second = hub.bind_pty_runtime_endpoint("team-race", "race-member", None);
 

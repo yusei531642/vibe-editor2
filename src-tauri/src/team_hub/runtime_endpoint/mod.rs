@@ -110,6 +110,39 @@ impl TeamHub {
         session_id: Option<String>,
     ) -> Result<String, String> {
         let _binding_guard = self.runtime.pty_binding_lock.lock().await;
+        // 認可 (PR #34 レビュー): terminal_create 経由の (team_id, agent_id) も renderer 由来。
+        // native bind と同じく active team + 実在メンバー (agents / PTY session / 非 terminal
+        // recruit lifecycle のいずれか) を fail-closed に要求する。
+        {
+            let state = self.state.lock().await;
+            if !state.active_teams.contains(team_id) {
+                return Err(format!("team '{team_id}' is not active"));
+            }
+            let recruited_here = state
+                .recruit_lifecycles
+                .get(agent_id)
+                .is_some_and(|lifecycle| {
+                    lifecycle.team_id == team_id
+                        && !matches!(
+                            lifecycle.state,
+                            crate::team_hub::events::RecruitLifecycleState::Failed
+                                | crate::team_hub::events::RecruitLifecycleState::Cancelled
+                        )
+                });
+            let is_member = state
+                .agents
+                .contains_key(&(team_id.to_string(), agent_id.to_string()))
+                || self
+                    .registry
+                    .list_team_members(team_id)
+                    .iter()
+                    .any(|(member_agent_id, _)| member_agent_id == agent_id);
+            if !recruited_here && !is_member {
+                return Err(format!(
+                    "agent '{agent_id}' is not a member of team '{team_id}'"
+                ));
+            }
+        }
         let endpoint_id = pty_endpoint_id(agent_id);
         let already_bound = {
             let state = self.state.lock().await;
