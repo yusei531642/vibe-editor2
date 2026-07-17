@@ -63,6 +63,9 @@ pub struct PendingRecruit {
     pub ack_done: AtomicBool,
     /// Issue #577: ack timeout 済みだが grace window 中で、遅着 ack を rescue できる状態。
     pub timed_out_at: Option<Instant>,
+    /// 遅着 ack が rescue された時刻。grace 満了 task はこれが Some なら terminal cancel を
+    /// スキップし、handshake timeout 側の経路に委ねる (PR #34 レビュー)。
+    pub rescued_at: Option<Instant>,
     /// Issue #742 (Security): この recruit grant を発行した時刻。
     /// `resolve_pending_recruit` の handshake で `issued_at.elapsed()` が
     /// `HANDSHAKE_GRANT_TTL` を超えていたら「期限切れ token」として reject する
@@ -161,6 +164,7 @@ impl TeamHub {
                 ack_tx: Some(ack_tx),
                 ack_done: AtomicBool::new(false),
                 timed_out_at: None,
+            rescued_at: None,
                 // Issue #742: grant 発行時刻。handshake TTL 検証の起点。
                 issued_at: Instant::now(),
             },
@@ -453,6 +457,7 @@ impl TeamHub {
             return Err(AckError::AlreadyAcked);
         }
         if let Some(timed_out_at) = pending.timed_out_at {
+            pending.rescued_at = Some(Instant::now());
             // timeout 後 grace 中の遅着 ack。ack waiter は既に close 済みなので送信せず、
             // renderer 側へ rescue event を出してカード維持を観測可能にする。
             let _ = pending.ack_tx.take();

@@ -204,13 +204,12 @@ impl TeamHub {
                     tokio::time::sleep(recruit_grace_from_env()).await;
                     let rescued = {
                         let mut s = hub.state.lock().await;
-                        match s
-                            .pending_recruits
-                            .get(&agent_id)
-                            .and_then(|p| p.timed_out_at)
-                        {
+                        match s.pending_recruits.get(&agent_id) {
+                            // ack rescue 済み (handshake 待ち): terminal cancel せず
+                            // handshake timeout 側の経路に委ねる (PR #34 レビュー)。
+                            Some(p) if p.rescued_at.is_some() => true,
                             // 同一 timeout 起点の pending が残っている = rescue されなかった。
-                            Some(ts) if ts == timed_out_at => {
+                            Some(p) if p.timed_out_at == Some(timed_out_at) => {
                                 s.pending_recruits.remove(&agent_id);
                                 false
                             }
