@@ -11,6 +11,8 @@
 import type { ReactNode } from 'react';
 import type { AgentStatus } from './types';
 import { AgentTypeIcon } from './AgentTypeIcon';
+import { ProviderBadge } from './ProviderBadge';
+import type { RuntimeProvider } from '../../../../../../types/agent-runtime';
 
 /** i18n の `t` 関数シグネチャ。 */
 type TFn = (key: string, params?: Record<string, string | number>) => string;
@@ -54,6 +56,8 @@ interface CardPresentationProps {
   typeName: string;
   /** 種別の accent カラー (custom のみ。未指定はロール accent を継承)。 */
   typeAccent?: string;
+  runtimeProvider?: RuntimeProvider;
+  fallbackFrom?: Extract<RuntimeProvider, 'codex-native' | 'claude-native'> | null;
   /** 所属組織名 (複数組織運用時のみ。無ければ非表示)。 */
   organizationName: string | undefined;
   /** 現在のアクティビティ状態 (idle / thinking / typing)。 */
@@ -74,6 +78,8 @@ export function CardPresentation({
   typeIcon,
   typeName,
   typeAccent,
+  runtimeProvider,
+  fallbackFrom,
   organizationName,
   activity,
   status,
@@ -99,6 +105,7 @@ export function CardPresentation({
         <span className="canvas-agent-card__role canvas-agent-card__role--inline">
           ·{roleLabel}
         </span>
+        <ProviderBadge provider={runtimeProvider} fallbackFrom={fallbackFrom} />
       </span>
       <span className="canvas-agent-card__actions">
         <StatusBadge state={activity} label={t(`agentStatus.${activity}`)} title={status} />

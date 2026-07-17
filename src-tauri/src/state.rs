@@ -34,6 +34,9 @@ pub struct AppState {
     /// process 再起動で消える in-memory guard であり、永続 resume トークンは Phase 8 の復元で扱う。
     #[cfg_attr(not(unix), allow(dead_code))] // Codex app-server registration is Unix-only.
     pub known_codex_threads: std::sync::Mutex<std::collections::HashSet<String>>,
+    /// Claude Agent SDK session resume/fork の process-local authority allowlist。
+    pub known_claude_sessions:
+        Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
     pub team_hub: TeamHub,
     /// Issue #952: watcher / cleanup / poller / inject 系 background task の共通 supervisor。
     /// shutdown 時はここで cancel token を立て、bounded wait してから PTY process-tree kill に進む。
@@ -85,6 +88,8 @@ impl AppState {
         let pty_registry = Arc::new(SessionRegistry::new());
         let runtime_manager = Arc::new(RuntimeManager::new());
         let known_codex_threads = std::sync::Mutex::new(std::collections::HashSet::new());
+        let known_claude_sessions =
+            Arc::new(std::sync::Mutex::new(std::collections::HashSet::new()));
         let task_supervisor = TaskSupervisor::new();
         let pty_inflight: Arc<InFlightTracker> = task_supervisor.clone();
         // Issue #630: TeamHub と AppState で同じ tracker Arc を共有することで、
@@ -102,6 +107,7 @@ impl AppState {
             pty_registry,
             runtime_manager,
             known_codex_threads,
+            known_claude_sessions,
             team_hub,
             task_supervisor,
             pty_inflight,

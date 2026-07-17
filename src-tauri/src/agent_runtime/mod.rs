@@ -6,6 +6,7 @@
 
 #[cfg_attr(not(unix), allow(dead_code))] // unix-gated codex 経路からのみ使用
 mod adapter;
+pub mod claude_agent;
 #[cfg(unix)]
 pub mod codex;
 #[cfg_attr(not(unix), allow(dead_code))] // unix-gated codex 経路からのみ使用
@@ -16,6 +17,7 @@ mod event;
 mod event_buffer;
 #[cfg_attr(not(unix), allow(dead_code))] // unix-gated codex 経路からのみ使用
 mod manager;
+mod provider_policy;
 #[cfg_attr(not(unix), allow(dead_code))] // unix-gated codex 経路からのみ使用
 mod pty_compat;
 
@@ -33,6 +35,12 @@ pub use event_buffer::{RuntimeEventBuffer, DEFAULT_RUNTIME_EVENT_BUFFER_CAPACITY
 #[allow(unused_imports)]
 pub use manager::{RuntimeEndpointRegistry, RuntimeManager, RuntimeOperation};
 pub use pty_compat::PtyCompatAdapter;
+pub use provider_policy::{
+    capabilities_for, provider_declarations, resolve_native_claude_command,
+    resolve_node_executable, resolve_sidecar_entrypoint, select_provider, ProviderAvailability,
+    ProviderSelection, RuntimeProvider,
+    RuntimeProviderDeclaration, SystemProviderAvailability,
+};
 
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU8, Ordering};

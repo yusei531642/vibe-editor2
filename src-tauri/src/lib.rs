@@ -183,8 +183,8 @@ pub fn run() {
             // ---- agent runtime (Issue #21 / #22) ----
             commands::agent_runtime::agent_runtime_diagnostics,
             commands::agent_runtime::agent_runtime_register_pty_endpoint,
-            commands::agent_runtime::agent_runtime_register_codex_endpoint,
-            commands::agent_runtime::agent_runtime_reconnect_codex,
+            commands::agent_runtime::agent_runtime_register_codex_endpoint, commands::agent_runtime::agent_runtime_reconnect_codex,
+            commands::agent_runtime::agent_runtime_register_claude_endpoint, commands::agent_runtime::agent_runtime_reconnect_claude,
             commands::agent_runtime::agent_runtime_spawn_turn,
             commands::agent_runtime::agent_runtime_write,
             commands::agent_runtime::agent_runtime_inject,

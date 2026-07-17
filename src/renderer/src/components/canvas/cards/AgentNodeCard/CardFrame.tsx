@@ -76,7 +76,7 @@ import { CardSummary, type CardSummaryHealth } from './CardSummary';
 import { useProject } from '../../../../lib/app-state-context';
 import { AgentCardRuntime } from './AgentCardRuntime';
 import { useTeamProjection } from '../../../v2/TeamProjectionProvider';
-
+import { isNativeRuntimeProvider, NativeRuntimeConnector } from './NativeRuntimeConnector';
 // Issue #732: `NodeProps` を `Node<CardDataOf<'agent'>>` で具体化することで
 // `data.payload` が `AgentPayload` として読め、`unknown` からの inline cast が不要になる。
 function AgentNodeCardImpl({
@@ -380,21 +380,18 @@ function AgentNodeCardImpl({
   );
   const terminalStatus = useMemo(() => formatTerminalRuntimeStatus(status, t), [status, t]);
   const { projection: teamProjection, terminalAgentId, sessionActive } = useTeamProjection();
-  // projection の管理対象は「実 team session があり、かつ projection.agents に載っている
-  // カード」だけ。それ以外 (v1 card / 旧 team の残存 card / placeholder team) は従来どおり
+  // 実 team session の projection 対象だけ terminalAgentId に従う。それ以外は従来どおり
   // Terminal を開いたままにする (PR #36 レビュー: 到達不能 Terminal の防止)。
   const managedByProjection =
     sessionActive &&
     Boolean(payload.agentId) &&
     teamProjection.agents.some((agent) => agent.agentId === payload.agentId);
-  const terminalOpen =
-    !managedByProjection || terminalAgentId === payload.agentId;
-
+  const terminalOpen = !managedByProjection || terminalAgentId === payload.agentId;
+  const nativeRuntime = isNativeRuntimeProvider(payload.runtimeProvider);
   const handleClose = useCallback(
     () => void confirmRemoveCard(id),
     [confirmRemoveCard, id]
   );
-
   return (
     <>
       <NodeResizer
@@ -422,6 +419,8 @@ function AgentNodeCardImpl({
           typeIcon={agentDescriptor.icon}
           typeName={agentDescriptor.displayName}
           typeAccent={agentDescriptor.accentColor}
+          runtimeProvider={payload.runtimeProvider}
+          fallbackFrom={payload.fallbackFrom}
           organizationName={payload.organization?.name}
           activity={activity}
           status={terminalStatus}
@@ -460,22 +459,33 @@ function AgentNodeCardImpl({
           t={t}
         />
         <AgentCardRuntime agentId={payload.agentId} />
-        <TerminalOverlay
-          cardId={id}
-          termRef={termRef}
-          payload={payload}
-          title={title}
-          roleProfileId={roleProfileId}
-          cwd={cwd}
-          command={command}
-          args={args}
-          claudeInstructions={claudeInstructions}
-          codexInstructions={codexInstructions}
-          initialMessage={payload.initialMessage}
-          expanded={terminalOpen}
-          onStatus={setStatus}
-          onActivity={setActivity}
-        />
+        {nativeRuntime ? (
+          <NativeRuntimeConnector
+            cardId={id}
+            payload={payload}
+            systemPrompt={instructions}
+            initialMessage={payload.initialMessage}
+            setCardPayload={setCardPayload}
+            onStatus={setStatus}
+          />
+        ) : (
+          <TerminalOverlay
+            cardId={id}
+            termRef={termRef}
+            payload={payload}
+            title={title}
+            roleProfileId={roleProfileId}
+            cwd={cwd}
+            command={command}
+            args={args}
+            claudeInstructions={claudeInstructions}
+            codexInstructions={codexInstructions}
+            initialMessage={payload.initialMessage}
+            expanded={terminalOpen}
+            onStatus={setStatus}
+            onActivity={setActivity}
+          />
+        )}
       </div>
       <Handle
         type="source"

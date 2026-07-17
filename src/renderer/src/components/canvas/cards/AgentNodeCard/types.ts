@@ -15,6 +15,10 @@ import type {
 export interface AgentPayload {
   /** 挙動系統 (engine)。識別子ではない。custom CLI も claude/codex いずれかの engine 上で動く。 */
   agent?: AgentEngine;
+  /** Rust-side provider policy の concrete selection。 */
+  runtimeProvider?: 'codex-native' | 'claude-native' | 'pty' | 'api';
+  /** native 不可で PTY fallback した場合の本来の provider。 */
+  fallbackFrom?: 'codex-native' | 'claude-native' | null;
   /** Issue #1113: custom agent の settings.customAgents id。名前/アイコン/色/skill 解決に使う。 */
   agentConfigId?: string;
   /** 新スキーマ: ロール識別子。未設定時は legacy `role` をフォールバックとして読む。 */

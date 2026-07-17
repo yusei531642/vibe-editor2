@@ -25,7 +25,7 @@ pub mod events;
 pub mod file_locks;
 pub mod inbox_watch;
 pub mod inject;
-pub mod protocol;
+pub mod protocol; pub(crate) mod provider_policy;
 // Issue #1072 Part2: online (handshake) 時の未読一括再配信 (Pty mode 限定)。
 pub mod redeliver;
 // Issue #517: 動的ロール同士の責務境界 lint (recruit / assign_task で warning 発火)。

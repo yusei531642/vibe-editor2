@@ -11,6 +11,7 @@ import { useSettings } from '../../../lib/settings-context';
 import { useProject } from '../../../lib/app-state-context';
 import { useCanvasStore, NODE_MIN_H, NODE_MIN_W, type CardDataOf } from '../../../stores/canvas';
 import { useT } from '../../../lib/i18n';
+import { ProviderBadge } from './AgentNodeCard/ProviderBadge';
 
 function isApiAgentConfig(value: unknown): value is ApiAgentConfig {
   return !!value && typeof value === 'object' && (value as { runtime?: string }).runtime === 'api';
@@ -292,6 +293,7 @@ function ApiAgentChatCardImpl({
         accent={apiAgent?.color ?? '#d97757'}
         minWidth={NODE_MIN_W}
         minHeight={NODE_MIN_H}
+        headerMeta={<ProviderBadge provider="api" />}
       >
         <div className="api-chat">
           {payload?.teamId && (

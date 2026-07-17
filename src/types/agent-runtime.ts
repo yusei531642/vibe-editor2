@@ -6,6 +6,7 @@
  */
 
 export type AgentRuntimeBackend = 'auto' | 'native' | 'pty';
+export type RuntimeProvider = 'codex-native' | 'claude-native' | 'pty' | 'api';
 
 export type AgentRuntimeCapability =
   | 'ptyExecution'
@@ -29,6 +30,11 @@ export interface AgentRuntimeDiagnostics {
   selectedBackend: Exclude<AgentRuntimeBackend, 'auto'>;
   reason: AgentRuntimeSelectionReason;
   capabilities: AgentRuntimeCapability[];
+  providers: Array<{
+    provider: RuntimeProvider;
+    available: boolean;
+    capabilities: AgentRuntimeCapability[];
+  }>;
 }
 
 export type {
@@ -67,6 +73,19 @@ export interface RegisterCodexRuntimeEndpointRequest {
   thread: CodexThreadAction;
 }
 
+export type ClaudeSessionAction =
+  | { mode: 'start' }
+  | { mode: 'resume'; sessionId: string }
+  | { mode: 'fork'; sessionId: string };
+
+export interface RegisterClaudeRuntimeEndpointRequest {
+  endpointId: string;
+  teamId?: string | null;
+  agentId?: string | null;
+  systemPrompt?: string | null;
+  session: ClaudeSessionAction;
+}
+
 export interface RuntimeSteerRequest {
   endpointId: string;
   input: string;
@@ -90,4 +109,8 @@ export interface RuntimeEndpointResult {
 
 export interface CodexRuntimeEndpointResult extends RuntimeEndpointResult {
   threadId: string;
+}
+
+export interface ClaudeRuntimeEndpointResult extends RuntimeEndpointResult {
+  sessionId?: string | null;
 }

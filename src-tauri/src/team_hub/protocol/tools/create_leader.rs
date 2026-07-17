@@ -112,6 +112,7 @@ pub async fn team_create_leader(
             .with_phase("engine_policy"));
     }
 
+    let provider_selection = crate::team_hub::provider_policy::select_recruit_provider(&role_profile_id, &resolved_engine).await;
     let new_agent_id = format!("vc-{}", Uuid::new_v4());
 
     let started = Instant::now();
@@ -156,6 +157,8 @@ pub async fn team_create_leader(
             new_agent_id: new_agent_id.clone(),
             role_profile_id: role_profile_id.clone(),
             engine: resolved_engine.clone(),
+            runtime_provider: provider_selection.provider.as_str().to_string(),
+            fallback_from: provider_selection.fallback_from.map(|provider| provider.as_str().to_string()),
             agent_label_hint: agent_label_hint.clone(),
             wait_policy: None,
             dynamic_role: None,
