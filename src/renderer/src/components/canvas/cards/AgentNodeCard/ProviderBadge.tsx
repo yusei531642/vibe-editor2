@@ -12,8 +12,9 @@ export function ProviderBadge({
 }: {
   provider?: RuntimeProvider;
   fallbackFrom?: Extract<RuntimeProvider, 'codex-native' | 'claude-native'> | null;
-}): JSX.Element {
-  const selected = provider ?? 'pty';
+}): JSX.Element | null {
+  if (!provider) return null;
+  const selected = provider;
   const fallbackLabel = fallbackFrom ? `${label(fallbackFrom)}→${label(selected)}` : null;
   return (
     <span className="canvas-agent-provider-group">

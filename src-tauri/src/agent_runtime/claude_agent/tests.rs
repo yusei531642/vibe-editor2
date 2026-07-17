@@ -5,6 +5,7 @@ use crate::agent_runtime::{
     RuntimeSessionSpawnRequest, RuntimeTurnSpawnRequest,
 };
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -220,6 +221,40 @@ fn crash_emits_error_then_failed_and_detaches_endpoint() {
         )
     });
     assert!(error_index.is_some_and(|index| failed_index.is_some_and(|failed| index < failed)));
+}
+
+#[test]
+fn dispose_after_reader_failure_skips_response_timeout() {
+    let failed = Arc::new(AtomicBool::new(false));
+    let captured = failed.clone();
+    let adapter = ClaudeAgentRuntimeAdapter::connect(
+        fixture_config("invalid-json", None),
+        None,
+        None,
+        Arc::new(move |event| {
+            if matches!(event, ClaudeAdapterEvent::Failure(_)) {
+                captured.store(true, Ordering::Release);
+            }
+        }),
+    )
+    .expect("fixture sidecar connects");
+    adapter
+        .spawn_session(&RuntimeSessionSpawnRequest {
+            endpoint_id: "invalid-json".into(),
+        })
+        .expect("fixture session starts");
+    adapter
+        .spawn_turn(&RuntimeTurnSpawnRequest {
+            input: "trigger protocol failure".into(),
+            submit: true,
+        })
+        .expect("turn response arrives before invalid JSON");
+    wait_until(|| failed.load(Ordering::Acquire));
+
+    let started = Instant::now();
+    adapter.dispose().expect("dispose succeeds");
+
+    assert!(started.elapsed() < Duration::from_millis(500));
 }
 
 #[test]

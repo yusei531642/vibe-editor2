@@ -397,6 +397,27 @@ pub async fn agent_runtime_reconnect_codex(
     }
 }
 
+#[tauri::command]
+pub async fn agent_runtime_reconnect_claude(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    request: RegisterClaudeEndpointRequest,
+) -> CommandResult<ClaudeRuntimeEndpointResult> {
+    validate_endpoint_id(&request.endpoint_id)?;
+    if state
+        .runtime_manager
+        .registry()
+        .resolve(&request.endpoint_id)
+        .is_some()
+    {
+        let manager = state.runtime_manager.clone();
+        let endpoint_id = request.endpoint_id.clone();
+        let operation = run_blocking(move || manager.dispose(&endpoint_id)).await?;
+        emit_events(&app, &operation.events);
+    }
+    registration::register_claude_endpoint(&app, &state, request).await
+}
+
 mod controls;
 pub use controls::*;
 
