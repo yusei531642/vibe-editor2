@@ -69,8 +69,8 @@ fn markdown_fence_for(data: &str) -> String {
 /// 末尾 `[end data [<nonce>]]` で同一 nonce を要求する形に組み立てる。
 fn generate_fence_nonce() -> String {
     use rand::Rng;
-    let mut rng = rand::thread_rng();
-    format!("{:08x}", rng.gen::<u32>())
+    let mut rng = rand::rng();
+    format!("{:08x}", rng.random::<u32>())
 }
 
 /// Issue #520 / #635 / #602: 信頼できない外部入力 (Leader が顧客から受け取った要件 / data field 等)

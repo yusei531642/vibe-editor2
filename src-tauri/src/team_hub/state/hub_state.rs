@@ -476,7 +476,7 @@ impl TeamHub {
         // ハンドシェイクトークンを生成 (24 byte → hex 48 文字)
         use rand::RngCore;
         let mut buf = [0u8; 24];
-        rand::thread_rng().fill_bytes(&mut buf);
+        rand::rng().fill_bytes(&mut buf);
         // Issue #739: 旧 `team_hub::hex_encode` を `util::log_redact` に集約。
         state.token = crate::util::log_redact::hex_encode(&buf);
 

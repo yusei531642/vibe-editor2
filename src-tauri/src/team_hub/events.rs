@@ -231,7 +231,7 @@ mod ts_bindings_tests {
     }
 
     fn declaration<T: TS>() -> String {
-        format!("export {}\n", T::decl())
+        format!("export {}\n", T::decl(&ts_rs::Config::default()))
     }
 
     fn render() -> String {
