@@ -20,16 +20,8 @@ use super::super::permissions::{check_permission, Permission};
 use super::error::RecruitError;
 use super::recruit::{recruit_ack_timeout, recruit_handshake_timeout_duration};
 
-/// leader lifecycle の遷移 (失敗は無視: 状態機械側で不正遷移を reject する)。
-async fn leader_lifecycle(hub: &TeamHub, agent_id: &str, state: RecruitLifecycleState) {
-    let _ = hub.transition_recruit_lifecycle(agent_id, state, None).await;
-}
+use super::create_leader_support::{cancel_leader_recruit, leader_lifecycle};
 
-/// 失敗経路の共通後始末 (lifecycle terminal + pending grace + runtime 回収)。
-async fn cancel_leader_recruit(hub: &TeamHub, team_id: &str, agent_id: &str) {
-    hub.cancel_recruit_with_pending_grace(team_id, agent_id, "create_leader_cancelled")
-        .await;
-}
 
 /// `team_create_leader` — 引き継ぎ用に同 teamId へ追加の leader カードを spawn する。
 ///
