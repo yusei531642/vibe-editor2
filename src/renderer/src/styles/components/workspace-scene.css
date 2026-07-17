@@ -283,3 +283,10 @@
     width: calc(100vw - 32px);
   }
 }
+
+/* FLIP 計測中は退避 transform を無効化する (PR #35 レビュー: 非 active scene の
+   translate が掛かったまま測ると移動量がずれる)。同期計測なので paint されない。 */
+.workspace-scene[data-measuring='true'] {
+  transform: none !important;
+  transition: none !important;
+}

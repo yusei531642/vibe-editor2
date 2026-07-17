@@ -1,5 +1,7 @@
 //! 長寿命 WebSocket-over-unix JSON-RPC client actor。
 
+use super::handshake::{connect_and_initialize, ClientSource};
+
 use crate::agent_runtime::RuntimeAdapterError;
 use crate::team_hub::app_server::error::AppServerError;
 use crate::team_hub::app_server::wire::WsStream;
@@ -11,7 +13,7 @@ use tokio::net::UnixStream;
 use tokio::sync::mpsc;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
-const SUPPORTED_PROTOCOL_VERSION: &str = "1";
+pub(super) const SUPPORTED_PROTOCOL_VERSION: &str = "1";
 
 #[derive(Clone, Debug)]
 pub enum ClientEvent {
@@ -388,62 +390,8 @@ fn is_supported_approval_method(method: &str) -> bool {
     )
 }
 
-enum ClientSource {
-    Path(String),
-    #[cfg(test)]
-    Stream(UnixStream),
-}
 
-async fn connect_and_initialize(
-    source: ClientSource,
-) -> Result<WsStream<UnixStream>, RuntimeAdapterError> {
-    let stream = match source {
-        ClientSource::Path(socket_path) => UnixStream::connect(socket_path)
-            .await
-            .map_err(|error| fatal("runtime_app_server_unreachable", error.to_string()))?,
-        #[cfg(test)]
-        ClientSource::Stream(stream) => stream,
-    };
-    let mut ws = WsStream::new(stream, true);
-    ws.client_handshake().await.map_err(map_wire_error)?;
-    let params = json!({
-        "clientInfo": { "name": "vibe-editor2", "title": "vibe-editor 2", "version": env!("CARGO_PKG_VERSION") },
-        "capabilities": { "experimentalApi": false, "requestAttestation": false }
-    });
-    write_json(
-        &mut ws,
-        &json!({ "id": 1, "method": "initialize", "params": params }),
-    )
-    .await?;
-    let result = loop {
-        let text = ws
-            .read_text()
-            .await
-            .map_err(map_wire_error)?
-            .ok_or_else(disconnected)?;
-        let value: Value = serde_json::from_str(&text)
-            .map_err(|error| fatal("runtime_app_server_protocol", error.to_string()))?;
-        if value.get("id").and_then(Value::as_i64) == Some(1) && value.get("method").is_none() {
-            break rpc_result(&value)?;
-        }
-    };
-    if let Some(version) = result.get("protocolVersion") {
-        let actual = version
-            .as_str()
-            .map(str::to_string)
-            .unwrap_or_else(|| version.to_string());
-        if actual != SUPPORTED_PROTOCOL_VERSION {
-            return Err(fatal(
-                "runtime_app_server_version_mismatch",
-                format!("unsupported app-server protocol version '{actual}', expected {SUPPORTED_PROTOCOL_VERSION}"),
-            ));
-        }
-    }
-    write_json(&mut ws, &json!({ "method": "initialized", "params": {} })).await?;
-    Ok(ws)
-}
-
-async fn write_json(
+pub(super) async fn write_json(
     ws: &mut WsStream<UnixStream>,
     value: &Value,
 ) -> Result<(), RuntimeAdapterError> {
@@ -452,7 +400,7 @@ async fn write_json(
     ws.write_text(text.as_bytes()).await.map_err(map_wire_error)
 }
 
-fn rpc_result(value: &Value) -> Result<Value, RuntimeAdapterError> {
+pub(super) fn rpc_result(value: &Value) -> Result<Value, RuntimeAdapterError> {
     if let Some(error) = value.get("error") {
         let code = error.get("code").and_then(Value::as_i64).unwrap_or(0);
         let message = error
@@ -477,18 +425,18 @@ fn id_key(value: &Value) -> Option<String> {
         .or_else(|| value.as_i64().map(|id| format!("i:{id}")))
 }
 
-fn map_wire_error(error: AppServerError) -> RuntimeAdapterError {
+pub(super) fn map_wire_error(error: AppServerError) -> RuntimeAdapterError {
     fatal("runtime_app_server_disconnected", error.to_string())
 }
 
-fn disconnected() -> RuntimeAdapterError {
+pub(super) fn disconnected() -> RuntimeAdapterError {
     fatal(
         "runtime_app_server_disconnected",
         "app-server socket disconnected",
     )
 }
 
-fn fatal(code: &str, message: impl Into<String>) -> RuntimeAdapterError {
+pub(super) fn fatal(code: &str, message: impl Into<String>) -> RuntimeAdapterError {
     RuntimeAdapterError::new(code, message, false)
 }
 
