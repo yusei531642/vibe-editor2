@@ -163,11 +163,11 @@ vi.mock('../lib/hooks/use-claude-check', () => ({
   })
 }));
 
-vi.mock('../components/v2/V2Shell', async () => {
+vi.mock('../components/v2/WorkspaceTransitionRoot', async () => {
   const ReactModule = await import('react');
   const context = await import('../lib/app-state-context');
   return {
-    V2Shell: () => {
+    WorkspaceTransitionRoot: () => {
       const project = context.useProject() as ReturnType<typeof context.useProject> & {
         instanceMarker: string;
       };

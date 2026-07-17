@@ -33,6 +33,7 @@ import { resolveBootstrapLanguage, translate } from './lib/i18n';
 import './styles/v2-base.css';
 import './styles/components/toast.css';
 import './styles/components/v2-shell.css';
+import './styles/components/workspace-scene.css';
 import './styles/components/drag-region.css';
 
 const rootEl = document.getElementById('root');

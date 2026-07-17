@@ -264,7 +264,11 @@ export function V2Shell(): JSX.Element {
           )}
         </section>
       ) : (
-        <section className="v2-timeline" aria-live="polite">
+        <section
+          className="v2-timeline"
+          aria-live="polite"
+          data-workspace-focus-frame=""
+        >
           <header>
             <div>
               <span className={`v2-engine-dot v2-engine-dot--${engine}`} />

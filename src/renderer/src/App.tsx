@@ -18,7 +18,7 @@
  */
 import { useWindowFrameInsets } from './lib/use-window-frame-insets';
 import { AppStateProvider } from './lib/app-state-context';
-import { V2Shell } from './components/v2/V2Shell';
+import { WorkspaceTransitionRoot } from './components/v2/WorkspaceTransitionRoot';
 
 export function App(): JSX.Element {
   // Issue #307: Windows 11 フレームレス最大化時の不可視リサイズ境界を CSS 変数で補正。
@@ -26,7 +26,7 @@ export function App(): JSX.Element {
 
   return (
     <AppStateProvider>
-      <V2Shell />
+      <WorkspaceTransitionRoot />
     </AppStateProvider>
   );
 }
