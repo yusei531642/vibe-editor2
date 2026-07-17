@@ -21,7 +21,8 @@ pub type CodexAdapterEventSink = Arc<dyn Fn(CodexAdapterEvent) + Send + Sync>;
 
 #[derive(Default)]
 struct SessionState {
-    thread_id: RwLock<Option<String>>,
+    /// client actor と共有する thread 束縛 (approval の thread 照合にも使う)。
+    thread_id: Arc<RwLock<Option<String>>>,
     active_turn_id: RwLock<Option<String>>,
 }
 
@@ -40,7 +41,11 @@ impl CodexRuntimeAdapter {
     ) -> Result<Self, RuntimeAdapterError> {
         let state = Arc::new(SessionState::default());
         let client_sink = client_sink(state.clone(), sink);
-        let client = Arc::new(ClientHandle::connect(socket_path, client_sink)?);
+        let client = Arc::new(ClientHandle::connect(
+            socket_path,
+            client_sink,
+            state.thread_id.clone(),
+        )?);
         Ok(Self {
             client: Mutex::new(Some(client)),
             cwd,
@@ -57,7 +62,11 @@ impl CodexRuntimeAdapter {
     ) -> Result<Self, RuntimeAdapterError> {
         let state = Arc::new(SessionState::default());
         let client_sink = client_sink(state.clone(), sink);
-        let client = Arc::new(ClientHandle::connect_stream(stream, client_sink)?);
+        let client = Arc::new(ClientHandle::connect_stream(
+            stream,
+            client_sink,
+            state.thread_id.clone(),
+        )?);
         Ok(Self {
             client: Mutex::new(Some(client)),
             cwd,
