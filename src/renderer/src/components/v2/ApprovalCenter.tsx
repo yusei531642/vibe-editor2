@@ -194,7 +194,7 @@ export function ApprovalCenter(): JSX.Element | null {
                     <button
                       key={decision}
                       type="button"
-                      disabled={busyId !== null}
+                      disabled={busyId === `${approval.endpointId}:${approval.requestId}`}
                       onClick={() =>
                         void decide(
                           approval.agentId,
