@@ -157,6 +157,7 @@ impl TeamHub {
         Ok(())
     }
 
+    #[cfg_attr(not(unix), allow(dead_code))]
     pub async fn bind_native_runtime_endpoint(
         &self,
         team_id: &str,
