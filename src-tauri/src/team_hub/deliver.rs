@@ -8,34 +8,96 @@
 //! Issue #1068: ユーザーが設定 (`codexTeamSendDelivery`) で `pty` を選んだ場合は、app-server 経路を
 //! 一切使わず常に PTY 注入する (`codex_delivery::prefers_pty`)。既定の `backend` は上記の挙動。
 
-use std::sync::Arc;
-
-use crate::pty::SessionRegistry;
-use crate::team_hub::inject::{self, InjectError};
+use crate::team_hub::inject::InjectError;
+use crate::team_hub::TeamHub;
 
 /// `agent_id` 宛にメッセージを配送する。戻り値・リトライ意味論は `inject::inject` と同一。
 pub async fn deliver_message(
-    registry: Arc<SessionRegistry>,
+    hub: &TeamHub,
+    team_id: &str,
     agent_id: &str,
     from_role: &str,
     text: &str,
 ) -> Result<(), InjectError> {
     // Issue #1068: 設定で PTY を強制している場合は app-server 経路を完全にスキップする。
-    if !crate::team_hub::codex_delivery::prefers_pty() {
-        if let Some(session) = registry.get_by_agent(agent_id) {
-            if session.is_codex {
-                if let Some((socket, thread_id)) =
-                    crate::pty::codex_app_server::target_for_session(&session)
+    let backend = hub.selected_runtime_backend();
+    let mut native_error: Option<InjectError> = None;
+    if let Some(result) = hub
+        .try_deliver_native_message(team_id, agent_id, from_role, text, backend)
+        .await
+    {
+        match result {
+            Ok(()) => return Ok(()),
+            // native 失敗時も即 PTY へ落とさず、下の legacy app-server 経路を
+            // 試してから PTY fallback する (Issue #1062 の app-server 優先契約、
+            // PR #34 一次レビュー 🟡5)。
+            Err(error) => {
+                tracing::warn!(
+                    agent_id,
+                    code = error.code(),
+                    "[teamhub] native delivery failed; trying legacy app-server then PTY"
+                );
+                native_error = Some(error);
+            }
+        }
+    }
+    if !hub.prefers_legacy_codex_pty() {
+        if let Some(session) = hub.registry.get_by_agent(agent_id) {
+            if let Some((socket, thread_id)) =
+                crate::pty::codex_app_server::target_for_session(&session)
+            {
+                if hub
+                    .try_legacy_app_server(agent_id, &socket, &thread_id, text)
+                    .await
                 {
-                    if try_app_server(agent_id, &socket, &thread_id, text).await {
-                        return Ok(());
-                    }
-                    // app-server 未対応 / 失敗時は下の PTY 注入へフォールバック。
+                    return Ok(());
                 }
             }
         }
     }
-    inject::inject(registry, agent_id, from_role, text).await
+    // native 失敗 & PTY session を持たない member (app-server 経由の native worker) で
+    // 無条件に PTY へ落とすと、PtyCompatAdapter 登録が lifecycle.endpoint_id を
+    // `team-pty-{agentId}` へ上書きした挙句 `inject_no_session` で失敗し、元の native
+    // エラーコードを潰す (PR #34 二次レビュー 🟡)。PTY session が実在する場合のみ fallback。
+    if let Some(error) = native_error {
+        if hub.registry.get_by_agent(agent_id).is_none() {
+            return Err(error);
+        }
+    }
+    // app-server 未対応 / 失敗時は下の PTY 注入へフォールバック。
+    hub.deliver_pty_message(team_id, agent_id, from_role, text)
+        .await
+}
+
+impl TeamHub {
+    async fn try_legacy_app_server(
+        &self,
+        agent_id: &str,
+        socket: &str,
+        thread_id: &str,
+        text: &str,
+    ) -> bool {
+        #[cfg(test)]
+        if let Some(result) = *self
+            .runtime
+            .legacy_app_server_override
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+        {
+            self.runtime
+                .legacy_app_server_deliveries
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .push((
+                    agent_id.to_string(),
+                    socket.to_string(),
+                    thread_id.to_string(),
+                    text.to_string(),
+                ));
+            return result;
+        }
+        try_app_server(agent_id, socket, thread_id, text).await
+    }
 }
 
 /// app-server 経路での配送を試みる。成功で `true`、失敗 (= PTY フォールバック) で `false`。

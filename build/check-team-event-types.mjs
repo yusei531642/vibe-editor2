@@ -2,9 +2,12 @@
 // Issue #959: ts-rs で生成した TeamHub event 型が最新かを CI で確認する。
 
 import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 
 const env = { ...process.env, UPDATE_TEAM_EVENT_TYPES: '1' };
 const writeOnly = process.argv.includes('--write');
+const generatedPath = 'src/types/generated/team-events.ts';
+const before = existsSync(generatedPath) ? readFileSync(generatedPath, 'utf8') : null;
 
 execFileSync(
   'cargo',
@@ -24,17 +27,12 @@ if (writeOnly) {
   process.exit(0);
 }
 
-try {
-  execFileSync('git', ['diff', '--exit-code', '--', 'src/types/generated/team-events.ts'], {
-    stdio: 'pipe'
-  });
-} catch (error) {
+const after = readFileSync(generatedPath, 'utf8');
+if (before !== after) {
   process.stderr.write(
     '[check-team-event-types] src/types/generated/team-events.ts is stale. ' +
       'Run `npm run generate:team-event-types` and commit the generated diff.\n'
   );
-  if (error.stdout) process.stderr.write(error.stdout);
-  if (error.stderr) process.stderr.write(error.stderr);
   process.exit(1);
 }
 

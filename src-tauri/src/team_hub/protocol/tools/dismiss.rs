@@ -36,7 +36,7 @@ pub async fn team_dismiss(
         });
     }
     // チーム所属チェック
-    let members = hub.registry.list_team_members(&ctx.team_id);
+    let members = hub.team_members(&ctx.team_id).await;
     if !members.iter().any(|(aid, _)| aid == &agent_id) {
         return Err(DismissError {
             code: "dismiss_not_found".into(),
@@ -65,12 +65,18 @@ pub async fn team_dismiss(
     // 旧実装は emit のみで Hub 状態を直接触らなかったため、handshake 完了前に
     // dismiss された pending が孤立し、try_register_pending_recruit の人数 / singleton
     // 判定にゴミとして残り続けていた (renderer 反映の冪等性が壊れる)。
-    hub.cancel_pending_recruit(&agent_id).await;
     // Issue #526: dismiss された worker が握っていた advisory file lock を漏れなく解放する。
     // 解放しないと「dismiss 済の worker が無限に lock を保持し続けて誰もファイル編集できない」
     // 状態になりうる。dismiss が成立した時点で lock も自動失効と扱う。
+    // NOTE: `cancel_recruit_with_pending_grace` (terminal cleanup) も内部で lock を解放するため、
+    // response の `releasedFileLocks` を正しく数えられるよう **先に** 解放して count を確保する
+    // (PR #34 レビュー: 後段だと常に 0 になる)。
     let released_lock_count = hub
         .release_all_file_locks_for_agent(&ctx.team_id, &agent_id)
+        .await;
+    // dismiss はユーザー意図の除去なので grace / rescue の対象外: 即時 terminal 確定。
+    // grace を挟むと handshake 窓の worker が Ready で復活し得る (PR #34 レビュー)。
+    hub.cancel_recruit_immediately(&ctx.team_id, &agent_id, "dismissed")
         .await;
     if released_lock_count > 0 {
         tracing::debug!(

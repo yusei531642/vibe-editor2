@@ -12,10 +12,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::Emitter;
 use tokio::sync::{oneshot, OwnedSemaphorePermit, Semaphore};
-
-
-const RECRUIT_GRACE_DEFAULT_MS: u64 = 2_000;
-const RECRUIT_GRACE_MAX_MS: u64 = 10_000;
+pub(crate) const RECRUIT_GRACE_DEFAULT_MS: u64 = 2_000;
+pub(crate) const RECRUIT_GRACE_MAX_MS: u64 = 10_000;
 
 /// Issue #742 (Security): recruit grant (= 事前発行された pending recruit) の有効期限。
 /// `try_register_pending_recruit` で agent_id を登録した瞬間から計時し、handshake が
@@ -34,11 +32,12 @@ const HANDSHAKE_GRANT_TTL_DEFAULT_MS: u64 = 120_000;
 /// TTL の許容上限。これより大きい env 値は無効として既定値に丸める
 /// (TTL を実質無効化するような巨大値の誤設定 / 改ざんを防ぐ)。
 const HANDSHAKE_GRANT_TTL_MAX_MS: u64 = 300_000;
-
 #[cfg(test)]
 pub(super) static RECRUIT_RESCUED_EVENTS_FOR_TEST: once_cell::sync::Lazy<
     std::sync::Mutex<Vec<RecruitRescuedPayload>>,
 > = once_cell::sync::Lazy::new(|| std::sync::Mutex::new(Vec::new()));
+#[cfg(test)]
+pub(super) static RECRUIT_RESCUE_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 #[derive(Clone, Debug)]
 pub struct RecruitOutcome {
@@ -64,6 +63,9 @@ pub struct PendingRecruit {
     pub ack_done: AtomicBool,
     /// Issue #577: ack timeout 済みだが grace window 中で、遅着 ack を rescue できる状態。
     pub timed_out_at: Option<Instant>,
+    /// 遅着 ack が rescue された時刻。grace 満了 task はこれが Some なら terminal cancel を
+    /// スキップし、handshake timeout 側の経路に委ねる (PR #34 レビュー)。
+    pub rescued_at: Option<Instant>,
     /// Issue #742 (Security): この recruit grant を発行した時刻。
     /// `resolve_pending_recruit` の handshake で `issued_at.elapsed()` が
     /// `HANDSHAKE_GRANT_TTL` を超えていたら「期限切れ token」として reject する
@@ -162,6 +164,7 @@ impl TeamHub {
                 ack_tx: Some(ack_tx),
                 ack_done: AtomicBool::new(false),
                 timed_out_at: None,
+            rescued_at: None,
                 // Issue #742: grant 発行時刻。handshake TTL 検証の起点。
                 issued_at: Instant::now(),
             },
@@ -225,6 +228,7 @@ impl TeamHub {
         let mut s = self.state.lock().await;
         // Issue #742: pending grant が存在するなら TTL / team_id / role を順に検証する。
         let mut consumed_pending = false;
+        let mut rescued_handshake = false;
         if let Some(p) = s.pending_recruits.get(agent_id) {
             // TTL 超過 = 期限切れ token。stale entry を除去してから reject する
             // (recruit 側 cancel 経路が拾えなかった残骸を handshake 側でも掃除)。
@@ -235,6 +239,14 @@ impl TeamHub {
                     p.issued_at.elapsed()
                 );
                 s.pending_recruits.remove(agent_id);
+                drop(s);
+                // handshake path から terminal cleanup (spawn_blocking を含む) を切り離す。
+                // handle_client を跨いだ lock 順序依存を作らない (PR #34 一次レビュー 🟡3)。
+                let hub = self.clone();
+                let agent_id = agent_id.to_string();
+                tokio::spawn(async move {
+                    let _ = hub.fail_recruit(&agent_id, "handshake_grant_expired").await;
+                });
                 return false;
             }
             if p.team_id != team_id {
@@ -257,6 +269,9 @@ impl TeamHub {
             }
             // single-use: 成功確定なので grant を消費 (remove) する。
             let p = s.pending_recruits.remove(agent_id).expect("just checked");
+            // timed_out_at 付き = Issue #577 の遅着 ack rescue 経路 (team_recruit は
+            // 既に timeout で return 済みで verify_recruit_liveness に到達しない)。
+            rescued_handshake = p.timed_out_at.is_some();
             let _ = p.tx.send(RecruitOutcome {
                 agent_id: agent_id.to_string(),
                 role_profile_id: role_profile_id.to_string(),
@@ -305,58 +320,15 @@ impl TeamHub {
         }
         entry.last_handshake_at = Some(now_iso.clone());
         entry.last_seen_at = Some(now_iso);
-        true
-    }
-
-    /// timeout 等でキャンセル: ack channel は即時 close しつつ、短い grace window 中は
-    /// pending を残して renderer からの遅着 ack を rescue できるようにする (Issue #577)。
-    pub async fn cancel_pending_recruit(&self, agent_id: &str) {
-        self.cancel_pending_recruit_with_grace(agent_id, recruit_grace_from_env())
-            .await;
-    }
-
-    async fn cancel_pending_recruit_with_grace(&self, agent_id: &str, grace: Duration) {
-        let timed_out_at = Instant::now();
-        let should_schedule_cleanup = {
-            let mut s = self.state.lock().await;
-            let Some(pending) = s.pending_recruits.get_mut(agent_id) else {
-                return;
-            };
-
-            // 既に timeout 済みなら idempotent に扱う。重複 cleanup task を増やさない。
-            if pending.timed_out_at.is_some() {
-                return;
-            }
-
-            // ack waiter には従来どおり Err を返すため、ack_tx は timeout 時点で close する。
-            let _ = pending.ack_tx.take();
-
-            if grace.is_zero() {
-                // VIBE_TEAM_RECRUIT_GRACE_MS=0 は旧挙動互換: 即時に pending を破棄する。
-                s.pending_recruits.remove(agent_id);
-                false
-            } else {
-                pending.timed_out_at = Some(timed_out_at);
-                true
-            }
-        };
-
-        if should_schedule_cleanup {
-            let hub = self.clone();
-            let agent_id = agent_id.to_string();
-            tokio::spawn(async move {
-                tokio::time::sleep(grace).await;
-                let mut s = hub.state.lock().await;
-                let should_remove = s
-                    .pending_recruits
-                    .get(&agent_id)
-                    .and_then(|p| p.timed_out_at)
-                    .is_some_and(|ts| ts == timed_out_at);
-                if should_remove {
-                    s.pending_recruits.remove(&agent_id);
-                }
-            });
+        drop(s);
+        // rescue 経路 (team_recruit が timeout 済みで verify_recruit_liveness に到達しない)
+        // に限って lifecycle を Ready まで前進させる。通常経路では liveness 検証を通った
+        // verify_recruit_liveness だけが Ready を出す (PR #34 レビュー: ready の意味を
+        // 「runtime endpoint が live」に保つ)。
+        if rescued_handshake {
+            self.advance_recruit_to_ready(agent_id).await;
         }
+        true
     }
 
     /// Issue #576: team 単位の同時 recruit permit を取得する。
@@ -485,6 +457,7 @@ impl TeamHub {
             return Err(AckError::AlreadyAcked);
         }
         if let Some(timed_out_at) = pending.timed_out_at {
+            pending.rescued_at = Some(Instant::now());
             // timeout 後 grace 中の遅着 ack。ack waiter は既に close 済みなので送信せず、
             // renderer 側へ rescue event を出してカード維持を観測可能にする。
             let _ = pending.ack_tx.take();
@@ -585,16 +558,6 @@ fn recruit_concurrency_from_env_with_source() -> (usize, RecruitConcurrencySourc
     }
 }
 
-/// Issue #577: timeout 後に遅着 ack を rescue する grace window。
-/// `VIBE_TEAM_RECRUIT_GRACE_MS=0` は旧挙動互換、`>10000` / parse 失敗 / 未設定は default。
-fn recruit_grace_from_env() -> Duration {
-    let ms = std::env::var("VIBE_TEAM_RECRUIT_GRACE_MS")
-        .ok()
-        .and_then(|raw| raw.trim().parse::<u64>().ok())
-        .filter(|&n| n <= RECRUIT_GRACE_MAX_MS)
-        .unwrap_or(RECRUIT_GRACE_DEFAULT_MS);
-    Duration::from_millis(ms)
-}
 
 /// Issue #742 (Security): recruit grant の TTL。`HANDSHAKE_GRANT_TTL_DEFAULT_MS` 既定。
 /// `VIBE_TEAM_HANDSHAKE_TTL_MS` で上書き可能だが、`1..=HANDSHAKE_GRANT_TTL_MAX_MS` の範囲外
@@ -734,16 +697,14 @@ mod role_binding_team_id_tests {
 /// Issue #577: timeout 後 grace 期間中の recruit ack rescue の単体テスト。
 #[cfg(test)]
 mod recruit_rescue_tests {
-    use super::{RecruitAckOutcome, RECRUIT_RESCUED_EVENTS_FOR_TEST};
+    use super::{RecruitAckOutcome, RECRUIT_RESCUED_EVENTS_FOR_TEST, RECRUIT_RESCUE_TEST_LOCK as ENV_LOCK};
     use crate::pty::SessionRegistry;
     use crate::team_hub::error::AckError;
     use crate::team_hub::TeamHub;
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
     use std::time::Duration;
     use tokio::sync::Barrier;
     use tokio::time::sleep;
-
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     fn make_hub() -> TeamHub {
         TeamHub::new(Arc::new(SessionRegistry::new()))

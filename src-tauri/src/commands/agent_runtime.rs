@@ -1,6 +1,6 @@
 // agent_runtime.* command — Issue #21 diagnostics / Issue #22 endpoint operations.
 #[cfg(unix)]
-use crate::agent_runtime::codex::{CodexAdapterEvent, CodexAdapterEventSink, CodexRuntimeAdapter};
+use crate::agent_runtime::codex::{CodexAdapterEvent, CodexAdapterEventSink};
 use crate::agent_runtime::{
     select_backend, BackendKind, PtyCompatAdapter, RuntimeCapability, RuntimeEventEnvelope,
     RuntimeOperation, RuntimeTurnSpawnRequest, SelectionReason, SystemCapabilityDetector,
@@ -10,6 +10,9 @@ use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
+
+#[cfg(unix)]
+mod registration;
 
 const MAX_RUNTIME_INPUT_BYTES: usize = 64 * 1024;
 const MAX_APPROVAL_REQUEST_ID_BYTES: usize = 256;
@@ -71,6 +74,8 @@ pub enum CodexThreadAction {
 #[cfg_attr(not(unix), allow(dead_code))] // 非 Unix では cfg(unix) の登録経路が消えるため
 pub struct RegisterCodexEndpointRequest {
     pub endpoint_id: String,
+    pub team_id: Option<String>,
+    pub agent_id: Option<String>,
     pub cwd: Option<String>,
     pub thread: CodexThreadAction,
 }
@@ -104,8 +109,22 @@ pub struct CodexRuntimeEndpointResult {
     pub thread_id: String,
 }
 
+/// TeamHub が内部管理する endpoint id の予約 prefix。renderer からの
+/// register / dispose / write 等で内部 endpoint を乗っ取れないよう fail-closed に拒否する
+/// (PR #34 四次レビュー: `team-pty-{agentId}` は予測可能なため名前空間を分離する)。
+const RESERVED_ENDPOINT_PREFIXES: [&str; 1] = ["team-pty-"];
+
 fn validate_endpoint_id(endpoint_id: &str) -> CommandResult<()> {
-    crate::commands::validation::validate_id_segment("endpoint_id", endpoint_id).map(|_| ())
+    crate::commands::validation::validate_id_segment("endpoint_id", endpoint_id)?;
+    if RESERVED_ENDPOINT_PREFIXES
+        .iter()
+        .any(|prefix| endpoint_id.starts_with(prefix))
+    {
+        return Err(CommandError::authz(format!(
+            "endpoint_id '{endpoint_id}' uses a reserved internal namespace"
+        )));
+    }
+    Ok(())
 }
 
 fn validate_runtime_input(input: &str) -> CommandResult<()> {
@@ -277,7 +296,7 @@ pub async fn agent_runtime_register_codex_endpoint(
         ))
     }
     #[cfg(unix)]
-    register_codex_endpoint(&app, &state, request).await
+    registration::register_codex_endpoint(&app, &state, request).await
 }
 
 #[tauri::command]
@@ -308,107 +327,8 @@ pub async fn agent_runtime_reconnect_codex(
             let operation = run_blocking(move || manager.dispose(&endpoint_id)).await?;
             emit_events(&app, &operation.events);
         }
-        register_codex_endpoint(&app, &state, request).await
+        registration::register_codex_endpoint(&app, &state, request).await
     }
-}
-
-#[cfg(unix)]
-async fn register_codex_endpoint(
-    app: &AppHandle,
-    state: &State<'_, AppState>,
-    request: RegisterCodexEndpointRequest,
-) -> CommandResult<CodexRuntimeEndpointResult> {
-    validate_endpoint_id(&request.endpoint_id)?;
-    // cwd は active project root / native picker 由来 grant への authority 照合を必須とする
-    // (renderer 指定の任意パスで thread を開かせない)。省略時は authority 照合済みの
-    // active project root を使う。
-    let cwd = match request.cwd.as_deref() {
-        Some(given) => {
-            validate_bounded_no_nul("cwd", given, 16 * 1024)?;
-            let authorized = crate::commands::authz::assert_readable_project_root(
-                &state.project_root,
-                &state.project_root_identity,
-                given,
-            )
-            .await?;
-            Some(authorized.as_str().to_string())
-        }
-        None => state.project_root.load().as_deref().map(|p| p.to_string()),
-    };
-    match &request.thread {
-        CodexThreadAction::Resume { thread_id } | CodexThreadAction::Fork { thread_id } => {
-            crate::commands::validation::validate_id_segment("thread_id", thread_id)?;
-            // 認可: この process が自ら開始/観測した thread のみ resume/fork できる。
-            // 任意 threadId の指定で authority 外プロジェクトの thread を開かせない。
-            authorize_known_thread(&state.known_codex_threads, thread_id)?;
-        }
-        CodexThreadAction::Start => {}
-    }
-    let endpoint_id = request.endpoint_id.clone();
-    // codex 実行コマンドは settings.json (Rust 正本) から解決し、renderer 入力を使わない。
-    let codex_command = crate::commands::settings::settings_load()
-        .await
-        .map(|settings| settings.codex_command)
-        .unwrap_or_else(|_| "codex".to_string());
-    // control socket は常に Rust 側の daemon 検出で解決する (renderer 指定の socket へ
-    // ユーザー入力や approval を流させない)。
-    let socket_path = crate::pty::codex_app_server::ensure_control_socket(&codex_command)
-        .await
-        .ok_or_else(|| {
-            finish_codex_failure(
-                app,
-                &state.runtime_manager,
-                &endpoint_id,
-                crate::agent_runtime::RuntimeAdapterError::new(
-                    "runtime_app_server_unavailable",
-                    "Codex app-server control socket is unavailable",
-                    false,
-                ),
-            )
-        })?;
-    let sink = codex_event_sink(
-        app.clone(),
-        state.runtime_manager.clone(),
-        endpoint_id.clone(),
-    );
-    let adapter_result =
-        run_blocking(move || CodexRuntimeAdapter::connect(socket_path, cwd, sink)).await?;
-    let adapter =
-        Arc::new(adapter_result.map_err(|error| {
-            finish_codex_failure(app, &state.runtime_manager, &endpoint_id, error)
-        })?);
-    let manager = state.runtime_manager.clone();
-    let operation_endpoint = endpoint_id.clone();
-    let operation_adapter = adapter.clone();
-    let operation = run_blocking(move || match request.thread {
-        CodexThreadAction::Start => {
-            manager.register_endpoint(operation_endpoint, operation_adapter)
-        }
-        CodexThreadAction::Resume { thread_id } => {
-            manager.register_resumed_endpoint(operation_endpoint, operation_adapter, thread_id)
-        }
-        CodexThreadAction::Fork { thread_id } => {
-            manager.register_forked_endpoint(operation_endpoint, operation_adapter, thread_id)
-        }
-    })
-    .await?;
-    emit_events(app, &operation.events);
-    operation
-        .result
-        .map_err(|error| CommandError::coded(error.code, error.message))?;
-    let thread_id = adapter.thread_id().ok_or_else(|| {
-        CommandError::coded(
-            "runtime_thread_not_ready",
-            "Codex app-server did not return a thread id",
-        )
-    })?;
-    // start/resume/fork いずれも成功した thread を「観測済み」として記録し、
-    // 以後の resume / fork を認可できるようにする。
-    record_known_thread(&state.known_codex_threads, Some(thread_id.clone()));
-    Ok(CodexRuntimeEndpointResult {
-        endpoint_id,
-        thread_id,
-    })
 }
 
 mod controls;

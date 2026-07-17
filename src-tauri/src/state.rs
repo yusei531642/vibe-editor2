@@ -87,7 +87,11 @@ impl AppState {
         // Issue #630: TeamHub と AppState で同じ tracker Arc を共有することで、
         // `team_send` 経由の inject::inject も `terminal_create` 経由の codex 注入も
         // 同一 counter で wait_idle できる。
-        let team_hub = TeamHub::with_inflight(pty_registry.clone(), pty_inflight.clone());
+        let team_hub = TeamHub::with_runtime(
+            pty_registry.clone(),
+            runtime_manager.clone(),
+            pty_inflight.clone(),
+        );
         Self {
             project_root: ArcSwapOption::from(None),
             project_root_identity: ArcSwapOption::from(None),

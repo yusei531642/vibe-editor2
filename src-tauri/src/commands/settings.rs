@@ -16,6 +16,7 @@
 
 use crate::commands::atomic_write::atomic_write;
 use crate::commands::error::{CommandError, CommandResult};
+use crate::team_hub::codex_delivery::sync_settings;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, path::Path, time::Duration};
@@ -427,7 +428,7 @@ pub async fn settings_load() -> CommandResult<Settings> {
             }
         };
     // Issue #1068: team_hub は永続 Settings を直接読まないため、起動時 load でミラーを同期する。
-    crate::team_hub::codex_delivery::set_from_settings(Some(&settings.codex_team_send_delivery));
+    sync_settings(&settings.codex_team_send_delivery, &settings.agent_runtime_backend);
     Ok(settings)
 }
 
@@ -551,13 +552,12 @@ pub async fn settings_save(_app: tauri::AppHandle, settings: Settings) -> Comman
         .await
         .map_err(|e| CommandError::Internal(e.to_string()))?;
     // Issue #1068: 設定変更を team_hub の配送方式ミラーへ即時反映する (settings.json が SSOT)。
-    crate::team_hub::codex_delivery::set_from_settings(Some(&settings.codex_team_send_delivery));
+    sync_settings(&settings.codex_team_send_delivery, &settings.agent_runtime_backend);
     // Issue #1193: rendererが更新できるsettingsのpathをglobal asset:// scopeへ追加しては
     // ならない。custom mascotのnative選択・data URL読み出しはproject authority側の専用経路で
     // 扱うため、settings_saveは表示用pathを保存するだけに留める。
     Ok(())
 }
-
 
 #[cfg(test)]
 mod tests {

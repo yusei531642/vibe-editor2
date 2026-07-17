@@ -50,6 +50,11 @@ pub fn set_from_settings(value: Option<&str>) {
     PREF.store(parse(value).as_u8(), Ordering::Relaxed);
 }
 
+pub fn sync_settings(codex_delivery: &str, runtime_backend: &str) {
+    set_from_settings(Some(codex_delivery));
+    crate::agent_runtime::set_requested_backend_from_settings(runtime_backend);
+}
+
 /// 現在の配送方式。
 pub fn current() -> CodexDelivery {
     CodexDelivery::from_u8(PREF.load(Ordering::Relaxed))

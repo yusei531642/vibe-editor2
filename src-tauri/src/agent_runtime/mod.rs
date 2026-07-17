@@ -9,6 +9,8 @@ mod adapter;
 #[cfg(unix)]
 pub mod codex;
 #[cfg_attr(not(unix), allow(dead_code))] // unix-gated codex 経路からのみ使用
+mod delivery;
+#[cfg_attr(not(unix), allow(dead_code))] // unix-gated codex 経路からのみ使用
 mod event;
 #[cfg_attr(not(unix), allow(dead_code))] // unix-gated codex 経路からのみ使用
 mod event_buffer;
@@ -19,8 +21,9 @@ mod pty_compat;
 
 pub use adapter::{
     AgentRuntimeAdapter, RuntimeAdapterError, RuntimeApprovalResponseRequest,
-    RuntimeSessionForkRequest, RuntimeSessionResumeRequest, RuntimeSessionSpawnRequest,
-    RuntimeSteerRequest, RuntimeTurnSpawnRequest,
+    RuntimeDeliveryFuture, RuntimeDeliveryRequest, RuntimeSessionForkRequest,
+    RuntimeSessionResumeRequest, RuntimeSessionSpawnRequest, RuntimeSteerRequest,
+    RuntimeTurnSpawnRequest,
 };
 #[allow(unused_imports)]
 pub use event::{
@@ -32,6 +35,7 @@ pub use manager::{RuntimeEndpointRegistry, RuntimeManager, RuntimeOperation};
 pub use pty_compat::PtyCompatAdapter;
 
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicU8, Ordering};
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -39,6 +43,36 @@ pub enum BackendKind {
     Auto,
     Native,
     Pty,
+}
+
+impl BackendKind {
+    const fn as_u8(self) -> u8 {
+        match self {
+            Self::Auto => 0,
+            Self::Native => 1,
+            Self::Pty => 2,
+        }
+    }
+
+    const fn from_u8(value: u8) -> Self {
+        match value {
+            1 => Self::Native,
+            2 => Self::Pty,
+            _ => Self::Auto,
+        }
+    }
+}
+
+// Settings の既定値は PTY。settings_load / settings_save が SSOT から即時同期する。
+static REQUESTED_BACKEND: AtomicU8 = AtomicU8::new(BackendKind::Pty.as_u8());
+
+pub fn set_requested_backend_from_settings(value: &str) {
+    let backend = BackendKind::try_from(value).unwrap_or(BackendKind::Pty);
+    REQUESTED_BACKEND.store(backend.as_u8(), Ordering::Relaxed);
+}
+
+pub fn requested_backend() -> BackendKind {
+    BackendKind::from_u8(REQUESTED_BACKEND.load(Ordering::Relaxed))
 }
 
 impl TryFrom<&str> for BackendKind {

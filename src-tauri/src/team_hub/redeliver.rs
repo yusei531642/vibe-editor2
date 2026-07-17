@@ -27,8 +27,8 @@
 
 use chrono::Utc;
 
-use crate::team_hub::delivery_mode::DeliveryMode;
 use crate::team_hub::deliver::deliver_message;
+use crate::team_hub::delivery_mode::DeliveryMode;
 use crate::team_hub::protocol::helpers::message_is_for_me;
 use crate::team_hub::{CallContext, TeamHub, TeamInfo};
 
@@ -61,7 +61,11 @@ fn select_candidates(team: &TeamInfo, role: &str, agent_id: &str) -> (usize, Vec
         .collect();
     cand.sort_by_key(|c| c.id);
     let older = cand.len().saturating_sub(REDELIVERY_MAX);
-    let batch = if older > 0 { cand.split_off(older) } else { cand };
+    let batch = if older > 0 {
+        cand.split_off(older)
+    } else {
+        cand
+    };
     (older, batch)
 }
 
@@ -97,20 +101,19 @@ impl TeamHub {
             return;
         }
 
-        let registry = self.registry.clone();
         // 古い未読の要約 1 行 (情報のみ。特定 message に紐付かないので delivered_to は進めない)。
         if older_count > 0 {
             let text = format!(
                 "[再配信] {older_count} 件のより古い未読メッセージがあります。team_read で取得してください。"
             );
-            let _ = deliver_message(registry.clone(), &ctx.agent_id, "system", &text).await;
+            let _ = deliver_message(self, &ctx.team_id, &ctx.agent_id, "system", &text).await;
         }
 
         let mut delivered_ids: Vec<u32> = Vec::new();
         for c in &batch {
             // at-least-once 重複を識別できるよう message id を前置 (banner 整形には触れない)。
             let text = format!("[再配信 msg #{}] {}", c.id, c.message);
-            match deliver_message(registry.clone(), &ctx.agent_id, &c.from, &text).await {
+            match deliver_message(self, &ctx.team_id, &ctx.agent_id, &c.from, &text).await {
                 Ok(()) => delivered_ids.push(c.id),
                 Err(e) => tracing::warn!(
                     "[redeliver] inject failed agent={} id={} code={}",
@@ -165,7 +168,13 @@ mod tests {
         TeamHub::new(Arc::new(SessionRegistry::new()))
     }
 
-    fn msg(id: u32, to_aid: &str, from_aid: &str, read_by: &[&str], delivered_to: &[&str]) -> TeamMessage {
+    fn msg(
+        id: u32,
+        to_aid: &str,
+        from_aid: &str,
+        read_by: &[&str],
+        delivered_to: &[&str],
+    ) -> TeamMessage {
         TeamMessage {
             id,
             from: "leader".into(),
@@ -217,7 +226,11 @@ mod tests {
         let (older, batch) = select_candidates(&team, "worker", "worker-1");
         assert_eq!(older, 5, "古い 5 件は要約に畳む");
         assert_eq!(batch.len(), REDELIVERY_MAX);
-        assert_eq!(batch.first().unwrap().id, 6, "最新 K 件 (id 6..=total) が batch");
+        assert_eq!(
+            batch.first().unwrap().id,
+            6,
+            "最新 K 件 (id 6..=total) が batch"
+        );
         assert_eq!(batch.last().unwrap().id, total);
     }
 
@@ -267,7 +280,9 @@ mod tests {
         hub.redeliver_unread_on_online_with_mode(&ctx, DeliveryMode::Monitor)
             .await;
         let s = hub.state.lock().await;
-        assert!(s.teams.get("t-mon").unwrap().messages[0].delivered_to.is_empty());
+        assert!(s.teams.get("t-mon").unwrap().messages[0]
+            .delivered_to
+            .is_empty());
     }
 
     /// REDELIVERY_MAX は名前付き定数で 20。

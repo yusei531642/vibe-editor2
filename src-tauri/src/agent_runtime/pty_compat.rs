@@ -2,7 +2,8 @@
 
 use super::{
     AgentRuntimeAdapter, BackendKind, RuntimeAdapterError, RuntimeCapability,
-    RuntimeSessionSpawnRequest, RuntimeTurnSpawnRequest,
+    RuntimeDeliveryFuture, RuntimeDeliveryRequest, RuntimeSessionSpawnRequest,
+    RuntimeTurnSpawnRequest,
 };
 use crate::pty::{session::TerminationReason, SessionRegistry, UserWriteOutcome};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -13,15 +14,30 @@ use std::sync::Arc;
 /// the wrapped session from [`SessionRegistry`].
 pub struct PtyCompatAdapter {
     registry: Arc<SessionRegistry>,
-    session_id: String,
+    target: PtyTarget,
     disposed: AtomicBool,
+}
+
+enum PtyTarget {
+    Session(String),
+    TeamAgent { agent_id: String },
 }
 
 impl PtyCompatAdapter {
     pub fn new(registry: Arc<SessionRegistry>, session_id: impl Into<String>) -> Self {
         Self {
             registry,
-            session_id: session_id.into(),
+            target: PtyTarget::Session(session_id.into()),
+            disposed: AtomicBool::new(false),
+        }
+    }
+
+    pub fn for_team_agent(registry: Arc<SessionRegistry>, agent_id: impl Into<String>) -> Self {
+        Self {
+            registry,
+            target: PtyTarget::TeamAgent {
+                agent_id: agent_id.into(),
+            },
             disposed: AtomicBool::new(false),
         }
     }
@@ -34,10 +50,14 @@ impl PtyCompatAdapter {
                 false,
             ));
         }
-        self.registry.get(&self.session_id).ok_or_else(|| {
+        let session = match &self.target {
+            PtyTarget::Session(session_id) => self.registry.get(session_id),
+            PtyTarget::TeamAgent { agent_id } => self.registry.get_by_agent(agent_id),
+        };
+        session.ok_or_else(|| {
             RuntimeAdapterError::new(
                 "runtime_pty_session_not_found",
-                format!("PTY session '{}' was not found", self.session_id),
+                "PTY session was not found",
                 false,
             )
         })
@@ -81,7 +101,10 @@ impl AgentRuntimeAdapter for PtyCompatAdapter {
         &self,
         _request: &RuntimeSessionSpawnRequest,
     ) -> Result<(), RuntimeAdapterError> {
-        self.session().map(|_| ())
+        match &self.target {
+            PtyTarget::Session(_) => self.session().map(|_| ()),
+            PtyTarget::TeamAgent { .. } => Ok(()),
+        }
     }
 
     fn spawn_turn(&self, request: &RuntimeTurnSpawnRequest) -> Result<(), RuntimeAdapterError> {
@@ -96,6 +119,32 @@ impl AgentRuntimeAdapter for PtyCompatAdapter {
 
     fn write(&self, data: &str) -> Result<(), RuntimeAdapterError> {
         self.write_bytes(data.as_bytes())
+    }
+
+    fn deliver<'a>(&'a self, request: &'a RuntimeDeliveryRequest) -> RuntimeDeliveryFuture<'a> {
+        Box::pin(async move {
+            match &self.target {
+                PtyTarget::Session(_) => self.write(&request.data),
+                PtyTarget::TeamAgent { agent_id, .. } => crate::team_hub::inject::inject(
+                    self.registry.clone(),
+                    agent_id,
+                    &request.from_role,
+                    &request.data,
+                )
+                .await
+                .map_err(|error| {
+                    // NoSession / SessionReplaced は endpoint の死を意味する。
+                    // recoverable=false で deliver_team_message に detach させ、
+                    // 再 spawn 時に stale adapter が残らないようにする (PR #34 一次レビュー 🟡6)。
+                    let recoverable = !matches!(
+                        error,
+                        crate::team_hub::inject::InjectError::NoSession
+                            | crate::team_hub::inject::InjectError::SessionReplaced { .. }
+                    );
+                    RuntimeAdapterError::new(error.code(), error.to_string(), recoverable)
+                }),
+            }
+        })
     }
 
     fn stop(&self) -> Result<(), RuntimeAdapterError> {

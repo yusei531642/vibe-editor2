@@ -7,4 +7,8 @@
 //! event emit を経由するため `cargo test` 単独では完結しない (mock framework 不採用)。
 //! ここでは Hub state 操作を伴わない pure な permission table を中心にカバーする。
 
+mod legacy_codex_delivery;
 mod permissions;
+mod recruit_grace_paths;
+mod runtime_delivery;
+mod runtime_delivery_errors;

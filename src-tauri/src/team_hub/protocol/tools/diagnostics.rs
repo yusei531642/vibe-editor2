@@ -170,6 +170,9 @@ pub async fn team_diagnostics(hub: &TeamHub, ctx: &CallContext) -> Result<Value,
 
     let now = Utc::now();
     let members: Vec<_> = hub
+        // Issue #342 の identity 乖離検出: bindings_snapshot (state 正本) と比較する側は
+        // registry 由来の生メンバー一覧でなければならない。union を返す team_members() を
+        // 使うと同一ソース比較になり inconsistent が恒常 false になる (PR #34 三次レビュー)。
         .registry
         .list_team_members(&ctx.team_id)
         .into_iter()

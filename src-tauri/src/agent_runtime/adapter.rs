@@ -1,6 +1,8 @@
 //! Runtime backend が実装する object-safe な操作契約。
 
 use super::{BackendKind, RuntimeCapability};
+use std::future::Future;
+use std::pin::Pin;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RuntimeSessionSpawnRequest {
@@ -33,6 +35,21 @@ pub struct RuntimeApprovalResponseRequest {
     pub request_id: String,
     pub decision: String,
 }
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RuntimeDeliveryRequest {
+    pub data: String,
+    pub from_role: String,
+}
+
+impl RuntimeDeliveryRequest {
+    pub fn framed_data(&self) -> String {
+        format!("[Team ← {}] {}", self.from_role, self.data)
+    }
+}
+
+pub type RuntimeDeliveryFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<(), RuntimeAdapterError>> + Send + 'a>>;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RuntimeAdapterError {
@@ -95,6 +112,15 @@ pub trait AgentRuntimeAdapter: Send + Sync {
     fn write(&self, data: &str) -> Result<(), RuntimeAdapterError>;
     fn inject(&self, data: &str) -> Result<(), RuntimeAdapterError> {
         self.write(data)
+    }
+    fn deliver_blocking(
+        &self,
+        request: &RuntimeDeliveryRequest,
+    ) -> Result<(), RuntimeAdapterError> {
+        self.write(&request.framed_data())
+    }
+    fn deliver<'a>(&'a self, request: &'a RuntimeDeliveryRequest) -> RuntimeDeliveryFuture<'a> {
+        Box::pin(async move { self.deliver_blocking(request) })
     }
     fn steer(&self, _request: &RuntimeSteerRequest) -> Result<(), RuntimeAdapterError> {
         Err(unsupported("turn steer"))

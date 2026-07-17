@@ -233,7 +233,7 @@ pub async fn team_assign_task(
     // task は作成されるが team_send 通知はゼロ宛先で no-op になり、
     // Leader からは「task は登録されたのに何も起こらない」サイレント失敗になる。
     // → 作成前に resolve_targets で検証し、無効ならエラーで弾いて roles を案内する。
-    let members = hub.registry.list_team_members(&ctx.team_id);
+    let members = hub.live_team_members(&ctx.team_id).await;
     let active_leader_agent_id = {
         let state = hub.state.lock().await;
         state
@@ -427,7 +427,7 @@ pub async fn team_assign_task(
     if let Err(e) = hub.persist_team_state(&ctx.team_id).await {
         tracing::warn!("[team_assign_task] persist team-state failed: {e}");
     }
-
+    hub.associate_task_runtime(&ctx.team_id, &resolved, task_id).await;
     // Issue #517: 宛先 worker と他 worker の責務範囲が同領域に重なっていれば warn する。
     // 拒否はせず assign は通す (偽陽性での操作妨害を避ける)。
     // 同 role 複数名 / "all" / agentId 指定の場合は最初に解決された role_id を target として

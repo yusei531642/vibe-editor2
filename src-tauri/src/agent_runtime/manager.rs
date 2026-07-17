@@ -363,7 +363,7 @@ impl RuntimeManager {
         }
     }
 
-    fn detach_endpoint(&self, endpoint_id: &str) {
+    pub(crate) fn detach_endpoint(&self, endpoint_id: &str) {
         if let Some(adapter) = self.registry.remove(endpoint_id) {
             if let Err(error) = adapter.dispose() {
                 tracing::warn!(
@@ -393,7 +393,7 @@ impl RuntimeManager {
         recover_mutex(self.sequences.lock()).remove(endpoint_id);
     }
 
-    fn failure_events(
+    pub(crate) fn failure_events(
         &self,
         endpoint_id: &str,
         error: &RuntimeAdapterError,
@@ -419,7 +419,7 @@ impl RuntimeManager {
     }
 
     /// 未登録 endpoint 向けの失敗 event。sequence counter を作らず固定 sequence=1 で構築する。
-    fn transient_error_event(
+    pub(crate) fn transient_error_event(
         &self,
         endpoint_id: &str,
         error: &RuntimeAdapterError,
@@ -466,6 +466,11 @@ impl RuntimeManager {
     #[allow(dead_code)]
     pub fn dropped_event_count(&self) -> u64 {
         recover_mutex(self.event_buffer.lock()).dropped_count()
+    }
+
+    #[cfg(test)]
+    pub fn tracked_sequence_count(&self) -> usize {
+        recover_mutex(self.sequences.lock()).len()
     }
 }
 

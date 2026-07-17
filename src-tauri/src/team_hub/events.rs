@@ -107,6 +107,35 @@ pub struct RecruitCancelledPayload {
     pub reason: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub enum RecruitLifecycleState {
+    Requested,
+    Spawning,
+    Handshaking,
+    Ready,
+    Failed,
+    Cancelled,
+}
+
+/// `team:recruit-lifecycle` の payload。placeholder と runtime-ready を分離する。
+#[derive(Debug, Clone, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct RecruitLifecyclePayload {
+    pub team_id: String,
+    pub agent_id: String,
+    pub role_profile_id: String,
+    #[ts(type = "number")]
+    pub sequence: u64,
+    pub state: RecruitLifecycleState,
+    pub endpoint_id: Option<String>,
+    pub session_id: Option<String>,
+    pub task_ids: Vec<u32>,
+    pub reason: Option<String>,
+}
+
 /// `team:dismiss-request` の payload。renderer の recruit listener と同期。
 #[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -210,6 +239,8 @@ mod ts_bindings_tests {
             &declaration::<RoleLintFinding>(),
             &declaration::<FileLockConflictSnapshot>(),
             &declaration::<RecruitCancelledPayload>(),
+            &declaration::<RecruitLifecycleState>(),
+            &declaration::<RecruitLifecyclePayload>(),
             &declaration::<DismissRequestPayload>(),
             &declaration::<RoleLintWarningPayload>(),
             &declaration::<FileLockConflictEventPayload>(),
@@ -234,7 +265,8 @@ mod ts_bindings_tests {
 
         let current = fs::read_to_string(&path).expect("read generated team event types");
         assert_eq!(
-            current, next,
+            current,
+            next,
             "{} is stale; run `npm run generate:team-event-types`",
             path.display()
         );
