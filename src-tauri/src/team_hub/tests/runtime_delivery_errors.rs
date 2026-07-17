@@ -1,4 +1,7 @@
-use crate::agent_runtime::{BackendKind, RuntimeManager};
+use crate::agent_runtime::{
+    AgentRuntimeAdapter, BackendKind, RuntimeAdapterError, RuntimeCapability, RuntimeManager,
+    RuntimeSessionSpawnRequest,
+};
 use crate::pty::session::test_support::failing_recording_handle;
 use crate::pty::{InFlightTracker, SessionRegistry};
 use crate::team_hub::protocol::tools::team_send;
@@ -58,6 +61,82 @@ async fn pty_delivery_preserves_inject_no_session_reason_code() {
     let response = send(&hub, team_id, agent_id, "missing session").await;
 
     assert_reason_code(&response, agent_id, "inject_no_session");
+}
+
+/// PR #34 二次レビュー 🟡: native binding のみ (PTY session なし) の member で native
+/// 配送が失敗したとき、PTY fallback へ落ちて `inject_no_session` に化けず、元の
+/// native エラーが reason code として保たれること。
+struct FailingNativeAdapter;
+
+impl AgentRuntimeAdapter for FailingNativeAdapter {
+    fn backend_kind(&self) -> BackendKind {
+        BackendKind::Native
+    }
+
+    fn capabilities(&self) -> Vec<RuntimeCapability> {
+        vec![RuntimeCapability::NativeProcessExecution]
+    }
+
+    fn spawn_session(
+        &self,
+        _request: &RuntimeSessionSpawnRequest,
+    ) -> Result<(), RuntimeAdapterError> {
+        Ok(())
+    }
+
+    fn spawn_turn(
+        &self,
+        _request: &crate::agent_runtime::RuntimeTurnSpawnRequest,
+    ) -> Result<(), RuntimeAdapterError> {
+        self.write("")
+    }
+
+    fn write(&self, _data: &str) -> Result<(), RuntimeAdapterError> {
+        Err(RuntimeAdapterError::new(
+            "codex_turn_start_failed",
+            "turn/start rejected by app-server",
+            true,
+        ))
+    }
+
+    fn stop(&self) -> Result<(), RuntimeAdapterError> {
+        Ok(())
+    }
+
+    fn dispose(&self) -> Result<(), RuntimeAdapterError> {
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn native_only_member_keeps_native_error_instead_of_pty_fallback() {
+    let (hub, _registry, manager) = super::runtime_delivery::hub();
+    hub.set_runtime_backend_for_test(BackendKind::Auto);
+    let team_id = "team-native-only";
+    let agent_id = "native-only-member";
+    assert!(manager
+        .register_endpoint("native-only-endpoint".into(), Arc::new(FailingNativeAdapter))
+        .result
+        .is_ok());
+    super::runtime_delivery::seed_member(&hub, team_id, agent_id, "worker").await;
+    super::runtime_delivery::seed_member(&hub, team_id, "leader-member", "leader").await;
+    hub.bind_native_runtime_endpoint(team_id, agent_id, "native-only-endpoint".into(), None)
+        .await
+        .unwrap();
+
+    let response = send(&hub, team_id, agent_id, "native failure").await;
+
+    // fallback で PtyCompatAdapter が登録されて lifecycle.endpoint_id を上書きしないこと。
+    let lifecycle = hub.recruit_lifecycle_for_test(agent_id).await.unwrap();
+    assert_eq!(
+        lifecycle.endpoint_id.as_deref(),
+        Some("native-only-endpoint")
+    );
+    assert_reason_code(&response, agent_id, "inject_write_initial_failed");
+    let message = response["deliveryStatus"][agent_id]["reason"]["message"]
+        .as_str()
+        .unwrap();
+    assert!(message.contains("codex_turn_start_failed"), "{message}");
 }
 
 #[tokio::test]
