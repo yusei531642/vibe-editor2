@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import type { RuntimeProvider } from '../../../../../../types/agent-runtime';
 import { useRuntimeStore } from '../../../../stores/runtime';
 import type { TerminalRuntimeStatus } from '../../../../lib/terminal-status';
@@ -30,6 +30,9 @@ export function NativeRuntimeConnector({
     () => (payload.agentId ? `native-${payload.agentId}` : null),
     [payload.agentId]
   );
+  // Team membership updates regenerate the prompt. They must not dispose an active session.
+  const systemPromptRef = useRef(systemPrompt);
+  systemPromptRef.current = systemPrompt;
 
   useEffect(() => {
     if (!endpointId || !payload.agentId || !payload.teamId) return;
@@ -52,7 +55,7 @@ export function NativeRuntimeConnector({
           endpointId,
           teamId: payload.teamId,
           agentId: payload.agentId,
-          systemPrompt: systemPrompt ?? null,
+          systemPrompt: systemPromptRef.current ?? null,
           session: { mode: 'start' }
         });
       } else {
@@ -70,7 +73,7 @@ export function NativeRuntimeConnector({
         return;
       }
       const bootstrap = initialMessage?.trim() ||
-        (provider === 'codex-native' ? systemPrompt?.trim() : '') ||
+        (provider === 'codex-native' ? systemPromptRef.current?.trim() : '') ||
         'Start your assigned team role and read pending TeamHub messages.';
       await window.api.agentRuntime.spawnTurn({
         endpointId,
@@ -105,8 +108,7 @@ export function NativeRuntimeConnector({
     payload.agentId,
     payload.teamId,
     provider,
-    setCardPayload,
-    systemPrompt
+    setCardPayload
   ]);
 
   if (!isNativeRuntimeProvider(provider)) return null;
