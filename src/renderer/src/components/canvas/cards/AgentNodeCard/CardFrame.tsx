@@ -379,12 +379,16 @@ function AgentNodeCardImpl({
     [health]
   );
   const terminalStatus = useMemo(() => formatTerminalRuntimeStatus(status, t), [status, t]);
-  const { projection: teamProjection, terminalAgentId } = useTeamProjection();
-  // agentId の無い v1 card は projection の対象外なので、従来どおり Terminal を開いたままにする。
+  const { projection: teamProjection, terminalAgentId, sessionActive } = useTeamProjection();
+  // projection の管理対象は「実 team session があり、かつ projection.agents に載っている
+  // カード」だけ。それ以外 (v1 card / 旧 team の残存 card / placeholder team) は従来どおり
+  // Terminal を開いたままにする (PR #36 レビュー: 到達不能 Terminal の防止)。
+  const managedByProjection =
+    sessionActive &&
+    Boolean(payload.agentId) &&
+    teamProjection.agents.some((agent) => agent.agentId === payload.agentId);
   const terminalOpen =
-    teamProjection.teamId === '' ||
-    !payload.agentId ||
-    Boolean(payload.agentId && terminalAgentId === payload.agentId);
+    !managedByProjection || terminalAgentId === payload.agentId;
 
   const handleClose = useCallback(
     () => void confirmRemoveCard(id),

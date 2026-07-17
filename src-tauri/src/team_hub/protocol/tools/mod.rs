@@ -8,6 +8,7 @@
 mod ack_handoff;
 mod assign_task;
 mod create_leader;
+mod create_leader_support;
 mod diagnostics;
 mod dismiss;
 pub(super) mod error;
