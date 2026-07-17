@@ -267,7 +267,7 @@ function EnabledWorkspaceTransitionRoot({
         inactive={focusInactive}
         sceneRef={focusRef}
       >
-        <V2Shell />
+        <V2Shell shortcutsEnabled={desiredScene === 'focus'} />
       </WorkspaceScene>
       <WorkspaceScene
         scene="team"
