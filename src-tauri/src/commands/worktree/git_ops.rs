@@ -275,9 +275,15 @@ pub(super) async fn list_worktree_metadata(
             }
         }
         let Some(raw_path) = path else { continue };
-        let Ok(canonical) = tokio::fs::canonicalize(raw_path).await else {
-            continue;
-        };
+        // 一時的 I/O 失敗で登録済み worktree が一覧から欠けると、reconcile が生きている
+        // assignment を drop してしまう。canonicalize 失敗は list 全体のエラーとして扱い、
+        // 呼び出し側 (reconcile) を中止させる (PR #37 レビュー: drop より skip を優先)。
+        let canonical = tokio::fs::canonicalize(&raw_path).await.map_err(|error| {
+            crate::commands::error::CommandError::internal(format!(
+                "failed to canonicalize worktree path {}: {error}",
+                raw_path.display()
+            ))
+        })?;
         if let (Some(head), Some(branch)) = (head, branch) {
             worktrees.push(WorktreeMetadata {
                 path: canonical,

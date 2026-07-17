@@ -52,28 +52,52 @@ impl WorktreeManager {
             (assignments, candidates)
         };
         let mut views = Vec::with_capacity(assignments.len());
+        // cache 切れの詳細取得 (git 2 プロセス/件) は直列だと N 件で N×~100ms 掛かるため
+        // 並行実行する (PR #37 レビュー)。git 呼び出しは self 非依存なので tokio::spawn で束ねる。
+        let mut detail_by_key = std::collections::HashMap::<_, CachedAssignmentDetails>::new();
+        let mut pending_fetches = Vec::new();
+        {
+            let cache = self.detail_cache.lock().await;
+            for record in &assignments {
+                if let Some(details) = cache
+                    .get(&record.key)
+                    .filter(|item| item.captured_at.elapsed() < DETAIL_CACHE_TTL)
+                {
+                    detail_by_key.insert(record.key.clone(), details.clone());
+                } else {
+                    let key = record.key.clone();
+                    let path = record.path.clone();
+                    pending_fetches.push(tokio::spawn(async move {
+                        let details = CachedAssignmentDetails {
+                            captured_at: Instant::now(),
+                            clean: super::git_ops::is_clean(&path).await.unwrap_or(false),
+                            head_commit: super::git_ops::rev_parse(&path, "HEAD")
+                                .await
+                                .unwrap_or_default(),
+                        };
+                        (key, details)
+                    }));
+                }
+            }
+        }
+        if !pending_fetches.is_empty() {
+            let mut cache = self.detail_cache.lock().await;
+            for handle in pending_fetches {
+                if let Ok((key, details)) = handle.await {
+                    cache.insert(key.clone(), details.clone());
+                    detail_by_key.insert(key, details);
+                }
+            }
+        }
         for record in assignments {
-            let cached = self.detail_cache.lock().await.get(&record.key).cloned();
-            let details = if let Some(details) =
-                cached.filter(|item| item.captured_at.elapsed() < DETAIL_CACHE_TTL)
-            {
-                details
-            } else {
-                let details = CachedAssignmentDetails {
+            let details = detail_by_key
+                .get(&record.key)
+                .cloned()
+                .unwrap_or_else(|| CachedAssignmentDetails {
                     captured_at: Instant::now(),
-                    clean: super::git_ops::is_clean(&record.path)
-                        .await
-                        .unwrap_or(false),
-                    head_commit: super::git_ops::rev_parse(&record.path, "HEAD")
-                        .await
-                        .unwrap_or_default(),
-                };
-                self.detail_cache
-                    .lock()
-                    .await
-                    .insert(record.key.clone(), details.clone());
-                details
-            };
+                    clean: false,
+                    head_commit: String::new(),
+                });
             let cleanup_eligible = details.clean
                 && record.integrated_candidate_id.as_ref().is_some_and(|id| {
                     candidates.iter().any(|candidate| {

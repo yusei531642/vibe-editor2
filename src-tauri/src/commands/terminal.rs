@@ -164,16 +164,26 @@ pub async fn terminal_create(
     let runtime_team_agent = opts.team_id.clone().zip(opts.agent_id.clone());
     match (&opts.team_id, &opts.agent_id) {
         (Some(team_id), Some(agent_id)) => {
-            state
+            // 失敗は既存契約どおり Ok(ok:false) で返す。
+            if let Err(error) = state
                 .team_hub
                 .authorize_team_agent_binding(team_id, agent_id)
-                .await?;
+                .await
+            {
+                return Ok(TerminalCreateResult {
+                    ok: false,
+                    error: Some(format!("team binding authorization failed: {error}")),
+                    ..Default::default()
+                });
+            }
         }
         (None, None) => {}
         _ => {
-            return Err(crate::commands::error::CommandError::validation(
-                "team_id and agent_id must be supplied together",
-            ));
+            return Ok(TerminalCreateResult {
+                ok: false,
+                error: Some("team_id and agent_id must be provided together".to_string()),
+                ..Default::default()
+            });
         }
     }
 
