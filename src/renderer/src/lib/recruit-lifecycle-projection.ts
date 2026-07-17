@@ -33,7 +33,16 @@ export function projectRecruitLifecycle(
   if (action.type === 'request') {
     const payload = action.payload;
     const current = state[payload.newAgentId];
-    if (current) return state;
+    // 進行中 entry は維持するが、terminal / 撤収中の残骸は新 epoch で上書きする
+    // (cancelled が書いた MAX_SAFE_INTEGER sequence を持ち越さない、PR #35 レビュー)。
+    if (
+      current &&
+      !current.exiting &&
+      current.state !== 'failed' &&
+      current.state !== 'cancelled'
+    ) {
+      return state;
+    }
     return {
       ...state,
       [payload.newAgentId]: {
