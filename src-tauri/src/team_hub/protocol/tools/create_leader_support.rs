@@ -9,8 +9,10 @@ pub(super) async fn leader_lifecycle(hub: &TeamHub, agent_id: &str, state: Recru
     let _ = hub.transition_recruit_lifecycle(agent_id, state, None).await;
 }
 
-/// 失敗経路の共通後始末 (lifecycle terminal + pending grace + runtime 回収)。
+/// 失敗経路の共通後始末 (pending 即破棄 + lifecycle terminal + runtime 回収)。
+/// create_leader の失敗は呼び出し元が既に Err を返しているため rescue 対象にしない:
+/// grace を挟むと遅着 handshake が孤児 leader を復活させる (PR #34 レビュー)。
 pub(super) async fn cancel_leader_recruit(hub: &TeamHub, team_id: &str, agent_id: &str) {
-    hub.cancel_recruit_with_pending_grace(team_id, agent_id, "create_leader_cancelled")
+    hub.cancel_recruit_immediately(team_id, agent_id, "create_leader_cancelled")
         .await;
 }

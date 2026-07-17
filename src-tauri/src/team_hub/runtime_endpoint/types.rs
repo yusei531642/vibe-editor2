@@ -1,6 +1,6 @@
 //! (teamId, agentId) ごとの runtime endpoint binding の型定義。
-//! 実装 (bind / deliver / cleanup) は runtime_endpoint.rs / runtime_cleanup.rs 側にある。
-//! runtime_endpoint.rs の 500 行 ratchet を守るため型だけを分離した。
+//! 実装 (bind / deliver / cleanup) は runtime_endpoint/mod.rs / runtime_cleanup.rs 側にある。
+//! runtime_endpoint/mod.rs の 500 行 ratchet を守るため型だけを分離した。
 
 use std::collections::HashMap;
 
