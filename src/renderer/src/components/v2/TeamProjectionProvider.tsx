@@ -33,6 +33,9 @@ interface TeamProjectionContextValue {
   /** Team scene が committed かつ provider が enabled のときのみ true。
    * 常時 mount のグローバル keybinding (Approval Center 等) はこれでゲートする。 */
   teamSceneActive: boolean;
+  /** 実 team session が存在するか (placeholder team の Provider は false)。
+   * `projection.teamId` は placeholder でも埋まるため判定に使わないこと (PR #36)。 */
+  sessionActive: boolean;
   projection: TeamProjection;
   selectedAgent: TeamAgentProjection | null;
   selectedAgentId: string | null;
@@ -349,6 +352,7 @@ export function TeamProjectionProvider({
   const value = useMemo<TeamProjectionContextValue>(
     () => ({
       teamSceneActive: enabled && teamSceneCommitted,
+      sessionActive: enabled,
       projection,
       selectedAgent,
       selectedAgentId,
@@ -388,6 +392,7 @@ export function TeamProjectionProvider({
 
 const NO_PROVIDER_CONTEXT: TeamProjectionContextValue = {
   teamSceneActive: false,
+  sessionActive: false,
   projection: EMPTY_PROJECTION,
   selectedAgent: null,
   selectedAgentId: null,

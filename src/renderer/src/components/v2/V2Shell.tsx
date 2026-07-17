@@ -75,7 +75,9 @@ export function V2Shell(): JSX.Element {
   const [leftOpen, setLeftOpen] = useState(false);
   const [standaloneInspectorOpen, setStandaloneInspectorOpen] = useState(false);
   const teamProjection = useTeamProjection();
-  const hasTeamProjection = Boolean(teamProjection.projection.teamId);
+  // placeholder team でも projection.teamId は埋まるため、実 session の有無は
+  // provider の sessionActive で判定する (PR #36 レビュー)。
+  const hasTeamProjection = teamProjection.sessionActive;
   const inspectorOpen = hasTeamProjection
     ? teamProjection.inspectorOpen
     : standaloneInspectorOpen;
