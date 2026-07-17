@@ -114,7 +114,33 @@ fn validate_git_version((major, minor): (u64, u64)) -> CommandResult<()> {
 }
 
 /// PTY wiring is optional: non-git projects and detached HEAD keep their plain cwd.
+/// snapshot が 3 秒ポーリングで呼ぶため、git サブプロセス 2 本の起動を短期 TTL で
+/// キャッシュする (PR #37 レビュー)。git 化 / detached 解消は数十秒での反映で十分。
+const SUPPORTS_CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(30);
+static SUPPORTS_CACHE: std::sync::Mutex<
+    Option<(std::path::PathBuf, std::time::Instant, bool)>,
+> = std::sync::Mutex::new(None);
+
 pub(super) async fn supports_worktree_project(cwd: &Path) -> CommandResult<bool> {
+    {
+        let cache = SUPPORTS_CACHE
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some((cached_path, at, value)) = cache.as_ref() {
+            if cached_path == cwd && at.elapsed() < SUPPORTS_CACHE_TTL {
+                return Ok(*value);
+            }
+        }
+    }
+    let value = supports_worktree_project_uncached(cwd).await?;
+    *SUPPORTS_CACHE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) =
+        Some((cwd.to_path_buf(), std::time::Instant::now(), value));
+    Ok(value)
+}
+
+async fn supports_worktree_project_uncached(cwd: &Path) -> CommandResult<bool> {
     let repository = run(cwd, ["rev-parse", "--is-inside-work-tree"]).await?;
     if !repository.success || repository.stdout.trim() != "true" {
         return Ok(false);

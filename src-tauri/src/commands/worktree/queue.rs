@@ -171,10 +171,16 @@ impl WorktreeManager {
         state.candidates[index].status = MergeCandidateStatus::Integrating;
         let candidate = state.candidates[index].clone();
         let key = Self::key(project_root, &candidate.team_id, &candidate.agent_id);
-        let assignment = state.assignments.get(&key).cloned().ok_or_else(|| {
+        let Some(assignment) = state.assignments.get(&key).cloned() else {
             state.candidates[index].status = MergeCandidateStatus::Failed;
-            CommandError::not_found("candidate worktree assignment was not found")
-        })?;
+            drop(state);
+            // Failed への遷移を永続化してから返す (PR #37 レビュー: closure 内の
+            // 副作用だけでは persist されず、再起動で Integrating 前の状態に戻る)。
+            let _ = self.persist().await;
+            return Err(CommandError::not_found(
+                "candidate worktree assignment was not found",
+            ));
+        };
         Ok((candidate, assignment))
     }
 

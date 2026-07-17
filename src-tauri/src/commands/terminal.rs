@@ -26,7 +26,7 @@ fn resolve_command(command: Option<String>, args: Option<Vec<String>>) -> (Strin
 
 /// Issue #27 isolates write-enabled team workers. Coordinating leader/planner terminals must stay
 /// on the base project so they can inspect and integrate the whole team without owning a branch.
-fn uses_managed_worker_worktree(role: Option<&str>) -> bool {
+pub(super) fn uses_managed_worker_worktree(role: Option<&str>) -> bool {
     role.is_some_and(|role| {
         !matches!(
             role.trim().to_ascii_lowercase().as_str(),
@@ -284,32 +284,21 @@ pub async fn terminal_create(
         crate::pty::session::resolve_valid_cwd(&opts.cwd, opts.fallback_cwd.as_deref());
     let mut managed_cwd_identity = None;
     if let Some((team_id, agent_id)) = &runtime_team_agent {
-        if uses_managed_worker_worktree(opts.role.as_deref()) {
-            let active_root =
-                crate::state::current_project_root(&state.project_root).ok_or_else(|| {
-                    crate::commands::error::CommandError::authz("no active project root")
-                })?;
-            let project_root = crate::commands::authz::assert_active_project_root(
-                &state.project_root,
-                &state.project_root_identity,
-                &active_root,
-            )
-            .await?;
-            if let Some((managed_cwd, identity)) = state
-                .worktree_manager
-                .optional_spawn_target(&project_root, team_id, agent_id)
-                .await?
-            {
+        match super::terminal_worktree::resolve_worker_worktree(
+            &state,
+            opts.role.as_deref(),
+            team_id,
+            agent_id,
+        )
+        .await
+        {
+            super::terminal_worktree::WorktreeResolution::Managed(managed_cwd, identity) => {
                 cwd = managed_cwd;
                 warning = None;
                 managed_cwd_identity = Some(identity);
-            } else {
-                tracing::warn!(
-                    team_id,
-                    agent_id,
-                    "[terminal] project is not a git repository or is on detached HEAD; using plain cwd"
-                );
             }
+            super::terminal_worktree::WorktreeResolution::PlainCwd => {}
+            super::terminal_worktree::WorktreeResolution::Fail(result) => return Ok(result),
         }
     }
     if is_codex_command {

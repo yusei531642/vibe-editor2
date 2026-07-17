@@ -35,6 +35,7 @@ pub mod team_presets;
 pub mod team_projection;
 pub mod team_state;
 pub mod terminal;
+mod terminal_worktree;
 pub mod terminal_tabs;
 // Issue #624 (Security): IPC 入力検証 (id segment / size cap / log sanitize) の共通 helper。
 pub mod validation;
