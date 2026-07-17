@@ -30,7 +30,7 @@ pub mod protocol;
 pub mod redeliver;
 // Issue #517: 動的ロール同士の責務境界 lint (recruit / assign_task で warning 発火)。
 pub mod role_lint;
-mod runtime_endpoint;
+pub(crate) mod runtime_endpoint;
 mod runtime_cleanup;
 // Issue #512: 32 KiB 超の payload を `<project_root>/.vibe-team2/tmp/<short_id>.md` に書き出して
 // inject 本文を「summary + attached: <path>」に置換する spool 機構。

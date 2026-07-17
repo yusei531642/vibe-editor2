@@ -22,6 +22,8 @@ import {
   type V2Engine,
   type V2Permission,
 } from "./UnifiedComposer";
+import { TeamInspector } from "./TeamInspector";
+import { useTeamProjection } from "./TeamProjectionProvider";
 
 interface TimelineEntry {
   id: string;
@@ -75,7 +77,22 @@ export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Ele
   const [running, setRunning] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
   const [leftOpen, setLeftOpen] = useState(false);
-  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [standaloneInspectorOpen, setStandaloneInspectorOpen] = useState(false);
+  const teamProjection = useTeamProjection();
+  // placeholder team でも projection.teamId は埋まるため、実 session の有無は
+  // provider の sessionActive で判定する (PR #36 レビュー)。
+  const hasTeamProjection = teamProjection.sessionActive;
+  const inspectorOpen = hasTeamProjection
+    ? teamProjection.inspectorOpen
+    : standaloneInspectorOpen;
+  const setInspectorOpen = useCallback(
+    (open: boolean | ((current: boolean) => boolean)) => {
+      const next = typeof open === "function" ? open(inspectorOpen) : open;
+      if (hasTeamProjection) teamProjection.setInspectorOpen(next);
+      else setStandaloneInspectorOpen(next);
+    },
+    [hasTeamProjection, inspectorOpen, teamProjection],
+  );
   const [entries, setEntries] = useState<TimelineEntry[]>([]);
   // fake runtime (placeholder) の応答 timer。停止/新規タスク/unmount で必ず破棄する。
   const fakeReplyTimerRef = useRef<number | null>(null);
@@ -172,7 +189,7 @@ export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Ele
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [shortcutsEnabled, stopRun]);
+  }, [setInspectorOpen, shortcutsEnabled, stopRun]);
 
   return (
     <main className={`v2-shell${hasStarted ? " v2-shell--session" : ""}`}>
@@ -376,7 +393,9 @@ export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Ele
         </aside>
       )}
 
-      {inspectorOpen && (
+      {inspectorOpen && hasTeamProjection ? (
+        <TeamInspector />
+      ) : inspectorOpen ? (
         <aside
           className="v2-drawer v2-drawer--right"
           aria-label={t("v2.drawer.inspector")}
@@ -408,7 +427,7 @@ export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Ele
             {t("v2.inspector.openTerminal")}
           </button>
         </aside>
-      )}
+      ) : null}
     </main>
   );
 }

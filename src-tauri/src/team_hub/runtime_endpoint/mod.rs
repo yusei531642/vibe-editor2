@@ -2,6 +2,7 @@
 
 mod binding;
 pub(crate) mod types;
+mod snapshot;
 #[cfg(test)]
 mod test_support;
 

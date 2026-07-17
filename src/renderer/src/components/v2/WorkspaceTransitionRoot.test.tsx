@@ -14,7 +14,8 @@ vi.mock('../../lib/settings-context', () => ({
 }));
 
 vi.mock('../../lib/app-state-context', () => ({
-  useTeam: () => ({ teams: teamContext.teams })
+  useTeam: () => ({ teams: teamContext.teams }),
+  useProject: () => ({ projectRoot: '/repo' })
 }));
 
 vi.mock('../../lib/i18n', () => ({

@@ -11,10 +11,14 @@ export interface RecruitProjection {
   agentId: string;
   teamId: string;
   roleProfileId: string;
+  endpointId: string | null;
+  sessionId: string | null;
+  taskIds: number[];
   sequence: number;
   state: RecruitLifecycleState;
   reason: string | null;
   exiting: boolean;
+  observedAt: string;
 }
 
 export type RecruitProjectionAction =
@@ -49,10 +53,14 @@ export function projectRecruitLifecycle(
         agentId: payload.newAgentId,
         teamId: payload.teamId,
         roleProfileId: payload.roleProfileId,
+        endpointId: null,
+        sessionId: null,
+        taskIds: [],
         sequence: -1,
         state: 'requested',
         reason: null,
-        exiting: false
+        exiting: false,
+        observedAt: new Date().toISOString()
       }
     };
   }
@@ -68,10 +76,14 @@ export function projectRecruitLifecycle(
         agentId: payload.agentId,
         teamId: payload.teamId,
         roleProfileId: payload.roleProfileId,
+        endpointId: payload.endpointId,
+        sessionId: payload.sessionId,
+        taskIds: payload.taskIds,
         sequence: payload.sequence,
         state: payload.state,
         reason: payload.reason,
-        exiting
+        exiting,
+        observedAt: new Date().toISOString()
       }
     };
   }
@@ -86,7 +98,8 @@ export function projectRecruitLifecycle(
         sequence: Number.MAX_SAFE_INTEGER,
         state: 'cancelled',
         reason: action.payload.reason,
-        exiting: true
+        exiting: true,
+        observedAt: new Date().toISOString()
       }
     };
   }

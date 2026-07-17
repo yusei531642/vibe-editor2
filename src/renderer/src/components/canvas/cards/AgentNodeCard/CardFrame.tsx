@@ -74,6 +74,8 @@ import { CardHandoff } from './CardHandoff';
 import { CardInject } from './CardInject';
 import { CardSummary, type CardSummaryHealth } from './CardSummary';
 import { useProject } from '../../../../lib/app-state-context';
+import { AgentCardRuntime } from './AgentCardRuntime';
+import { useTeamProjection } from '../../../v2/TeamProjectionProvider';
 
 // Issue #732: `NodeProps` を `Node<CardDataOf<'agent'>>` で具体化することで
 // `data.payload` が `AgentPayload` として読め、`unknown` からの inline cast が不要になる。
@@ -377,6 +379,16 @@ function AgentNodeCardImpl({
     [health]
   );
   const terminalStatus = useMemo(() => formatTerminalRuntimeStatus(status, t), [status, t]);
+  const { projection: teamProjection, terminalAgentId, sessionActive } = useTeamProjection();
+  // projection の管理対象は「実 team session があり、かつ projection.agents に載っている
+  // カード」だけ。それ以外 (v1 card / 旧 team の残存 card / placeholder team) は従来どおり
+  // Terminal を開いたままにする (PR #36 レビュー: 到達不能 Terminal の防止)。
+  const managedByProjection =
+    sessionActive &&
+    Boolean(payload.agentId) &&
+    teamProjection.agents.some((agent) => agent.agentId === payload.agentId);
+  const terminalOpen =
+    !managedByProjection || terminalAgentId === payload.agentId;
 
   const handleClose = useCallback(
     () => void confirmRemoveCard(id),
@@ -398,7 +410,7 @@ function AgentNodeCardImpl({
         style={{ background: accent, width: 10, height: 10 }}
       />
       <div
-        className="canvas-agent-card"
+        className={`canvas-agent-card${terminalOpen ? ' canvas-agent-card--terminal-open' : ''}`}
         style={cardStyle}
         data-workspace-leader={roleProfileId === 'leader' ? '' : undefined}
         data-workspace-team-id={roleProfileId === 'leader' ? payload.teamId : undefined}
@@ -447,6 +459,7 @@ function AgentNodeCardImpl({
           showToast={showToast}
           t={t}
         />
+        <AgentCardRuntime agentId={payload.agentId} />
         <TerminalOverlay
           cardId={id}
           termRef={termRef}
@@ -459,6 +472,7 @@ function AgentNodeCardImpl({
           claudeInstructions={claudeInstructions}
           codexInstructions={codexInstructions}
           initialMessage={payload.initialMessage}
+          expanded={terminalOpen}
           onStatus={setStatus}
           onActivity={setActivity}
         />

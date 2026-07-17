@@ -6,6 +6,7 @@
  *   - Ctrl+Shift+I  → IDE モードへ戻る
  *   - Ctrl+Shift+M  → Canvas モードへ切替
  *   - Ctrl+Shift+N  → 新しい Terminal Card
+ *   - Ctrl+Shift+A  → Team Approval Center
  *
  * Phase 5 以降で IDE 側 (CommandPalette など) も移行。
  */
@@ -71,5 +72,7 @@ export const KEYS = {
   quickNav: { key: 'k', ctrl: true, shift: true } satisfies KeyDef,
   toggleIde: { key: 'i', ctrl: true, shift: true } satisfies KeyDef,
   toggleCanvas: { key: 'm', ctrl: true, shift: true } satisfies KeyDef,
-  newTerminal: { key: 'n', ctrl: true, shift: true } satisfies KeyDef
+  newTerminal: { key: 'n', ctrl: true, shift: true } satisfies KeyDef,
+  teamApprovals: { key: 'a', ctrl: true, shift: true } satisfies KeyDef,
+  teamApprovalsMac: { key: 'a', meta: true, shift: true } satisfies KeyDef
 };
