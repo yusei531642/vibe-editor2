@@ -182,12 +182,33 @@ impl WorktreeManager {
         };
         let mut valid = HashMap::new();
         for mut record in records {
-            if !record_matches_project(&record, project_root.as_path(), &storage).await {
+            let Some(path_state) =
+                record_path_state(&record, project_root.as_path(), &storage).await
+            else {
                 tracing::warn!(
                     team_id = %record.key.team_id,
                     agent_id = %record.key.agent_id,
                     "[worktree] dropping unsafe or stale persisted assignment"
                 );
+                continue;
+            };
+            let expected_prefix = format!(
+                "vibe/{}/{agent}-",
+                record.key.team_id,
+                agent = record.key.agent_id
+            );
+            if !record.branch_name.starts_with(&expected_prefix) {
+                tracing::warn!(branch = %record.branch_name, "[worktree] refusing mismatched managed branch");
+                continue;
+            }
+            record.project_root = project_root.as_path().to_path_buf();
+            if path_state == RecordPathState::Missing {
+                tracing::warn!(
+                    team_id = %record.key.team_id,
+                    agent_id = %record.key.agent_id,
+                    "[worktree] preserving missing managed assignment for branch recovery"
+                );
+                valid.insert(record.key.clone(), record);
                 continue;
             }
             let Some(metadata) = registered
@@ -201,16 +222,10 @@ impl WorktreeManager {
                 );
                 continue;
             };
-            let expected_prefix = format!(
-                "vibe/{}/{agent}-",
-                record.key.team_id,
-                agent = record.key.agent_id
-            );
             if !metadata.branch.starts_with(&expected_prefix) {
                 tracing::warn!(branch = %metadata.branch, "[worktree] refusing mismatched managed branch");
                 continue;
             }
-            record.project_root = project_root.as_path().to_path_buf();
             record.path = metadata.path.clone();
             record.branch_name = metadata.branch.clone();
             valid.insert(record.key.clone(), record);
@@ -344,21 +359,40 @@ impl WorktreeManager {
     }
 }
 
-async fn record_matches_project(
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RecordPathState {
+    Present,
+    Missing,
+}
+
+async fn record_path_state(
     record: &AssignmentRecord,
     project_root: &Path,
     storage_root: &Path,
-) -> bool {
+) -> Option<RecordPathState> {
     if super::WorktreeManager::validate_ids(&record.key.team_id, &record.key.agent_id).is_err() {
-        return false;
+        return None;
     }
     let Ok(record_project) = tokio::fs::canonicalize(&record.project_root).await else {
-        return false;
+        return None;
     };
-    let Ok(record_path) = tokio::fs::canonicalize(&record.path).await else {
-        return false;
-    };
-    record_project == project_root && record_path.starts_with(storage_root)
+    if record_project != project_root {
+        return None;
+    }
+    let expected_path = storage_root
+        .join(&record.key.project_key)
+        .join(&record.key.team_id)
+        .join(&record.key.agent_id);
+    if record.path != expected_path {
+        return None;
+    }
+    match tokio::fs::canonicalize(&record.path).await {
+        Ok(record_path) if record_path == expected_path => Some(RecordPathState::Present),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            Some(RecordPathState::Missing)
+        }
+        _ => None,
+    }
 }
 
 fn managed_owner(path: &Path, project_storage: &Path) -> Option<(String, String)> {
