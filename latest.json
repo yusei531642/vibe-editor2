@@ -1,0 +1,55 @@
+{
+  "version": "2.0.0-alpha.0",
+  "notes": "自動ビルド成果物。\n\n- Windows: `.exe` (NSIS インストーラ)\n- macOS:   `.dmg` (universal2 — Apple Silicon + Intel)\n- Linux:   `.AppImage` / `.deb` / `.rpm`\n\n動作確認後にこの draft を publish してください。",
+  "pub_date": "2026-07-17T17:02:44.697Z",
+  "platforms": {
+    "linux-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUYVdmN0E0cUVCbkpKdzhJQ0RhcGpyaStHNWdwNE01TUs2TUVQMHczZ2tIM3hhVndMclg5bTNXKzAyNGxWdzErUmdxRDZVYncyNHhOa1kwR2NoOENoK2RJdDR2emlmcVFJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg0MzA3NjE5CWZpbGU6dmliZS1lZGl0b3IgMl8yLjAuMC1hbHBoYS4wX2FtZDY0LkFwcEltYWdlClBaNVBqMHNhZ1pEN3FqWHQ1M3c2UVZ1cUNTT25rKzFVa2NhcGtoMElPaGFBVVlxL1hvdzhLdXdsRHl1dVZuUklQV2pybEpPQU41WktJT0g3R2xmRENBPT0K",
+      "url": "https://api.github.com/repos/yusei531642/vibe-editor2/releases/assets/480600807"
+    },
+    "linux-x86_64-appimage": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUYVdmN0E0cUVCbkpKdzhJQ0RhcGpyaStHNWdwNE01TUs2TUVQMHczZ2tIM3hhVndMclg5bTNXKzAyNGxWdzErUmdxRDZVYncyNHhOa1kwR2NoOENoK2RJdDR2emlmcVFJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg0MzA3NjE5CWZpbGU6dmliZS1lZGl0b3IgMl8yLjAuMC1hbHBoYS4wX2FtZDY0LkFwcEltYWdlClBaNVBqMHNhZ1pEN3FqWHQ1M3c2UVZ1cUNTT25rKzFVa2NhcGtoMElPaGFBVVlxL1hvdzhLdXdsRHl1dVZuUklQV2pybEpPQU41WktJT0g3R2xmRENBPT0K",
+      "url": "https://api.github.com/repos/yusei531642/vibe-editor2/releases/assets/480600807"
+    },
+    "linux-x86_64-deb": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUYVdmN0E0cUVCbkdLK1ltbzBITElmOVp5Y3d1TFJ0dEJIeWZNMndxbnNhZ2tPMEU3NHdKYlpFc3p4WVJPWk05UkUvbWdzSU5DSk5HeWppanpGZjlMWU9UdHdMYzhIWUFBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg0MzA3NjE5CWZpbGU6dmliZS1lZGl0b3IgMl8yLjAuMC1hbHBoYS4wX2FtZDY0LmRlYgpJcTdLbUROMHpSNWpvYnZaVGF5RW1KRFljdG45U0ZmK1B6YnlBZmZmM3ZaTG9OUzhFVTJ5aFdRQ1h6STVWSFVjbEswZVY2aHBjdVRzOEI5OUMzV0RBUT09Cg==",
+      "url": "https://api.github.com/repos/yusei531642/vibe-editor2/releases/assets/480600746"
+    },
+    "linux-x86_64-rpm": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUYVdmN0E0cUVCbkljakMxdUNkSERRZG1rTG5hNENEZzNKQlpuRWQ2dllpa0xEZXBJazZoMGVETHZISUhENG1JcS8vbWFWenNSek5vMXRPazBxdUN6d3JMall0dmtUaUFFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg0MzA3NjE5CWZpbGU6dmliZS1lZGl0b3IgMi0yLjAuMC1hbHBoYS4wLTEueDg2XzY0LnJwbQorTkRtaVJvZ1Q4UjNEV25nc1NDYUhRaTJoWDRzdUJQUTRyTTJIWjZzN1pybFgvZmdwVGJNekRIL0N4NnVEZjE2UVRibjQ0bDVyejNGSnFkMEpid1dDdz09Cg==",
+      "url": "https://api.github.com/repos/yusei531642/vibe-editor2/releases/assets/480600771"
+    },
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUYVdmN0E0cUVCbk14LzE1ektnQTRFaWJOaUNtVVBUUi82VFRrRkJPejhEak1vclQxMXAwWHgybjdqL28rb0ZYbWtpT1JlaFI4ZWRLejZ3Wis0VWt4dlJpQnFIdE5Ob0FNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg0MzA3NzI4CWZpbGU6dmliZS1lZGl0b3IgMl8yLjAuMC1hbHBoYS4wX3g2NC1zZXR1cC5leGUKbExUeUxhaWhLdXRFRG1SaVZpMDd3Sjc0bTBDbHZaYjFsbXhoYUdCbWh0YlMreWpCdENLdU5PQURRbjMxZ2tKVjJrdU9DdllRb3pPQlVYcUJVdkF2RGc9PQo=",
+      "url": "https://api.github.com/repos/yusei531642/vibe-editor2/releases/assets/480602696"
+    },
+    "windows-x86_64-nsis": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUYVdmN0E0cUVCbk14LzE1ektnQTRFaWJOaUNtVVBUUi82VFRrRkJPejhEak1vclQxMXAwWHgybjdqL28rb0ZYbWtpT1JlaFI4ZWRLejZ3Wis0VWt4dlJpQnFIdE5Ob0FNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg0MzA3NzI4CWZpbGU6dmliZS1lZGl0b3IgMl8yLjAuMC1hbHBoYS4wX3g2NC1zZXR1cC5leGUKbExUeUxhaWhLdXRFRG1SaVZpMDd3Sjc0bTBDbHZaYjFsbXhoYUdCbWh0YlMreWpCdENLdU5PQURRbjMxZ2tKVjJrdU9DdllRb3pPQlVYcUJVdkF2RGc9PQo=",
+      "url": "https://api.github.com/repos/yusei531642/vibe-editor2/releases/assets/480602696"
+    },
+    "darwin-aarch64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUYVdmN0E0cUVCbk9TTURKVDRFdEVzdE5JWnY1b3lNMnUxeTg5TExmZ25iYjJqRzFJNElYUFNZa2w4MmUrV2VxQkVDdFhIZXNVTkZHbWZHc1pCV1BmdzV2TjRDMFRnUUE0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg0MzA3NzU3CWZpbGU6dmliZS1lZGl0b3IgMi5hcHAudGFyLmd6CkoxMEpWNzRGVWlzeEhDRXRNTXh1S2doeDluZ1NLaWpZcEMvb1o5S0JRd3hXUVNzR0pXckdTdG9JYWlHUFFibk1hVTJtS1ZYZkM2NWZDT1VPZFZQN0R3PT0K",
+      "url": "https://api.github.com/repos/yusei531642/vibe-editor2/releases/assets/480603124"
+    },
+    "darwin-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUYVdmN0E0cUVCbk9TTURKVDRFdEVzdE5JWnY1b3lNMnUxeTg5TExmZ25iYjJqRzFJNElYUFNZa2w4MmUrV2VxQkVDdFhIZXNVTkZHbWZHc1pCV1BmdzV2TjRDMFRnUUE0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg0MzA3NzU3CWZpbGU6dmliZS1lZGl0b3IgMi5hcHAudGFyLmd6CkoxMEpWNzRGVWlzeEhDRXRNTXh1S2doeDluZ1NLaWpZcEMvb1o5S0JRd3hXUVNzR0pXckdTdG9JYWlHUFFibk1hVTJtS1ZYZkM2NWZDT1VPZFZQN0R3PT0K",
+      "url": "https://api.github.com/repos/yusei531642/vibe-editor2/releases/assets/480603124"
+    },
+    "darwin-universal": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUYVdmN0E0cUVCbk9TTURKVDRFdEVzdE5JWnY1b3lNMnUxeTg5TExmZ25iYjJqRzFJNElYUFNZa2w4MmUrV2VxQkVDdFhIZXNVTkZHbWZHc1pCV1BmdzV2TjRDMFRnUUE0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg0MzA3NzU3CWZpbGU6dmliZS1lZGl0b3IgMi5hcHAudGFyLmd6CkoxMEpWNzRGVWlzeEhDRXRNTXh1S2doeDluZ1NLaWpZcEMvb1o5S0JRd3hXUVNzR0pXckdTdG9JYWlHUFFibk1hVTJtS1ZYZkM2NWZDT1VPZFZQN0R3PT0K",
+      "url": "https://api.github.com/repos/yusei531642/vibe-editor2/releases/assets/480603124"
+    },
+    "darwin-aarch64-app": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUYVdmN0E0cUVCbk9TTURKVDRFdEVzdE5JWnY1b3lNMnUxeTg5TExmZ25iYjJqRzFJNElYUFNZa2w4MmUrV2VxQkVDdFhIZXNVTkZHbWZHc1pCV1BmdzV2TjRDMFRnUUE0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg0MzA3NzU3CWZpbGU6dmliZS1lZGl0b3IgMi5hcHAudGFyLmd6CkoxMEpWNzRGVWlzeEhDRXRNTXh1S2doeDluZ1NLaWpZcEMvb1o5S0JRd3hXUVNzR0pXckdTdG9JYWlHUFFibk1hVTJtS1ZYZkM2NWZDT1VPZFZQN0R3PT0K",
+      "url": "https://api.github.com/repos/yusei531642/vibe-editor2/releases/assets/480603124"
+    },
+    "darwin-x86_64-app": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUYVdmN0E0cUVCbk9TTURKVDRFdEVzdE5JWnY1b3lNMnUxeTg5TExmZ25iYjJqRzFJNElYUFNZa2w4MmUrV2VxQkVDdFhIZXNVTkZHbWZHc1pCV1BmdzV2TjRDMFRnUUE0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg0MzA3NzU3CWZpbGU6dmliZS1lZGl0b3IgMi5hcHAudGFyLmd6CkoxMEpWNzRGVWlzeEhDRXRNTXh1S2doeDluZ1NLaWpZcEMvb1o5S0JRd3hXUVNzR0pXckdTdG9JYWlHUFFibk1hVTJtS1ZYZkM2NWZDT1VPZFZQN0R3PT0K",
+      "url": "https://api.github.com/repos/yusei531642/vibe-editor2/releases/assets/480603124"
+    },
+    "darwin-universal-app": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUYVdmN0E0cUVCbk9TTURKVDRFdEVzdE5JWnY1b3lNMnUxeTg5TExmZ25iYjJqRzFJNElYUFNZa2w4MmUrV2VxQkVDdFhIZXNVTkZHbWZHc1pCV1BmdzV2TjRDMFRnUUE0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg0MzA3NzU3CWZpbGU6dmliZS1lZGl0b3IgMi5hcHAudGFyLmd6CkoxMEpWNzRGVWlzeEhDRXRNTXh1S2doeDluZ1NLaWpZcEMvb1o5S0JRd3hXUVNzR0pXckdTdG9JYWlHUFFibk1hVTJtS1ZYZkM2NWZDT1VPZFZQN0R3PT0K",
+      "url": "https://api.github.com/repos/yusei531642/vibe-editor2/releases/assets/480603124"
+    }
+  }
+}
