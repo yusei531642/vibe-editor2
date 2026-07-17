@@ -2,7 +2,7 @@
 
 use super::{BackendKind, RuntimeCapability};
 use serde::Serialize;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -156,24 +156,20 @@ impl ProviderAvailability for SystemProviderAvailability {
             RuntimeProvider::ClaudeNative => {
                 resolve_node_executable().is_some()
                     && resolve_sidecar_entrypoint().is_some()
-                    && command_is_available(&self.claude_command)
+                    && resolve_native_claude_command(&self.claude_command).is_some()
             }
             RuntimeProvider::Api | RuntimeProvider::Pty => true,
         }
     }
 }
 
-fn command_is_available(command: &str) -> bool {
-    let trimmed = command.trim();
-    if trimmed.is_empty() {
-        return false;
+/// Native sidecar may forward credentials only to the default Claude CLI resolved from the
+/// host PATH. A settings-supplied wrapper/path stays on the PTY provider.
+pub fn resolve_native_claude_command(command: &str) -> Option<PathBuf> {
+    if command.trim() != "claude" {
+        return None;
     }
-    let path = Path::new(trimmed);
-    if path.components().count() > 1 || path.is_absolute() {
-        path.is_file()
-    } else {
-        which::which(trimmed).is_ok()
-    }
+    which::which("claude").ok()
 }
 
 pub fn resolve_node_executable() -> Option<PathBuf> {
@@ -249,5 +245,12 @@ mod tests {
         let selected = select_provider("claude", true, BackendKind::Pty, &available(&[]));
         assert_eq!(selected.provider, RuntimeProvider::Api);
         assert_eq!(selected.reason, ProviderSelectionReason::ApiRuntime);
+    }
+
+    #[test]
+    fn custom_claude_commands_are_not_native_credential_targets() {
+        assert!(resolve_native_claude_command("my-claude-wrapper").is_none());
+        assert!(resolve_native_claude_command("/tmp/claude").is_none());
+        assert!(resolve_native_claude_command("claude --dangerous-flag").is_none());
     }
 }
