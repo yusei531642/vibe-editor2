@@ -114,7 +114,7 @@ export function useCanvasMenuActions(): CanvasMenuActions {
   }, [settings.language, showToast, dismissToast]);
 
   const handleOpenGithub = useCallback((): void => {
-    void window.api.app.openExternal('https://github.com/yusei531642/vibe-editor');
+    void window.api.app.openExternal('https://github.com/yusei531642/vibe-editor2');
   }, []);
 
   const clearCanvas = useCallback(async (): Promise<void> => {

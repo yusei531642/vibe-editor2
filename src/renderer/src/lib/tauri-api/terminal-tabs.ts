@@ -1,6 +1,6 @@
 // tauri-api/terminal-tabs.ts — Issue #661 IDE タブ永続化 IPC namespace
 //
-// `~/.vibe-editor/terminal-tabs.json` を Rust 側で atomic write する API のラッパ。
+// `~/.vibe-editor2/terminal-tabs.json` を Rust 側で atomic write する API のラッパ。
 // 読込時は schemaVersion 不一致 / 未存在 / parse 失敗で `null` を返す (parse 失敗時の原本退避と
 // save 前の未来 schema guard は Rust 側が担当する)。
 

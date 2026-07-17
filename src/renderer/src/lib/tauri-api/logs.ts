@@ -4,7 +4,7 @@ import { invokeCommand } from './command-error';
 import type { ReadLogTailResponse } from '../../../../types/shared';
 
 /** Issue #326: 設定モーダルからログを表示する用。
- *  Rust 側で stderr と並行して `~/.vibe-editor/logs/vibe-editor.log` に書き出している。 */
+ *  Rust 側で stderr と並行して `~/.vibe-editor2/logs/vibe-editor2.log` に書き出している。 */
 export const logs = {
   /** ログファイル末尾の最大 maxBytes バイトを返す。省略時は 256KB。 */
   readTail: (maxBytes?: number): Promise<ReadLogTailResponse> =>

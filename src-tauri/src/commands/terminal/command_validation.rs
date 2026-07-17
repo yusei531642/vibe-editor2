@@ -105,7 +105,7 @@ pub fn normalize_terminal_command(
     (cmd, parts)
 }
 
-/// Issue #618: `~/.vibe-editor/settings.json` から `terminalForceUtf8` を読み出す。
+/// Issue #618: `~/.vibe-editor2/settings.json` から `terminalForceUtf8` を読み出す。
 /// settings.json が無い / parse 失敗 / フィールド未定義のいずれの場合も `true` (default) を返す。
 /// `terminal_create` 経路から spawn 直前にだけ呼ぶ想定 (1 spawn = 1 file read のオーバーヘッドのみ)。
 pub fn settings_terminal_force_utf8() -> bool {
@@ -209,7 +209,7 @@ pub fn is_allowed_terminal_command(command: &str) -> bool {
 /// から **動的に注入された** もの (prompt injection 等の経路) は spawn 前に拒否する。
 ///
 /// 一方 vibe-editor は Claude Code / Codex 専用エディタであり、ユーザーが自分の
-/// マシンの `~/.vibe-editor/settings.json` (`claudeArgs` / `codexArgs` /
+/// マシンの `~/.vibe-editor2/settings.json` (`claudeArgs` / `codexArgs` /
 /// `customAgents[].args`) に **明示的に書いた** フラグは信頼境界の内側にある正規の
 /// opt-in なので許可する。`reject_danger_flags` には settings 由来の sanction 集合
 /// ([`settings_sanctioned_danger_flags`]) を渡し、その集合に無いフラグだけを拒否する。
@@ -241,7 +241,7 @@ fn canonical_danger_flag(token: &str) -> Option<&'static str> {
         .find(|flag| flag.trim_start_matches('-') == stem)
 }
 
-/// Issue #788: `~/.vibe-editor/settings.json` の `claudeArgs` / `codexArgs` /
+/// Issue #788: `~/.vibe-editor2/settings.json` の `claudeArgs` / `codexArgs` /
 /// `customAgents[].args` にユーザーが明示的に書いた危険フラグを canonical 形で集める。
 /// ここに含まれるフラグは「ユーザー自身が opt-in したもの」として spawn を許可する。
 ///
@@ -608,7 +608,7 @@ mod command_normalization_tests {
                 "-c".to_string(),
                 "disable_paste_burst=true".to_string(),
                 "--config".to_string(),
-                r"model_instructions_file=C:\Users\zooyo\.vibe-editor\codex-instructions\instr.md"
+                r"model_instructions_file=C:\Users\zooyo\.vibe-editor2\codex-instructions\instr.md"
                     .to_string(),
             ]),
         );
@@ -621,7 +621,7 @@ mod command_normalization_tests {
                 "-c",
                 "disable_paste_burst=true",
                 "--config",
-                r"model_instructions_file=C:\Users\zooyo\.vibe-editor\codex-instructions\instr.md",
+                r"model_instructions_file=C:\Users\zooyo\.vibe-editor2\codex-instructions\instr.md",
             ]
         );
     }
@@ -703,12 +703,12 @@ mod command_normalization_tests {
     fn split_preserves_windows_backslashes() {
         assert_eq!(
             split_command_line(
-                r#"codex --config model_instructions_file=C:\Users\zooyo\.vibe-editor\instr.md"#
+                r#"codex --config model_instructions_file=C:\Users\zooyo\.vibe-editor2\instr.md"#
             ),
             vec![
                 "codex",
                 "--config",
-                r"model_instructions_file=C:\Users\zooyo\.vibe-editor\instr.md",
+                r"model_instructions_file=C:\Users\zooyo\.vibe-editor2\instr.md",
             ]
         );
     }

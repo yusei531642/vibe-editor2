@@ -265,7 +265,7 @@ fn parse_send_args(args: &Value) -> Result<SendArgs, SendError> {
 ///
 /// 旧実装は呼び出し側 (Leader / HR / worker) に「自分でファイル書き出してから path で送れ」と
 /// reject で要求していたため、運用知識への依存と再呼び出しの往復コストが発生していた
-/// (Issue #107 の運用回避策が前提)。Hub が自動で `<project_root>/.vibe-team/tmp/<short_id>.md` に
+/// (Issue #107 の運用回避策が前提)。Hub が自動で `<project_root>/.vibe-team2/tmp/<short_id>.md` に
 /// 本文書き出し → message を「summary + attached: <path>」に置換することで、Leader が
 /// 知らない状態でも長文が安全に流れる。
 ///
@@ -340,7 +340,7 @@ async fn spool_oversized_message(
                 "send_payload_threshold",
                 format!(
                     "message exceeds the long-payload threshold ({} > {} bytes) and \
-                     auto-spool to `.vibe-team/tmp/` failed: {e}. \
+                     auto-spool to `.vibe-team2/tmp/` failed: {e}. \
                      Write the full content to a file with the Write tool, then call team_send \
                      again with a brief summary plus the file path.",
                     message.len(),
@@ -516,7 +516,7 @@ async fn insert_team_message(
         // Issue #512: worker_reports は **元 `message`** (spool 化 **前**) の先頭 500 文字を保持する。
         // worker_reports は Leader が後で「完了報告 / blocked の経緯」を読み返すための診断ログで、
         // 「summary + attached: <path>」だけが残ると情報量が著しく落ちる。spool ファイル本体は
-        // `<project_root>/.vibe-team/tmp/` に残っているので、original の冒頭 500 文字 + ファイル
+        // `<project_root>/.vibe-team2/tmp/` に残っているので、original の冒頭 500 文字 + ファイル
         // パス (= effective_message にも含まれる) の組み合わせで「report として何があったか」が
         // 後追いできる設計にする。
         let summary: String = message.chars().take(500).collect();

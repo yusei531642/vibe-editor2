@@ -517,7 +517,7 @@ impl TeamHub {
         let flush_notify = state.message_flusher.notify.clone();
         tokio::spawn(self.clone().run_message_flusher(flush_notify));
 
-        // bridge スクリプトを `~/.vibe-editor/team-bridge.js` に書き出し
+        // bridge スクリプトを `~/.vibe-editor2/team-bridge.js` に書き出し
         // Issue #143 (Security):
         //   - symlink replacement attack 対策: 既存ファイルが symlink ならエラー扱いで除去
         //   - 書き込み中クラッシュ耐性 + 他ユーザ可読性回避のため atomic_write を使う

@@ -1,18 +1,18 @@
-// Claude Code MCP 設定 (~/.claude.json) の `mcpServers.vibe-team` を更新
+// Claude Code MCP 設定 (~/.claude.json) の `mcpServers.vibe-team2` を更新
 
 use anyhow::{Context, Result};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use tokio::fs;
 
-const ENTRY: &str = "vibe-team";
+const ENTRY: &str = "vibe-team2";
 const LEGACY_ENTRY: &str = "vive-team";
 
 pub(crate) fn config_path() -> PathBuf {
     dirs::home_dir().unwrap_or_default().join(".claude.json")
 }
 
-/// `mcpServers["vibe-team"]` を `desired` で上書き。
+/// `mcpServers["vibe-team2"]` を `desired` で上書き。
 /// 既に同じ内容なら false (no-op)、変更したら true を返す。
 /// 旧 `vive-team` エントリがあれば同時に削除する (名前変更による自動マイグレーション)。
 ///
@@ -298,14 +298,14 @@ mod tests {
         let changed = setup_at(&absent_path, &desired).await.unwrap();
         assert!(changed, "absent file should be created");
         let created = fs::read_to_string(&absent_path).await.unwrap();
-        assert!(created.contains("vibe-team"));
+        assert!(created.contains("vibe-team2"));
 
         let empty_path = tmp.path().join("empty.claude.json");
         fs::write(&empty_path, b"").await.unwrap();
         let changed = setup_at(&empty_path, &desired).await.unwrap();
         assert!(changed, "empty file should be initialized");
         let initialized = fs::read_to_string(&empty_path).await.unwrap();
-        assert!(initialized.contains("vibe-team"));
+        assert!(initialized.contains("vibe-team2"));
     }
 
     #[test]

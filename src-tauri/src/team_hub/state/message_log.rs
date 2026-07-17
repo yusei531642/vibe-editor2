@@ -3,7 +3,7 @@
 //!
 //! # 背景
 //! `TeamInfo.tasks` / `worker_reports` / `team_reports` / `handoff_events` 等は
-//! `persist_team_state` (#470) で `~/.vibe-editor/team-state/<key>/<team>.json` に永続化され、
+//! `persist_team_state` (#470) で `~/.vibe-editor2/team-state/<key>/<team>.json` に永続化され、
 //! `register_team` の restore 経路で Hub 再起動後に復元される。一方で `TeamInfo.messages`
 //! (= `team_send` 履歴 + `read_by` / `delivered_at` + `next_message_id`) は in-memory only
 //! だったため、Hub 再起動でメッセージ履歴と既読状態だけが消失する非対称があった
@@ -21,7 +21,7 @@
 //!   コストを抑え、無制限肥大を防ぐ。restore 時はこの直近 N 件が復元される。
 //! - **spool 二重保存回避 (#512)**: `TeamMessage.message` は既に spool 置換後の
 //!   `effective_message` (= 「summary + `[Full content saved to: <path>]`」) なので、巨大 body は
-//!   `<project_root>/.vibe-team/tmp/` 側にのみ残り、message log には置換後の短い本文しか入らない。
+//!   `<project_root>/.vibe-team2/tmp/` 側にのみ残り、message log には置換後の短い本文しか入らない。
 
 use std::path::{Path, PathBuf};
 
@@ -307,7 +307,7 @@ mod tests {
     fn build_log_does_not_double_store_spooled_body() {
         let mut m = msg(1, &["leader-1"]);
         // team_send は spool 化済みの effective_message を message に入れる。
-        m.message = "先頭サマリ\n[Full content saved to: /repo/.vibe-team/tmp/send-abcd1234.md]".into();
+        m.message = "先頭サマリ\n[Full content saved to: /repo/.vibe-team2/tmp/send-abcd1234.md]".into();
         let team = team_with(vec![m], 1);
         let log = build_log("team-1", &team);
         let stored = &log.messages[0].message;

@@ -517,7 +517,7 @@ export function AppShell({
               );
             }}
             onOpenGithub={() => {
-              void window.api.app.openExternal('https://github.com/yusei531642/vibe-editor');
+              void window.api.app.openExternal('https://github.com/yusei531642/vibe-editor2');
             }}
             onOpenSettings={() => setSettingsOpen(true)}
             onOpenPalette={() => setPaletteOpen(true)}

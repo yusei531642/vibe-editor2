@@ -12,15 +12,15 @@ use super::{prune_old_log_files, LOG_KEEP_DAYS};
 use std::fs;
 use std::time::{Duration, SystemTime};
 
-/// Issue #643: 14 日より古い `vibe-editor.log*` は削除され、
+/// Issue #643: 14 日より古い `vibe-editor2.log*` は削除され、
 /// 新しいファイルや無関係ファイルは残ることを確認する。
 #[test]
 fn prunes_only_old_vibe_editor_log_files() {
     let dir = tempfile::tempdir().expect("tempdir");
 
-    let old_dated = dir.path().join("vibe-editor.log.2020-01-01");
-    let old_legacy = dir.path().join("vibe-editor.log");
-    let recent_dated = dir.path().join("vibe-editor.log.2099-12-31");
+    let old_dated = dir.path().join("vibe-editor2.log.2020-01-01");
+    let old_legacy = dir.path().join("vibe-editor2.log");
+    let recent_dated = dir.path().join("vibe-editor2.log.2099-12-31");
     let unrelated = dir.path().join("other.log");
     let unrelated_old = dir.path().join("readme.txt");
 
@@ -49,7 +49,7 @@ fn prunes_only_old_vibe_editor_log_files() {
     assert!(unrelated.exists(), "non-log file must survive");
     assert!(
         unrelated_old.exists(),
-        "files outside vibe-editor.log* prefix must not be touched"
+        "files outside vibe-editor2.log* prefix must not be touched"
     );
 }
 

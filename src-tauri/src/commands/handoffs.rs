@@ -1,7 +1,7 @@
 // handoffs.* command — Canvas agent/session handoff persistence.
 //
 // Handoff bodies can become large, so Canvas localStorage and team-history only
-// store references. The canonical content lives under ~/.vibe-editor/handoffs/.
+// store references. The canonical content lives under ~/.vibe-editor2/handoffs/.
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::Utc;

@@ -195,7 +195,7 @@ pub(super) async fn validate_and_register_dynamic_role(
     })
 }
 
-/// Issue #513: `~/.vibe-editor/role-profiles.json#dynamic[]` の 1 件分エントリ (Rust 側 view)。
+/// Issue #513: `~/.vibe-editor2/role-profiles.json#dynamic[]` の 1 件分エントリ (Rust 側 view)。
 ///
 /// renderer 側 `DynamicRoleEntry` (camelCase) と `#[serde(rename_all = "camelCase")]` で対応。
 /// `register_team` 経路で「該当 team_id の entry だけ」を抽出して `replay_persisted_dynamic_roles_for_team`
@@ -309,7 +309,7 @@ pub async fn replay_persisted_dynamic_roles_for_team(
             skipped += 1;
             continue;
         }
-        // Issue #604 (Security): persistent storage (~/.vibe-editor/role-profiles.json) は
+        // Issue #604 (Security): persistent storage (~/.vibe-editor2/role-profiles.json) は
         // user-writable plain JSON で、外部書き換え / 過去の緩い lint 版で書かれた entry が
         // 残っている可能性がある。replay 時にも lint_all の **deny** だけは強制再評価し、
         // deny 句を含む entry は load 拒否 + warn ログを残す (warn 句は forward-compat のため許容)。

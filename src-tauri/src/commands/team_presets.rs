@@ -2,7 +2,7 @@
 //
 // Canvas 上で「うまくいったチーム編成」をプリセットとして保存し、
 // 後から 1 操作で再構築できるようにする。
-// 保存先: `~/.vibe-editor/presets/<id>.json` (1 file = 1 preset)。
+// 保存先: `~/.vibe-editor2/presets/<id>.json` (1 file = 1 preset)。
 // File-per-preset は team-history.json (single-file array) と異なり、
 // 「import / export を 1 ファイルでやり取りできる」「外部編集が容易」「同時書き込みが
 // 衝突しない」「将来的に MCP 経由で個別共有できる」メリットがある。
@@ -22,7 +22,7 @@ use std::path::PathBuf;
 use tokio::fs;
 use tokio::sync::Mutex;
 
-/// preset ファイル群の保存先 `~/.vibe-editor/presets/`。
+/// preset ファイル群の保存先 `~/.vibe-editor2/presets/`。
 fn presets_root() -> PathBuf {
     crate::util::config_paths::vibe_root().join("presets")
 }

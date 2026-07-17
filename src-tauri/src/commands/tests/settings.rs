@@ -2,7 +2,7 @@
 //!
 //! Phase 2 (PR #501 / Issue #493) で `Settings` を strong-typed serde struct 化したので、
 //! ここでは `Settings` ⇔ disk JSON ⇔ atomic_write の round-trip を tempdir 配下で走らせる。
-//! `settings_load` / `settings_save` は内部で `~/.vibe-editor/settings.json` を直接さわる
+//! `settings_load` / `settings_save` は内部で `~/.vibe-editor2/settings.json` を直接さわる
 //! Tauri command なので、env (USERPROFILE / HOME) 操作はせず代わりに Settings 単体の
 //! roundtrip + atomic_write の組み合わせで cover する。
 
@@ -30,7 +30,7 @@ async fn default_settings_roundtrip_through_atomic_write() {
     // 主要フィールドが round-trip 後も同値
     assert_eq!(loaded.schema_version, Some(APP_SETTINGS_SCHEMA_VERSION));
     assert_eq!(loaded.language, "ja");
-    assert_eq!(loaded.theme, "claude-dark");
+    assert_eq!(loaded.theme, "claude-light");
     assert_eq!(loaded.density, "normal");
     assert_eq!(loaded.claude_command, "claude");
     assert_eq!(loaded.codex_command, "codex");
@@ -220,7 +220,7 @@ async fn newer_disk_schema_blocks_save_via_compat_check() {
 
     // 旧 build (= 現行 const = APP_SETTINGS_SCHEMA_VERSION) が disk を読む → schema_version が
     // 既知の最大より大きいので check_schema_compat が reject。`settings_save` 本体は
-    // `~/.vibe-editor/settings.json` 固定パスを使うので、ここでは check 関数を直接叩いて
+    // `~/.vibe-editor2/settings.json` 固定パスを使うので、ここでは check 関数を直接叩いて
     // ガードが期待通り発火することを確認する。
     let res = check_schema_compat(Some(future), Some(APP_SETTINGS_SCHEMA_VERSION));
     assert!(res.is_err(), "newer disk must block older save");

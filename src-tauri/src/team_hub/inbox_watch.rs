@@ -32,8 +32,8 @@ function safeSeg(raw) {
   return s;
 }
 function watermarkPath() {
-  // canonical: ~/.vibe-editor/team-inbox-watermarks/<team>/<agent>.json (この watcher が唯一の読み書き手)。
-  return path.join(os.homedir(), '.vibe-editor', 'team-inbox-watermarks', safeSeg(TEAM_ID), safeSeg(AGENT_ID) + '.json');
+  // canonical: ~/.vibe-editor2/team-inbox-watermarks/<team>/<agent>.json (この watcher が唯一の読み書き手)。
+  return path.join(os.homedir(), '.vibe-editor2', 'team-inbox-watermarks', safeSeg(TEAM_ID), safeSeg(AGENT_ID) + '.json');
 }
 function loadWatermark() {
   try {

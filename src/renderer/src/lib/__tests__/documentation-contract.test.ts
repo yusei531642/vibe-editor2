@@ -61,7 +61,7 @@ describe('project documentation contract', () => {
 
     expect(vibeeditor).not.toContain('`issue-fix` skill');
     expect(vibeeditor).not.toContain('`finalfix` skill');
-    for (const skill of ['pullrequest', 'issue-plan', 'pty-portable-debugging', 'claude-design', 'vibe-team']) {
+    for (const skill of ['pullrequest', 'issue-plan', 'pty-portable-debugging', 'claude-design', 'vibe-team2']) {
       expect(existsSync(resolve(root, `.claude/skills/${skill}/SKILL.md`)), skill).toBe(true);
     }
   });

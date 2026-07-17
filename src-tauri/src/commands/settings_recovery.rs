@@ -1,7 +1,7 @@
 // settings_recovery — settings.json の parse 失敗時の復旧経路 (Issue #996)。
 //
 // 背景:
-//   - settings_load は `~/.vibe-editor/settings.v11.bak` (pre-v12 スナップショット) を
+//   - settings_load は `~/.vibe-editor2/settings.v11.bak` (pre-v12 スナップショット) を
 //     書き出すが、v12 への migration / 保存が settings.json を壊した場合に、その健全な
 //     スナップショットを読み戻さず default を返していた。計画 v2 の
 //     「migration 失敗時は旧 settings を保持して v11 として読み続ける」を満たすため、
@@ -140,7 +140,7 @@ mod tests {
         let err = serde_json::from_slice::<Settings>(corrupt).unwrap_err();
         let recovered = recover_after_parse_failure(&path, corrupt, err).await;
         // default 値
-        assert_eq!(recovered.theme, "claude-dark");
+        assert_eq!(recovered.theme, "claude-light");
         assert_eq!(recovered.language, "ja");
     }
 }

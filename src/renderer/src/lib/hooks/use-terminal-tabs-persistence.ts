@@ -1,7 +1,7 @@
 /**
  * use-terminal-tabs-persistence — Issue #661
  *
- * IDE モード terminal タブを `~/.vibe-editor/terminal-tabs.json` に atomic 永続化し、
+ * IDE モード terminal タブを `~/.vibe-editor2/terminal-tabs.json` に atomic 永続化し、
  * mount 時に load → 各タブを `addTerminalTab` で復元する hook。
  *
  * 流れ:

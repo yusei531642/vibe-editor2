@@ -1,8 +1,8 @@
 {
-  "name": "vibe-editor",
-  "version": "1.6.9",
+  "name": "vibe-editor2",
+  "version": "2.0.0-alpha.0",
   "private": true,
-  "description": "Tauri ベースの Claude Code / Codex 専用エディタ",
+  "description": "GUI-first Claude Code / Codex / vibe-team2 editor",
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
   },
@@ -21,6 +21,7 @@
     "lint:release-workflow": "node build/check-release-workflow.mjs",
     "lint:command-result": "node build/check-command-result.mjs",
     "lint:team-events": "node build/check-team-event-payloads.mjs",
+    "lint:v2-identity": "node build/check-v2-identity.mjs",
     "lint:team-event-types": "node build/check-team-event-types.mjs",
     "generate:team-event-types": "node build/check-team-event-types.mjs --write",
     "test:watch": "vitest",

@@ -30,24 +30,10 @@ import { FileTreeStateProvider } from './lib/filetree-state-context';
 import { useUiStore } from './stores/ui';
 import { webviewZoom } from './lib/webview-zoom';
 import { resolveBootstrapLanguage, translate } from './lib/i18n';
-import './index.css';
-import './styles/components/palette.css';
-import './styles/components/modal.css';
-import './styles/components/welcome.css';
-import './styles/components/onboarding.css';
-import './styles/components/agent-wizard.css';
-import './styles/components/menu.css';
+import './styles/v2-base.css';
 import './styles/components/toast.css';
-import './styles/components/claude-not-found.css';
-import './styles/components/canvas.css';
-import './styles/components/canvas-agent-card.css';
-import './styles/components/team-dashboard.css';
-import './styles/components/claude-patterns.css';
-import './styles/components/shell.css';
-import './styles/components/glass.css';
+import './styles/components/v2-shell.css';
 import './styles/components/drag-region.css';
-import './styles/components/image-preview.css';
-import './styles/components/voice.css';
 
 const rootEl = document.getElementById('root');
 if (!rootEl) {

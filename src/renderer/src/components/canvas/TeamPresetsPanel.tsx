@@ -1,7 +1,7 @@
 /**
  * TeamPresetsPanel — Issue #522.
  *
- * Canvas 上で「うまくいったチーム編成」を `~/.vibe-editor/presets/<id>.json` に保存し、
+ * Canvas 上で「うまくいったチーム編成」を `~/.vibe-editor2/presets/<id>.json` に保存し、
  * 別タイミングで 1 操作で再構築できるようにする小型 popover panel。
  *
  * 構成:

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">vibe-editor 2</title>
+  <desc id="desc">Warm neutral app tile with a cloud-shaped terminal mark</desc>
+  <rect x="32" y="32" width="960" height="960" rx="224" fill="#f8f8f6"/>
+  <rect x="32" y="32" width="960" height="960" rx="224" fill="none" stroke="#dedbd5" stroke-width="20"/>
+  <path
+    d="M350 721c-94 0-170-76-170-170 0-77 51-142 121-163 6-115 101-206 217-206 91 0 172 56 204 139 79 14 139 83 139 166 0 44-17 84-45 114 2 12 3 24 3 36 0 94-76 170-170 170-51 0-97-22-128-58-31 36-77 58-128 58-70 0-130-42-156-102-25 10-52 16-80 16Z"
+    fill="#ffffff"
+    stroke="#494744"
+    stroke-width="42"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path d="M400 429l74 86-74 86" fill="none" stroke="#d97757" stroke-width="46" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M536 601h126" fill="none" stroke="#494744" stroke-width="46" stroke-linecap="round"/>
+  <circle cx="755" cy="268" r="38" fill="#d97757"/>
+  <circle cx="831" cy="344" r="22" fill="#d97757"/>
+</svg>

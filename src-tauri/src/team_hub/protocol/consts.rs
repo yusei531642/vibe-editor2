@@ -73,7 +73,7 @@ pub(crate) const MAX_DYNAMIC_ROLES_PER_TEAM: usize = 64;
 /// Issue #107: team_send 1 message の最大長 (ハードリミット)。これ以上は呼び出し側を拒否する
 /// (単に切ると context が崩れて user 体験が悪いので reject に倒す)。
 pub(crate) const MAX_MESSAGE_LEN: usize = 64 * 1024; // 64 KiB
-/// 「長文ペイロード・ルール」の閾値。これを超えたら `.vibe-team/tmp/<short_id>.md` に
+/// 「長文ペイロード・ルール」の閾値。これを超えたら `.vibe-team2/tmp/<short_id>.md` に
 /// 書き出してファイルパスを送るパターンを強制する。
 /// inject 側を bracketed-paste 化したので Claude Code は long な貼付けを 1 件として
 /// 扱える ようになった。よって閾値は inject の MAX_PAYLOAD と揃えて 32 KiB に拡大。
@@ -140,11 +140,11 @@ pub(crate) const STATUS_STALE_THRESHOLD_SECS: u64 = 300;
 // silent reject ではなく project_root 配下の spool ディレクトリに書き出して、Hub から worker へは
 // 「summary + attached: <path>」の短文だけを inject する。長文を fail-loud から「安全に分流」させる。
 
-/// project_root 直下の spool ディレクトリ (= `<project_root>/.vibe-team/tmp/`)。
-/// renderer 側の SKILL.md が以前から「`.vibe-team/tmp/<short_id>.md` に書き出す」と
+/// project_root 直下の spool ディレクトリ (= `<project_root>/.vibe-team2/tmp/`)。
+/// renderer 側の SKILL.md が以前から「`.vibe-team2/tmp/<short_id>.md` に書き出す」と
 /// 案内していた path と整合させ、ユーザーが手動で書いた spool ファイルと Hub が自動で
 /// 書いた spool ファイルが同じ directory に混在しても困らない設計にする。
-pub(crate) const SPOOL_DIR: &str = ".vibe-team/tmp";
+pub(crate) const SPOOL_DIR: &str = ".vibe-team2/tmp";
 
 /// spool ファイルの保持時間 (時間単位)。Hub 起動時 + 24 時間ごとに古い entry を削除する。
 /// 24 時間あれば worker が読み終えていない可能性は低く、long-running session でも安全。

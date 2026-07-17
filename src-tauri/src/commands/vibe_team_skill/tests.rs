@@ -7,7 +7,7 @@ use tokio::fs;
 use arc_swap::ArcSwapOption;
 use std::sync::Arc;
 
-/// 指定の本文を temp dir 配下の `.claude/skills/vibe-team/SKILL.md` に書き出す。
+/// 指定の本文を temp dir 配下の `.claude/skills/vibe-team2/SKILL.md` に書き出す。
 async fn write_skill(root: &Path, body: &str) {
     let dir = skill_dir(root);
     fs::create_dir_all(&dir).await.unwrap();
@@ -121,7 +121,7 @@ async fn active_root_install_rejects_empty_missing_and_mismatch() {
 }
 
 /// Issue #1109: bundled 本文 (SKILL_VERSION + vibe_team_skill_body.md) と、リポジトリの
-/// 正本 `.claude/skills/vibe-team/SKILL.md` が再び別文書に乖離しないことを CI で固定する。
+/// 正本 `.claude/skills/vibe-team2/SKILL.md` が再び別文書に乖離しないことを CI で固定する。
 /// 正本を更新したら `tail -n +2 SKILL.md > vibe_team_skill_body.md` で bundled を再生成し、
 /// SKILL_VERSION と正本ヘッダを同時に bump すること。
 #[test]
@@ -130,12 +130,12 @@ fn bundled_text_matches_repo_canonical_skill_md() {
     // Windows で autocrlf=true な checkout でも比較が壊れないよう CRLF は正規化する
     // (materialize 時に書かれるのは current_skill_text() 側なので実挙動には影響しない)。
     let canonical =
-        include_str!("../../../../.claude/skills/vibe-team/SKILL.md").replace("\r\n", "\n");
+        include_str!("../../../../.claude/skills/vibe-team2/SKILL.md").replace("\r\n", "\n");
     let bundled = current_skill_text().replace("\r\n", "\n");
     assert_eq!(
         bundled, canonical,
-        "bundled (SKILL_VERSION + vibe_team_skill_body.md) と正本 .claude/skills/vibe-team/SKILL.md が乖離しています。\
-         正本を編集した場合は `tail -n +2 .claude/skills/vibe-team/SKILL.md > src-tauri/src/commands/vibe_team_skill_body.md` \
+        "bundled (SKILL_VERSION + vibe_team_skill_body.md) と正本 .claude/skills/vibe-team2/SKILL.md が乖離しています。\
+         正本を編集した場合は `tail -n +2 .claude/skills/vibe-team2/SKILL.md > src-tauri/src/commands/vibe_team_skill_body.md` \
          で bundled を再生成し、SKILL_VERSION を bump してください (Issue #1109)"
     );
 }

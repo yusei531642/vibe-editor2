@@ -3,7 +3,7 @@
 // TeamHub itself is an in-memory socket hub. Issue #470 requires the
 // orchestration layer (active leader, tasks, worker reports, handoff lifecycle,
 // and human gates) to survive handoff / app restart, so this module owns the
-// on-disk state under ~/.vibe-editor/team-state/.
+// on-disk state under ~/.vibe-editor2/team-state/.
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::Utc;

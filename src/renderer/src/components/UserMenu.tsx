@@ -122,7 +122,7 @@ export function UserMenu({ onOpenSettings }: UserMenuProps): JSX.Element {
 
   const openReleases = (): void => {
     void window.api.app.openExternal(
-      'https://github.com/yusei531642/vibe-editor/releases'
+      'https://github.com/yusei531642/vibe-editor2/releases'
     );
     setOpen(false);
   };

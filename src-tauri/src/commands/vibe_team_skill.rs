@@ -1,6 +1,6 @@
 // vibe-team Skill 自動配置
 //
-// プロジェクトルート直下の `.claude/skills/vibe-team/SKILL.md` に、
+// プロジェクトルート直下の `.claude/skills/vibe-team2/SKILL.md` に、
 // vibe-team の Leader / HR / 動的ワーカーが共通で参照する「行動ルールブック」を書き出す。
 //
 // 設計意図:
@@ -9,7 +9,7 @@
 //       - エージェントが必要なときだけ Skill を読み込む (毎回 prompt に詰めない)
 //       - ユーザーがファイルを直接編集してチームの振る舞いを調整できる
 //       - vibe-editor 以外の Claude Code 利用 (terminal 直接 / 他 CLI) でも同じルールを共有できる
-//   - 名前空間の独立性: Skill 名は "vibe-team"。ファイルパスも `vibe-team/SKILL.md` に固定し、
+//   - 名前空間の独立性: Skill 名は "vibe-team2"。ファイルパスも `vibe-team2/SKILL.md` に固定し、
 //     裏で動く可能性のある他の agent teams 系ツールとは明確に分離する。
 //
 // 配置タイミング: setup_team_mcp で「実チーム」を初めて起動するときに 1 回書き出す。
@@ -28,7 +28,7 @@ mod secure_install_tests;
 
 /// Skill ファイル本文の現行バージョン。SKILL.md 先頭に埋め込んでおき、
 /// Rust 側がファイルを見たときに「ユーザーが手で編集したか / 古いバンドル版か」を判別できるようにする。
-const SKILL_VERSION: &str = "1.6.5";
+const SKILL_VERSION: &str = "2.0.0";
 
 /// vibe-team Skill 本文。Claude Code の Skill 形式 (frontmatter + Markdown body) で書く。
 const SKILL_BODY: &str = include_str!("./vibe_team_skill_body.md");
@@ -50,7 +50,7 @@ fn skill_dir(project_root: &Path) -> PathBuf {
     project_root
         .join(".claude")
         .join("skills")
-        .join("vibe-team")
+        .join("vibe-team2")
 }
 
 fn skill_path(project_root: &Path) -> PathBuf {
@@ -71,8 +71,8 @@ fn current_skill_text() -> String {
     out
 }
 
-/// Issue #998: API エージェントが TeamHub 参加時に自動追加する `vibe-team` skill の
-/// バンドル本文。プロジェクトに `.claude/skills/vibe-team/SKILL.md` がまだ書き出されて
+/// Issue #998: API エージェントが TeamHub 参加時に自動追加する `vibe-team2` skill の
+/// バンドル本文。プロジェクトに `.claude/skills/vibe-team2/SKILL.md` がまだ書き出されて
 /// いない (= チーム未起動) 場合のフォールバックとして使う。
 pub(crate) fn bundled_vibe_team_skill_text() -> String {
     current_skill_text()
@@ -216,7 +216,7 @@ pub async fn app_install_vibe_team_skill(
     let force = force_overwrite.unwrap_or(false);
     // Issue #135 (Security): renderer から来る project_root が AppState の現在値と一致
     // するか canonicalize 比較する。一致しないとユーザー HOME 等の任意ディレクトリ配下に
-    // .claude/skills/vibe-team/SKILL.md を作成できてしまい AI hijack 経路になる。
+    // .claude/skills/vibe-team2/SKILL.md を作成できてしまい AI hijack 経路になる。
     // Issue #1149: 認可をauthz helperへ一本化し、認可失敗は従来どおりresult.errorで返す。
     Ok(install_skill_for_active_root(
         &state.project_root,

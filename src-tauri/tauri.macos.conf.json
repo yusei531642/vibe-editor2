@@ -3,17 +3,17 @@
   "app": {
     "windows": [
       {
-        "title": "vibe-editor",
+        "title": "vibe-editor 2",
         "width": 1440,
         "height": 900,
-        "minWidth": 1100,
+        "minWidth": 960,
         "minHeight": 640,
         "resizable": true,
         "decorations": true,
         "transparent": false,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
-        "backgroundColor": "#0A0A1A",
+        "backgroundColor": "#F8F8F6",
         "fullscreen": false
       }
     ]

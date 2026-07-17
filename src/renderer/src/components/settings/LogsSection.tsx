@@ -1,7 +1,7 @@
 /**
  * LogsSection — Issue #326
  *
- * 設定モーダル内に「ログ」セクションを追加し、`~/.vibe-editor/logs/vibe-editor.log`
+ * 設定モーダル内に「ログ」セクションを追加し、`~/.vibe-editor2/logs/vibe-editor2.log`
  * の末尾を GUI 上で閲覧できるようにする。
  *
  * 機能 (MVP):

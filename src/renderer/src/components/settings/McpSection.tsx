@@ -15,7 +15,7 @@ interface HubInfo {
 }
 
 /**
- * MCP タブ — vibe-team MCP サーバーの導入方法を案内する。
+ * MCP タブ — vibe-team2 MCP サーバーの導入方法を案内する。
  *
  * 3 セクション構成:
  *   1. 自動セットアップ ON/OFF トグル (既存の setupTeamMcp を無効化できる)
@@ -48,12 +48,12 @@ export function McpSection({ draft, update }: Props): JSX.Element {
 
   const aiPrompt = useMemo(
     () =>
-      `You are installing a local MCP server named "vibe-team" for this machine's Claude Code / Codex configurations.
+      `You are installing a local MCP server named "vibe-team2" for this machine's Claude Code / Codex configurations.
 
 Perform the following steps exactly, then report the result.
 
 STEP 1 — Claude Code (~/.claude.json):
-Open the user's Claude Code configuration file at "~/.claude.json" (on Windows: "%USERPROFILE%\\.claude.json"). Under the top-level "mcpServers" object, add or update an entry named "vibe-team" with these fields (preserve all other entries as-is):
+Open the user's Claude Code configuration file at "~/.claude.json" (on Windows: "%USERPROFILE%\\.claude.json"). Under the top-level "mcpServers" object, add or update an entry named "vibe-team2" with these fields (preserve all other entries as-is):
 {
   "type": "stdio",
   "command": "node",
@@ -65,14 +65,14 @@ Open the user's Claude Code configuration file at "~/.claude.json" (on Windows: 
 }
 
 STEP 2 — Codex CLI (~/.codex/config.toml):
-Open "~/.codex/config.toml". Add an [mcp_servers.vibe-team] section equivalent to the above:
-[mcp_servers.vibe-team]
+Open "~/.codex/config.toml". Add an [mcp_servers.vibe-team2] section equivalent to the above:
+[mcp_servers.vibe-team2]
 command = "node"
 args = ["${bridgePath}"]
 env = { VIBE_TEAM_SOCKET = "${socket}", VIBE_TEAM_TOKEN = "${token}" }
 
 STEP 3 — Verify:
-Run "claude mcp list" (or the Codex equivalent) and confirm that "vibe-team" appears. Do not modify any other entries.
+Run "claude mcp list" (or the Codex equivalent) and confirm that "vibe-team2" appears. Do not modify any other entries.
 
 Notes:
 - Replace forward slashes with double backslashes if you are on Windows.
@@ -84,7 +84,7 @@ Notes:
     () =>
       `{
   "mcpServers": {
-    "vibe-team": {
+    "vibe-team2": {
       "type": "stdio",
       "command": "node",
       "args": ["${bridgePath}"],
@@ -100,11 +100,11 @@ Notes:
 
   const manualToml = useMemo(
     () =>
-      `[mcp_servers.vibe-team]
+      `[mcp_servers.vibe-team2]
 command = "node"
 args = ["${bridgePath}"]
 
-[mcp_servers.vibe-team.env]
+[mcp_servers.vibe-team2.env]
 VIBE_TEAM_SOCKET = "${socket}"
 VIBE_TEAM_TOKEN = "${token}"`,
     [socket, token, bridgePath]

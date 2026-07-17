@@ -550,7 +550,7 @@ export interface ApiAgentSendRequest {
 
 /**
  * skill selector 用のメタ情報。Rust `api_agent_skill_list` が vibe-editor 専用フォルダ
- * (`~/.vibe-editor/skills/<id>/SKILL.md`) を列挙して返す。本文 (body) は送信時に Rust 側で
+ * (`~/.vibe-editor2/skills/<id>/SKILL.md`) を列挙して返す。本文 (body) は送信時に Rust 側で
  * 解決し、IPC では往復させない (Issue #998 / #1017)。
  */
 export interface ApiAgentSkillMeta {
@@ -669,7 +669,7 @@ export interface AppUserInfo {
  * ユーザーに通知するための cooldown 判定結果。
  *
  * `app_updater_should_warn_signature` IPC の戻り値。Rust 側は
- * `~/.vibe-editor/updater-warned.json` の `lastSignatureWarningAt` (ISO 8601 UTC)
+ * `~/.vibe-editor2/updater-warned.json` の `lastSignatureWarningAt` (ISO 8601 UTC)
  * を読み、24h 以上経過していれば `shouldWarn=true` を返す。
  */
 export interface UpdaterShouldWarnResult {
@@ -682,7 +682,7 @@ export interface UpdaterShouldWarnResult {
 export const DEFAULT_SETTINGS: AppSettings = {
   schemaVersion: APP_SETTINGS_SCHEMA_VERSION,
   language: 'ja',
-  theme: 'claude-dark',
+  theme: 'claude-light',
   uiFontFamily:
     "'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans', 'Yu Gothic UI', sans-serif",
   uiFontSize: 14,
@@ -854,7 +854,7 @@ export type TerminalAgent = string;
 export type TeamRole = string;
 
 /** ロールプロファイル — チームメンバーの役割テンプレ。
- *  built-in (アプリ同梱) と user (~/.vibe-editor/role-profiles.json) の合成で運用。 */
+ *  built-in (アプリ同梱) と user (~/.vibe-editor2/role-profiles.json) の合成で運用。 */
 export interface RoleProfile {
   schemaVersion: 1;
   id: string;
@@ -925,7 +925,7 @@ export interface DynamicRoleEntry {
   expiresAt?: string;
 }
 
-/** ~/.vibe-editor/role-profiles.json のスキーマ */
+/** ~/.vibe-editor2/role-profiles.json のスキーマ */
 export interface RoleProfilesFile {
   schemaVersion: 1;
   /** built-in を id ベースで部分上書き */
@@ -1103,7 +1103,7 @@ export interface TeamHistoryEntry {
    * IDE モードからは無視される (後方互換)。
    */
   canvasState?: TeamCanvasState;
-  /** Issue #359: 最新 handoff の参照。本体は ~/.vibe-editor/handoffs/ に保存する。 */
+  /** Issue #359: 最新 handoff の参照。本体は ~/.vibe-editor2/handoffs/ に保存する。 */
   latestHandoff?: HandoffReference;
   /** Issue #470: TeamHub orchestration state の軽量要約 */
   orchestration?: TeamOrchestrationSummary;
@@ -1168,7 +1168,7 @@ export interface TeamPresetLayout {
 
 /**
  * Issue #522: 「うまくいったチーム編成」を保存・再構築するための設計図。
- * 1 preset = `~/.vibe-editor/presets/<id>.json`。
+ * 1 preset = `~/.vibe-editor2/presets/<id>.json`。
  */
 export interface TeamPreset {
   schemaVersion: 1;
@@ -1620,7 +1620,7 @@ export const TERMINAL_TABS_SCHEMA_VERSION = 1;
 /**
  * 1 個の terminal タブを再起動跨ぎで復元するためのスナップショット。
  *
- * 永続化先は `~/.vibe-editor/terminal-tabs.json`。`team-history.json` (Canvas / TeamHub
+ * 永続化先は `~/.vibe-editor2/terminal-tabs.json`。`team-history.json` (Canvas / TeamHub
  * 配下のタブ) とは独立した SSOT で、IDE モードの単独タブが対象。
  */
 export interface PersistedTerminalTab {

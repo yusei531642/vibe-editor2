@@ -112,7 +112,7 @@ async fn web_fetch(args: &Value) -> ToolOutcome {
         }
         let mut resp = match NO_REDIRECT_CLIENT
             .get(url.clone())
-            .header("user-agent", "vibe-editor-agent")
+            .header("user-agent", "vibe-editor2-agent")
             .timeout(Duration::from_secs(FETCH_TIMEOUT_SECS))
             .send()
             .await

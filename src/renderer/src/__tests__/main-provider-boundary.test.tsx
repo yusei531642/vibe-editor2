@@ -163,11 +163,11 @@ vi.mock('../lib/hooks/use-claude-check', () => ({
   })
 }));
 
-vi.mock('../components/AppShell', async () => {
+vi.mock('../components/v2/V2Shell', async () => {
   const ReactModule = await import('react');
   const context = await import('../lib/app-state-context');
   return {
-    AppShell: () => {
+    V2Shell: () => {
       const project = context.useProject() as ReturnType<typeof context.useProject> & {
         instanceMarker: string;
       };
@@ -182,7 +182,7 @@ vi.mock('../components/AppShell', async () => {
       return ReactModule.createElement(
         'section',
         {
-          'data-testid': 'app-shell-probe',
+          'data-testid': 'v2-shell-probe',
           'data-project-instance': project.instanceMarker,
           'data-tabs-instance': tabs.instanceMarker,
           'data-team-instance': team.instanceMarker,
@@ -319,7 +319,7 @@ afterEach(() => {
 });
 
 describe('main provider boundary', () => {
-  it('keeps the single real CanvasLayout inside the shared AppStateProvider across mode changes', async () => {
+  it('mounts only the GUI-first shell inside one shared AppStateProvider', async () => {
     document.body.innerHTML = '<div id="root"></div>';
     const { useUiStore } = await import('../stores/ui');
     useUiStore.setState({ viewMode: 'ide', sidebarCollapsed: true });
@@ -328,41 +328,15 @@ describe('main provider boundary', () => {
     expect(harness.renderedTree).not.toBeNull();
 
     const view = render(harness.renderedTree as ReactElement);
-    const shell = screen.getByTestId('app-shell-probe');
-    const canvas = view.container.querySelector<HTMLElement>('.canvas-layout');
-    const canvasChild = screen.getByTestId('canvas-child-probe');
-    expect(canvas).not.toBeNull();
-    expect(view.container.querySelectorAll('.canvas-layout')).toHaveLength(1);
-    expect(shell.compareDocumentPosition(canvas as Node) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-
-    for (const key of ['project-instance', 'tabs-instance', 'team-instance']) {
-      expect(canvasChild.dataset[key]).toBe(shell.dataset[key]);
-    }
-    expect(canvas).toHaveStyle({ display: 'none' });
-    expect(canvas).toHaveAttribute('aria-hidden', 'true');
-
-    const initialCanvasNode = canvas;
-    const baselineMounts = harness.canvasChildMounts;
-    const baselineUnmounts = harness.canvasChildUnmounts;
+    const shell = screen.getByTestId('v2-shell-probe');
+    expect(view.container.querySelector('.canvas-layout')).toBeNull();
+    expect(view.container.querySelector('.layout')).toBeNull();
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'switch project' }));
     });
     expect(shell).toHaveAttribute('data-project-root', 'C:\\project-b');
-    expect(canvasChild).toHaveAttribute('data-project-root', 'C:\\project-b');
-    expect(canvasChild).toHaveAttribute('data-tabs-project', 'C:\\project-b');
-    expect(canvasChild).toHaveAttribute('data-team-project', 'C:\\project-b');
-
-    act(() => useUiStore.getState().setViewMode('canvas'));
-    expect(view.container.querySelector('.canvas-layout')).toBe(initialCanvasNode);
-    expect(initialCanvasNode).not.toHaveStyle({ display: 'none' });
-    expect(initialCanvasNode).toHaveAttribute('aria-hidden', 'false');
-
-    act(() => useUiStore.getState().setViewMode('ide'));
-    expect(view.container.querySelector('.canvas-layout')).toBe(initialCanvasNode);
-    expect(initialCanvasNode).toHaveStyle({ display: 'none' });
-    expect(initialCanvasNode).toHaveAttribute('aria-hidden', 'true');
-    expect(harness.canvasChildMounts).toBe(baselineMounts);
-    expect(harness.canvasChildUnmounts).toBe(baselineUnmounts);
+    expect(shell).toHaveAttribute('data-tabs-project', 'C:\\project-b');
+    expect(shell).toHaveAttribute('data-team-project', 'C:\\project-b');
   });
 });

@@ -17,7 +17,7 @@
 
 use crate::commands::error::{CommandError, CommandResult};
 
-/// `~/.vibe-editor/settings.json` の現行 schema version。
+/// `~/.vibe-editor2/settings.json` の現行 schema version。
 /// renderer 側 `src/types/shared.ts` の `APP_SETTINGS_SCHEMA_VERSION` と同期。
 /// Issue #75 / #449 / #618 で bump されてきた。
 /// Issue #1113 で custom agent descriptor フィールド (engine/env/icon/tags/defaultSkillIds/
@@ -25,15 +25,15 @@ use crate::commands::error::{CommandError, CommandResult};
 /// 新フィールド silent drop を防ぐよう版数を上げる。
 pub const SETTINGS_SCHEMA_VERSION: u32 = 13;
 
-/// `~/.vibe-editor/team-state/*.json` (TeamHub orchestration state) の現行 schema version。
+/// `~/.vibe-editor2/team-state/*.json` (TeamHub orchestration state) の現行 schema version。
 /// Issue #470 で導入。
 pub const TEAM_STATE_SCHEMA_VERSION: u32 = 1;
 
-/// `~/.vibe-editor/handoffs/.../*.json` (leader handoff checkpoint) の現行 schema version。
+/// `~/.vibe-editor2/handoffs/.../*.json` (leader handoff checkpoint) の現行 schema version。
 /// 旧実装は `handoffs.rs` 内に `schema_version: 1` の直書きリテラルだった。
 pub const HANDOFF_SCHEMA_VERSION: u32 = 1;
 
-/// `~/.vibe-editor/terminal-tabs.json` の現行 schema version。
+/// `~/.vibe-editor2/terminal-tabs.json` の現行 schema version。
 /// renderer 側 `TERMINAL_TABS_SCHEMA_VERSION` と同期。
 pub const TERMINAL_TABS_SCHEMA_VERSION: u32 = 1;
 

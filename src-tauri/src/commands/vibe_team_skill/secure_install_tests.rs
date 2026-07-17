@@ -44,7 +44,7 @@ async fn rejects_each_linked_parent_without_outside_write() {
         let parents = [
             project.path().join(".claude"),
             project.path().join(".claude/skills"),
-            project.path().join(".claude/skills/vibe-team"),
+            project.path().join(".claude/skills/vibe-team2"),
         ];
         if let Some(parent) = parents[position].parent() {
             std::fs::create_dir_all(parent).unwrap();
@@ -59,7 +59,7 @@ async fn rejects_each_linked_parent_without_outside_write() {
         assert_eq!(std::fs::read(&canary).unwrap(), b"unchanged");
         assert!(
             !outside.path().join("SKILL.md").exists()
-                && !outside.path().join("skills/vibe-team/SKILL.md").exists()
+                && !outside.path().join("skills/vibe-team2/SKILL.md").exists()
         );
     }
 }
@@ -188,10 +188,10 @@ fn parent_swap_after_open_stays_bound_to_original_directory_handles() {
         "a returned ambient path must not identify a different directory"
     );
     assert_eq!(
-        std::fs::read(moved.join("skills/vibe-team/SKILL.md")).unwrap(),
+        std::fs::read(moved.join("skills/vibe-team2/SKILL.md")).unwrap(),
         b"safe body"
     );
-    assert!(!outside.path().join("skills/vibe-team/SKILL.md").exists());
+    assert!(!outside.path().join("skills/vibe-team2/SKILL.md").exists());
 }
 
 #[cfg(unix)]
@@ -313,7 +313,7 @@ async fn rejects_each_parent_directory_junction() {
         let parents = [
             project.path().join(".claude"),
             project.path().join(".claude/skills"),
-            project.path().join(".claude/skills/vibe-team"),
+            project.path().join(".claude/skills/vibe-team2"),
         ];
         if let Some(parent) = parents[position].parent() {
             std::fs::create_dir_all(parent).unwrap();

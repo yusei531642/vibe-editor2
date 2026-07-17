@@ -128,7 +128,7 @@ pub(crate) fn is_safe_watch_root(root: &Path) -> bool {
     }
 
     // Issue #1193: private authority ledger / settings / TeamHub state を含む
-    // `~/.vibe-editor` 自体（またはその祖先・子孫）をprojectにすると、認可済みfiles IPCから
+    // `~/.vibe-editor2` 自体（またはその祖先・子孫）をprojectにすると、認可済みfiles IPCから
     // ledgerを書き換えてnative approvalを偽造できる。通常projectはsiblingなので影響しない。
     if let Ok(private_root) = crate::util::config_paths::vibe_root().canonicalize() {
         if canon.starts_with(&private_root) || private_root.starts_with(&canon) {

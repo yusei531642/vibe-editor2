@@ -70,21 +70,18 @@ function cssDeclarationsForProperty(
 }
 
 describe('Glass CSS contract', () => {
-  it('main.tsx imports glass.css after component CSS and before final image-preview CSS', () => {
+  it('main.tsx loads only the v2 base, toast, and GUI-first shell styles', () => {
     const imports = importedCssPaths(readRendererFile('main.tsx'));
-
-    const glassIndex = imports.indexOf('styles/components/glass.css');
-    expect(glassIndex).toBeGreaterThanOrEqual(0);
-
-    // Glass effects must win over component base CSS, but image-preview remains final override.
-    for (const componentCss of [
-      'styles/components/canvas.css',
-      'styles/components/claude-patterns.css',
-      'styles/components/shell.css'
-    ]) {
-      expect(glassIndex).toBeGreaterThan(imports.indexOf(componentCss));
-    }
-    expect(glassIndex).toBeLessThan(imports.indexOf('styles/components/image-preview.css'));
+    expect(imports).toEqual([
+      'styles/fonts.css',
+      'styles/v2-base.css',
+      'styles/components/toast.css',
+      'styles/components/v2-shell.css',
+      'styles/components/drag-region.css'
+    ]);
+    expect(imports).not.toContain('styles/components/glass.css');
+    expect(imports).not.toContain('styles/components/shell.css');
+    expect(imports).not.toContain('styles/components/canvas.css');
   });
 
   it('tokens.css owns --glass-* values, not glass visual effects', () => {

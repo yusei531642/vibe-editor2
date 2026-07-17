@@ -63,7 +63,7 @@ describe('Canvas corrupt persistence recovery (Issue #1140)', () => {
       key,
       value
     ) {
-      if (key === 'vibe-editor:canvas:recovery-notice') {
+      if (key === 'vibe-editor2:canvas:recovery-notice') {
         throw new DOMException('quota exceeded', 'QuotaExceededError');
       }
       return originalSetItem.call(this, key, value);

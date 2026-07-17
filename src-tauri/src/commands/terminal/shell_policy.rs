@@ -14,7 +14,7 @@
 //   - 引数は各シェルの **対話起動フラグの allowlist** に一致するものだけ許可
 //   - 一致しないもの (即時実行フラグ・スクリプトパス・未知フラグ) は既定で拒否
 //     = 列挙漏れが deny 側に倒れる
-//   - 例外は「ユーザーが ~/.vibe-editor/settings.json に明示登録した完全コマンドライン」
+//   - 例外は「ユーザーが ~/.vibe-editor2/settings.json に明示登録した完全コマンドライン」
 //     ([`settings_registered_command_lines`]) との完全一致のみ。フラグ単位の例外は設けない
 //
 // 対象はシェル (SHELL_BASENAMES) のみ。claude / codex / custom agent はこの契約の対象外で、
@@ -65,7 +65,7 @@ fn non_interactive_msg(token: &str) -> String {
     format!(
         "shell argument is not in the interactive-session allowlist (Issue #933): {token} \
          (shells can only be launched interactively; to opt in, register the full command line \
-         in ~/.vibe-editor/settings.json)"
+         in ~/.vibe-editor2/settings.json)"
     )
 }
 
@@ -282,7 +282,7 @@ pub fn registered_command_lines_from_value(
     out
 }
 
-/// `~/.vibe-editor/settings.json` から登録済みコマンドラインを読む。
+/// `~/.vibe-editor2/settings.json` から登録済みコマンドラインを読む。
 /// settings.json が無い / parse 失敗の場合は空集合 (= 例外なし) を返す。
 /// spawn 境界から spawn 直前にだけ呼ぶ想定 (1 spawn = 1 file read)。
 pub fn settings_registered_command_lines() -> HashSet<Vec<String>> {

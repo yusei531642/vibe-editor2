@@ -28,7 +28,7 @@ impl TeamHub {
             }
             None => None,
         };
-        // Issue #513: ~/.vibe-editor/role-profiles.json#dynamic[] から該当 team_id の entry を抽出。
+        // Issue #513: ~/.vibe-editor2/role-profiles.json#dynamic[] から該当 team_id の entry を抽出。
         // role-profiles.json は user-global (project_root 非依存) なので、project_root の有無に
         // 関わらず実行する。読み込み失敗 / 古い JSON (dynamic フィールドなし) は空配列扱い。
         // state.lock の前に async I/O を済ませ、lock を保持中に file read をしないようにしている。
@@ -140,7 +140,7 @@ impl TeamHub {
             }
         }
 
-        // Issue #512: チーム登録ごとに `<project_root>/.vibe-team/tmp/` の古い spool ファイルを
+        // Issue #512: チーム登録ごとに `<project_root>/.vibe-team2/tmp/` の古い spool ファイルを
         // best-effort で cleanup する。アプリ起動時のみだと長時間 session で TTL 超過が発生し続ける
         // ため、register_team (= setup MCP 経路) ごとに 1 回だけ走らせる。fire-and-forget で
         // register_team の戻りを遅延させない。
@@ -355,7 +355,7 @@ impl TeamHub {
     }
 }
 
-/// Issue #513: `~/.vibe-editor/role-profiles.json#dynamic[]` から **指定 team_id に紐付く
+/// Issue #513: `~/.vibe-editor2/role-profiles.json#dynamic[]` から **指定 team_id に紐付く
 /// entry だけ** を抽出して返す内部 helper。`register_team` の前段で呼び、Hub state.lock を
 /// 取らずに async I/O を済ませてから replay する設計。
 ///

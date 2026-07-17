@@ -1,6 +1,6 @@
 // team_history.* command — 旧 src/main/ipc/team-history.ts に対応
 //
-// ~/.vibe-editor/team-history.json (JSON 配列) を読み書き。
+// ~/.vibe-editor2/team-history.json (JSON 配列) を読み書き。
 // プロジェクト単位のフィルタ、最新 20 件 + lastUsedAt 降順保持。
 
 use crate::commands::files::hash::{mtime_ms_of, sha256_hex};
@@ -535,7 +535,7 @@ mod tests {
     //!   cache が新規 state のまま残り、renderer 側に IPC エラーを返しても再起動で消える
     //!   データ不整合が起きていた。新実装は write-ahead 化しているので、failure path で
     //!   cache が old state のまま保持されることを下記で担保する。
-    //! - #642: `team_history_save` 等の Tauri command 自体は `~/.vibe-editor/team-history.json`
+    //! - #642: `team_history_save` 等の Tauri command 自体は `~/.vibe-editor2/team-history.json`
     //!   を直接読み書きするので、ここでは `compute_fingerprint` / `reload_disk_entries` /
     //!   `save_all` を tempdir 配下のパスに対して直接呼ぶ + `merge_external_disk` の merge
     //!   セマンティクス + `reconcile_external_changes` の fingerprint 不一致時の挙動を unit

@@ -16,43 +16,17 @@
  * AppStateProvider の子に置くため、ref ブリッジは完全に Provider 内部へ閉じ込められ、
  * 両者は同じ project / tabs / team state を購読する。
  */
-import { useCallback, useState } from 'react';
-import type { SessionInfo } from '../../types/shared';
 import { useWindowFrameInsets } from './lib/use-window-frame-insets';
 import { AppStateProvider } from './lib/app-state-context';
-import { AppShell } from './components/AppShell';
-import { CanvasLayout } from './layouts/CanvasLayout';
+import { V2Shell } from './components/v2/V2Shell';
 
 export function App(): JSX.Element {
   // Issue #307: Windows 11 フレームレス最大化時の不可視リサイズ境界を CSS 変数で補正。
   useWindowFrameInsets();
 
-  // セッションパネル UI の state。AppStateProvider の `onSessionsLoaded`
-  // (events-up: loadProject が取得した初期 sessions を流す) / `onProjectSwitched`
-  // (events-up: プロジェクト切替時のリセット) と AppShell のセッションパネル
-  // (callbacks-down) の両方から触れるよう、共通の親である App が hold する。
-  // 旧 App.tsx では同コンポーネント内の useState だった。
-  const [sessions, setSessions] = useState<SessionInfo[]>([]);
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-
-  // プロジェクト切替時に activeSessionId を null へ戻す (旧 App.tsx の
-  // `projectSwitchedRef.current` 内 `setActiveSessionId(null)` 相当)。
-  const handleProjectSwitched = useCallback(() => {
-    setActiveSessionId(null);
-  }, []);
-
   return (
-    <AppStateProvider
-      onSessionsLoaded={setSessions}
-      onProjectSwitched={handleProjectSwitched}
-    >
-      <AppShell
-        sessions={sessions}
-        setSessions={setSessions}
-        activeSessionId={activeSessionId}
-        setActiveSessionId={setActiveSessionId}
-      />
-      <CanvasLayout />
+    <AppStateProvider>
+      <V2Shell />
     </AppStateProvider>
   );
 }

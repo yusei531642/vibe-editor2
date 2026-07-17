@@ -1,7 +1,7 @@
 // tauri-api/team-state.ts — TeamHub orchestration state の renderer 側 wrapper (Issue #514).
 //
 // Rust 側 `commands/team_state.rs` の `team_state_read` IPC を 1:1 で叩く薄いラッパー。
-// project_root + team_id を指定して `~/.vibe-editor/team-state/<projectKey>/<teamId>.json`
+// project_root + team_id を指定して `~/.vibe-editor2/team-state/<projectKey>/<teamId>.json`
 // から persistence された orchestration state (tasks / worker_reports / human_gate /
 // handoff_events) を読み出す。
 //

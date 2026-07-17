@@ -138,7 +138,7 @@ export const app = {
       phase: args.phase ?? null
     }),
   /**
-   * `<projectRoot>/.claude/skills/vibe-team/SKILL.md` を書き出す。
+   * `<projectRoot>/.claude/skills/vibe-team2/SKILL.md` を書き出す。
    * setupTeamMcp でも best-effort で実行されるが、Onboarding / 設定 UI から手動で
    * 強制再配置 (forceOverwrite=true) したい場合のために露出する。
    *

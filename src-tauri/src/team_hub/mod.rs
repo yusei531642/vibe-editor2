@@ -30,7 +30,7 @@ pub mod protocol;
 pub mod redeliver;
 // Issue #517: 動的ロール同士の責務境界 lint (recruit / assign_task で warning 発火)。
 pub mod role_lint;
-// Issue #512: 32 KiB 超の payload を `<project_root>/.vibe-team/tmp/<short_id>.md` に書き出して
+// Issue #512: 32 KiB 超の payload を `<project_root>/.vibe-team2/tmp/<short_id>.md` に書き出して
 // inject 本文を「summary + attached: <path>」に置換する spool 機構。
 pub mod spool;
 pub mod state;
@@ -111,7 +111,7 @@ async fn bind_local_listener() -> Result<(UnixListener, String)> {
 
 #[cfg(windows)]
 fn new_pipe_endpoint() -> String {
-    format!(r"\\.\pipe\vibe-editor-team-hub-{}", uuid::Uuid::new_v4())
+    format!(r"\\.\pipe\vibe-editor2-team-hub-{}", uuid::Uuid::new_v4())
 }
 
 #[cfg(windows)]

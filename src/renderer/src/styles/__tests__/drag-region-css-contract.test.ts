@@ -39,13 +39,14 @@ function slashPath(path: string): string {
 }
 
 describe('Drag-region CSS contract', () => {
-  it('main.tsx imports drag-region.css after glass.css and before final image-preview', () => {
+  it('main.tsx imports drag-region.css after the GUI-first shell CSS', () => {
     const imports = importedCssPaths(readRendererFile('main.tsx'));
 
     const dragIndex = imports.indexOf('styles/components/drag-region.css');
     expect(dragIndex).toBeGreaterThanOrEqual(0);
-    expect(dragIndex).toBeGreaterThan(imports.indexOf('styles/components/glass.css'));
-    expect(dragIndex).toBeLessThan(imports.indexOf('styles/components/image-preview.css'));
+    expect(dragIndex).toBeGreaterThan(imports.indexOf('styles/components/v2-shell.css'));
+    expect(imports).not.toContain('styles/components/glass.css');
+    expect(imports).not.toContain('styles/components/image-preview.css');
   });
 
   it('drag-region.css defines drag and no-drag rules with no-drag after drag', () => {

@@ -58,7 +58,7 @@ export const useUiStore = create<UiState>()(
       setStatus: (s) => set({ status: s })
     }),
     {
-      name: 'vibe-editor:ui',
+      name: 'vibe-editor2:ui',
       partialize: (s) => ({
         viewMode: s.viewMode,
         sidebarCollapsed: s.sidebarCollapsed

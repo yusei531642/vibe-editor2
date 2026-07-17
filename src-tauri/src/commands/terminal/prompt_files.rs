@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
 /// Issue #99: Codex の system prompt を一時ファイルに書き、`--config model_instructions_file=...`
-/// を args 末尾に追加する。書き出し先は `~/.vibe-editor/codex-instructions/`。
+/// を args 末尾に追加する。書き出し先は `~/.vibe-editor2/codex-instructions/`。
 pub async fn prepare_codex_instructions_file(instructions: &str) -> Option<PathBuf> {
     prepare_prompt_file("codex-instructions", "instr", instructions).await
 }

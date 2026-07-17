@@ -32,7 +32,7 @@ use self::types::*;
 use crate::state::{current_project_root, AppState};
 use tauri::State;
 
-const KEYRING_SERVICE: &str = "vibe-editor";
+const KEYRING_SERVICE: &str = "vibe-editor2";
 
 static SEND_LOCKS: once_cell::sync::Lazy<Mutex<HashMap<String, Arc<Mutex<()>>>>> =
     once_cell::sync::Lazy::new(|| Mutex::new(HashMap::new()));

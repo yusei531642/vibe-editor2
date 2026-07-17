@@ -2,7 +2,7 @@
 //!
 //! 背景: `team_state_read` (#600) / `team_diagnostics_read` (#601 / A-3) /
 //! `handoffs_*` (#609 / A-8) など複数 IPC が renderer 由来の `project_root` を
-//! 引数で受け取り、その path を base64 encode して `~/.vibe-editor/team-state/...`
+//! 引数で受け取り、その path を base64 encode して `~/.vibe-editor2/team-state/...`
 //! 配下のファイルを読みに行く。`AppState` の active project_root と一致するか
 //! 検証していないため、同じ user の別プロジェクトの team-state を任意に閲覧できる
 //! cross-project leak が成立していた。

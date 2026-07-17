@@ -2,7 +2,7 @@
 // import (Issue #998 / #1017)。
 //
 // 構成:
-//   - API エージェントが読む skill ソースは vibe-editor 専用フォルダ `~/.vibe-editor/skills`。
+//   - API エージェントが読む skill ソースは vibe-editor 専用フォルダ `~/.vibe-editor2/skills`。
 //   - import 元は Claude (`~/.claude/skills`, `<project>/.claude/skills`) と
 //     Codex (`~/.agents/skills`, `<project>/.agents/skills`)。設定からコピー (snapshot) する。
 //
@@ -30,13 +30,13 @@ use super::types::{
 const MAX_SKILL_FILE_BYTES: usize = 256 * 1024;
 
 /// TeamHub 参加時に自動追加する skill。
-pub(super) const VIBE_TEAM_SKILL_ID: &str = "vibe-team";
+pub(super) const VIBE_TEAM_SKILL_ID: &str = "vibe-team2";
 
 // ============================================================
 // 専用フォルダ (API エージェントが読む skill ソース)
 // ============================================================
 
-/// vibe-editor 専用 skill フォルダ (`~/.vibe-editor/skills`) の skill 一覧を返す。
+/// vibe-editor 専用 skill フォルダ (`~/.vibe-editor2/skills`) の skill 一覧を返す。
 #[tauri::command]
 pub async fn api_agent_skill_list() -> CommandResult<Vec<ApiAgentSkillMeta>> {
     Ok(list_skills_in(&config_paths::vibe_skills_dir()).await)
@@ -352,7 +352,7 @@ async fn load_skill_bodies_inner(
             ids.push(id.clone());
         }
     }
-    // 計画 v2: TeamHub 参加時は vibe-team を自動追加 (API エージェント経路のみ)。
+    // 計画 v2: TeamHub 参加時は vibe-team2 を自動追加 (API エージェント経路のみ)。
     if include_vibe_team && !ids.iter().any(|i| i == VIBE_TEAM_SKILL_ID) {
         ids.push(VIBE_TEAM_SKILL_ID.to_string());
     }

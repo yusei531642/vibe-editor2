@@ -224,7 +224,7 @@ export const enSettings: Dict = {
   // ---------- Settings: Logs (Issue #326) ----------
   'settings.logs.title': 'Logs',
   'settings.logs.desc':
-    'Tail of the app runtime log (~/.vibe-editor/logs/vibe-editor.log). Attach this when filing a bug report.',
+    'Tail of the app runtime log (~/.vibe-editor2/logs/vibe-editor2.log). Attach this when filing a bug report.',
   'settings.logs.refresh': 'Refresh',
   'settings.logs.openDir': 'Open log folder',
   'settings.logs.levelFilter': 'Level',
@@ -325,9 +325,9 @@ export const enSettings: Dict = {
   'settings.mcp.manualDesc':
     'Open the config files in your editor and merge the snippets below.',
   'settings.mcp.manualStep1': 'Open ~/.claude.json (create it if missing).',
-  'settings.mcp.manualStep2': 'Add a "vibe-team" entry under the top-level "mcpServers" object.',
+  'settings.mcp.manualStep2': 'Add a "vibe-team2" entry under the top-level "mcpServers" object.',
   'settings.mcp.manualStep3':
-    'For Codex, add the equivalent [mcp_servers.vibe-team] section to ~/.codex/config.toml.',
+    'For Codex, add the equivalent [mcp_servers.vibe-team2] section to ~/.codex/config.toml.',
   'settings.mcp.copy': 'Copy',
   'settings.mcp.copied': 'Copied',
   // Issue #729: McpSection inline isJa moved into i18n.ts

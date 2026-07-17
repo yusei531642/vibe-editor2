@@ -17,11 +17,11 @@ use tauri::Manager;
 use tracing::info;
 
 /// Issue #326 → #643: tracing を stderr + ファイル両方に書き出す。
-/// ファイルは `~/.vibe-editor/logs/vibe-editor.log.YYYY-MM-DD` で **日次回転**する
+/// ファイルは `~/.vibe-editor2/logs/vibe-editor2.log.YYYY-MM-DD` で **日次回転**する
 /// (tracing-appender 0.2 の `rolling::Builder` + `Rotation::DAILY`)。
 /// 古い世代は appender 自身が `max_log_files()` で GC し、加えて起動時に
-/// 14 日を超える残骸 / 旧 `vibe-editor.log` 単体ファイルも `prune_old_log_files()` で
-/// best-effort 削除する。これで長期稼働時に `vibe-editor.log` が肥大化して
+/// 14 日を超える残骸 / 旧 `vibe-editor2.log` 単体ファイルも `prune_old_log_files()` で
+/// best-effort 削除する。これで長期稼働時に `vibe-editor2.log` が肥大化して
 /// disk full → DoS に繋がる経路を塞ぐ。
 fn init_logging() {
     use tracing_appender::rolling::{Builder as RollingBuilder, Rotation};
@@ -37,22 +37,22 @@ fn init_logging() {
 
     // Issue #643: 起動時 sweep。`max_log_files` は appender が新たに rotate した世代しか
     // 管理しないため、(1) アプリが長期間起動されなかったケースの旧世代、
-    // (2) Issue #326 時代の無回転 `vibe-editor.log` 単体ファイル、
+    // (2) Issue #326 時代の無回転 `vibe-editor2.log` 単体ファイル、
     // を best-effort で削除する。失敗は無視 (ログ書き込み自体には影響させない)。
     prune_old_log_files(&log_dir, LOG_KEEP_DAYS);
 
     // `team_diagnostics` の `serverLogPath` 用に「ベースファイル」のパスを記録する。
-    // 実ファイルは `vibe-editor.log.YYYY-MM-DD` だが、診断 UI 上はディレクトリ位置の
-    // 目印として `vibe-editor.log` を返す形を維持する (renderer の commands::logs 側も
+    // 実ファイルは `vibe-editor2.log.YYYY-MM-DD` だが、診断 UI 上はディレクトリ位置の
+    // 目印として `vibe-editor2.log` を返す形を維持する (renderer の commands::logs 側も
     // 同ディレクトリの最新世代を解決して表示するため、リテラルが残っていても矛盾しない)。
-    let base_log_path = log_dir.join("vibe-editor.log");
+    let base_log_path = log_dir.join("vibe-editor2.log");
 
     // Issue #342 Phase 3 (3.12): ログファイル ACL を強制する。
     //   - Unix: 0o600 (既存 `bind_local_listener` / `team-bridge.js` 書き出しと同流儀)
     //   - Windows: ~ 配下の user profile default ACL に依存 (新規 ACE は付けない)
     // tracing-appender が append open する前に空ファイルを先行作成しておくことで、
     // 「ログファイル作成された瞬間」にも ACL が掛かっている状態を保証する。
-    // 日次回転後の新ファイル (`vibe-editor.log.YYYY-MM-DD`) には appender が umask で書き
+    // 日次回転後の新ファイル (`vibe-editor2.log.YYYY-MM-DD`) には appender が umask で書き
     // 出すため、Unix で厳格に縛りたい場合は別途 umask を設定する想定。今回はベースファイル
     // 位置のみ ACL を強制する (regression 回避)。
     {
@@ -73,15 +73,15 @@ fn init_logging() {
     team_hub::set_server_log_path(base_log_path);
 
     // Issue #643: 日次回転 + 古い世代を appender 自身が GC。
-    // ファイル名は `vibe-editor.log.YYYY-MM-DD` 形式 (tracing-appender 0.2 の標準形)。
+    // ファイル名は `vibe-editor2.log.YYYY-MM-DD` 形式 (tracing-appender 0.2 の標準形)。
     // build() 失敗時は best-effort で `rolling::daily()` にフォールバック (max_log_files
     // GC は失われるが、prune_old_log_files() の起動時 sweep が backstop として残る)。
     let file_appender = RollingBuilder::new()
         .rotation(Rotation::DAILY)
-        .filename_prefix("vibe-editor.log")
+        .filename_prefix("vibe-editor2.log")
         .max_log_files(LOG_KEEP_DAYS as usize)
         .build(&log_dir)
-        .unwrap_or_else(|_| tracing_appender::rolling::daily(&log_dir, "vibe-editor.log"));
+        .unwrap_or_else(|_| tracing_appender::rolling::daily(&log_dir, "vibe-editor2.log"));
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
     // WorkerGuard はプロセス終了まで保持する必要があるため leak で 'static 化する。
     // 1 度だけの起動コストで、メモリリークも 1 件のみ (許容)。
@@ -103,14 +103,14 @@ fn init_logging() {
 /// 14 日 = 2 週間分。長期稼働マシンでも 14 ファイル × 数十 MB 程度に収まる想定。
 const LOG_KEEP_DAYS: u32 = 14;
 
-/// Issue #643: ログディレクトリ内の `vibe-editor.log*` のうち、
+/// Issue #643: ログディレクトリ内の `vibe-editor2.log*` のうち、
 /// `keep_days` 日より前に最終更新されたものを best-effort で削除する。
 ///
 /// 起動時に 1 度だけ呼ばれる。`max_log_files` だけだと拾えない以下のケースを backstop する:
 ///   - アプリを 14 日以上起動しなかった結果として残っている古い世代
-///   - Issue #326 時代の無回転 `vibe-editor.log` 単体ファイル (新形式に移行済み環境用)
+///   - Issue #326 時代の無回転 `vibe-editor2.log` 単体ファイル (新形式に移行済み環境用)
 ///
-/// 削除対象は `vibe-editor.log` で始まるファイルのみ。サブディレクトリ・別名ファイルは触らない。
+/// 削除対象は `vibe-editor2.log` で始まるファイルのみ。サブディレクトリ・別名ファイルは触らない。
 /// I/O エラーはすべて無視 (起動自体を失敗させない)。
 fn prune_old_log_files(log_dir: &std::path::Path, keep_days: u32) {
     use std::time::{Duration, SystemTime};
@@ -132,7 +132,7 @@ fn prune_old_log_files(log_dir: &std::path::Path, keep_days: u32) {
         let name = entry.file_name();
         let name_str = name.to_string_lossy();
         // 我々が書いたログファイル以外は触らない (誤削除防止)。
-        if !name_str.starts_with("vibe-editor.log") {
+        if !name_str.starts_with("vibe-editor2.log") {
             continue;
         }
         let Ok(meta) = entry.metadata() else {
@@ -464,7 +464,7 @@ pub fn run() {
                             })
                             .await;
                             // MCP エントリは残しておく (次回起動時に reclaim されるので副作用なし)
-                            // team-bridge.js は ~/.vibe-editor/ に置いたまま (再利用のため)
+                            // team-bridge.js は ~/.vibe-editor2/ に置いたまま (再利用のため)
                             app_for_drain.exit(0);
                         });
                     }

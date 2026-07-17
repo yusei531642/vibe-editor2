@@ -47,7 +47,7 @@ vibe-autopilot-batch
 ## 必須要件
 
 - [Claude Code](https://claude.ai/claude-code) (CLI / Desktop / Web)
-- [vibe-editor](https://github.com/yusei531642/vibe-editor) + vibe-team MCP サーバー
+- [vibe-editor 2](https://github.com/yusei531642/vibe-editor2) + vibe-team2 MCP サーバー
 
 ## オプション（なくても動作します）
 

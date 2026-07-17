@@ -31,8 +31,8 @@ impl AppServerConn {
     pub async fn initialize(&mut self) -> Result<(), AppServerError> {
         let params = json!({
             "clientInfo": {
-                "name": "vibe-editor",
-                "title": "vibe-editor",
+                "name": "vibe-editor2",
+                "title": "vibe-editor 2",
                 "version": env!("CARGO_PKG_VERSION"),
             },
             "capabilities": {
