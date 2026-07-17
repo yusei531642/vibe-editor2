@@ -249,7 +249,7 @@ pub fn validate_template(
     // combined テキスト (instructions + instructions_ja を改行連結)。Worktree Isolation Rule
     // のトークンや 4 軸見出しは英語側に書かれていれば pass。日本語側だけにある場合も同様に pass。
     let combined: String = match instructions_ja {
-        Some(ja) if !ja.is_empty() => format!("{}\n{}", instructions, ja),
+        Some(ja) if !ja.is_empty() => format!("{instructions}\n{ja}"),
         _ => instructions.to_string(),
     };
 
@@ -260,8 +260,7 @@ pub fn validate_template(
             level: TemplateLevel::Deny,
             category: "too_short",
             detail: format!(
-                "instructions are too short: {} bytes (minimum {})",
-                trimmed_len, MIN_INSTRUCTIONS_BYTES
+                "instructions are too short: {trimmed_len} bytes (minimum {MIN_INSTRUCTIONS_BYTES})"
             ),
         });
         // 中身が無いケースは他チェックを重ねても意味が薄いので早期 return。
@@ -293,7 +292,7 @@ pub fn validate_template(
         findings.push(TemplateFinding {
             level: TemplateLevel::Warn,
             category: "missing_section",
-            detail: format!("missing required section: '### {}'", name),
+            detail: format!("missing required section: '### {name}'"),
         });
     }
 
@@ -354,8 +353,7 @@ pub fn validate_template(
                 level: TemplateLevel::Warn,
                 category: "vague_label",
                 detail: format!(
-                    "label '{}' is too vague (matches '{}'); pick a role-specific name",
-                    label, pat
+                    "label '{label}' is too vague (matches '{pat}'); pick a role-specific name"
                 ),
             });
             break;

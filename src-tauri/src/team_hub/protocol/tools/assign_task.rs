@@ -456,7 +456,7 @@ pub async fn team_assign_task(
         let app = hub.app_handle.lock().await.clone();
         if let Some(app) = &app {
             let summary = boundary_report
-                .warn_message(&format!("タスク #{} の責務境界 warning", task_id))
+                .warn_message(&format!("タスク #{task_id} の責務境界 warning"))
                 .unwrap_or_default();
             let payload = crate::team_hub::events::RoleLintWarningPayload {
                 team_id: ctx.team_id.clone(),
@@ -494,7 +494,7 @@ pub async fn team_assign_task(
                 source: "assign".to_string(),
                 task_id,
                 assignee: assignee.to_string(),
-                message: format!("タスク #{} の file lock 競合: {}", task_id, summary),
+                message: format!("タスク #{task_id} の file lock 競合: {summary}"),
                 conflicts: lock_conflict_snapshots.clone(),
             };
             if let Err(e) = app.emit("team:file-lock-conflict", payload) {

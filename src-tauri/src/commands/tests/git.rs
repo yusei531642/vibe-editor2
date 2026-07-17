@@ -31,7 +31,7 @@ fn init_fixture_repo(dir: &Path) {
             .current_dir(dir)
             .status()
             .expect("git command failed");
-        assert!(status.success(), "git {:?} failed", args);
+        assert!(status.success(), "git {args:?} failed");
     };
     run(&["init", "--initial-branch=main"]);
     run(&["config", "user.email", "test@example.com"]);
@@ -51,7 +51,7 @@ fn commit_all(dir: &Path, message: &str) {
             .current_dir(dir)
             .status()
             .expect("git command failed");
-        assert!(status.success(), "git {:?} failed", args);
+        assert!(status.success(), "git {args:?} failed");
     };
     run(&["add", "-A"]);
     run(&["commit", "-m", message, "--no-verify"]);

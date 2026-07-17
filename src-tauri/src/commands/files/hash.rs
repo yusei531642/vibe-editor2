@@ -7,7 +7,7 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
     let digest = h.finalize();
     let mut out = String::with_capacity(digest.len() * 2);
     for b in digest.iter() {
-        out.push_str(&format!("{:02x}", b));
+        out.push_str(&format!("{b:02x}"));
     }
     out
 }

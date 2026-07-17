@@ -68,7 +68,7 @@ Tauri ベースのGUI-first Claude Code / Codex / vibe-teamエディタ。正確
 
 ## 技術スタック
 - Tauri 2 + Vite 8 + React 19 + TypeScript 6
-- Rust 1.85 (tokio, portable-pty, notify, anyhow, serde, encoding_rs, sha2)
+- Rust 1.88 (tokio, portable-pty, notify, anyhow, serde, encoding_rs, sha2)
 - Monaco Editor (diff + エディタ、選択的言語インポート)
 - xterm.js + portable-pty (ターミナル)
 - @xyflow/react (Canvas)
