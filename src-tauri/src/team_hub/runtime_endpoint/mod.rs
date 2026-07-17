@@ -111,38 +111,8 @@ impl TeamHub {
     ) -> Result<String, String> {
         let _binding_guard = self.runtime.pty_binding_lock.lock().await;
         // 認可 (PR #34 レビュー): terminal_create 経由の (team_id, agent_id) も renderer 由来。
-        // native bind と同じく active team + 実在メンバー (agents / PTY session / 非 terminal
-        // recruit lifecycle のいずれか) を fail-closed に要求する。
-        {
-            let state = self.state.lock().await;
-            if !state.active_teams.contains(team_id) {
-                return Err(format!("team '{team_id}' is not active"));
-            }
-            let recruited_here = state
-                .recruit_lifecycles
-                .get(agent_id)
-                .is_some_and(|lifecycle| {
-                    lifecycle.team_id == team_id
-                        && !matches!(
-                            lifecycle.state,
-                            crate::team_hub::events::RecruitLifecycleState::Failed
-                                | crate::team_hub::events::RecruitLifecycleState::Cancelled
-                        )
-                });
-            let is_member = state
-                .agents
-                .contains_key(&(team_id.to_string(), agent_id.to_string()))
-                || self
-                    .registry
-                    .list_team_members(team_id)
-                    .iter()
-                    .any(|(member_agent_id, _)| member_agent_id == agent_id);
-            if !recruited_here && !is_member {
-                return Err(format!(
-                    "agent '{agent_id}' is not a member of team '{team_id}'"
-                ));
-            }
-        }
+        // native bind と同一の fail-closed 検証を通す。
+        self.authorize_team_agent_binding(team_id, agent_id).await?;
         let endpoint_id = pty_endpoint_id(agent_id);
         let already_bound = {
             let state = self.state.lock().await;
@@ -197,6 +167,45 @@ impl TeamHub {
         Ok(endpoint_id)
     }
 
+    /// (team_id, agent_id) が「active team の実在メンバー (handshake 済み agents /
+    /// PTY session / 非 terminal recruit lifecycle のいずれか)」であることを検証する。
+    /// renderer 由来の binding 系入力に共通の fail-closed 認可 (PR #34 レビュー)。
+    async fn authorize_team_agent_binding(
+        &self,
+        team_id: &str,
+        agent_id: &str,
+    ) -> Result<(), String> {
+        let state = self.state.lock().await;
+        if !state.active_teams.contains(team_id) {
+            return Err(format!("team '{team_id}' is not active"));
+        }
+        let recruited_here = state
+            .recruit_lifecycles
+            .get(agent_id)
+            .is_some_and(|lifecycle| {
+                lifecycle.team_id == team_id
+                    && !matches!(
+                        lifecycle.state,
+                        crate::team_hub::events::RecruitLifecycleState::Failed
+                            | crate::team_hub::events::RecruitLifecycleState::Cancelled
+                    )
+            });
+        let is_member = state
+            .agents
+            .contains_key(&(team_id.to_string(), agent_id.to_string()))
+            || self
+                .registry
+                .list_team_members(team_id)
+                .iter()
+                .any(|(member_agent_id, _)| member_agent_id == agent_id);
+        if !recruited_here && !is_member {
+            return Err(format!(
+                "agent '{agent_id}' is not a member of team '{team_id}'"
+            ));
+        }
+        Ok(())
+    }
+
     pub async fn bind_native_runtime_endpoint(
         &self,
         team_id: &str,
@@ -218,41 +227,13 @@ impl TeamHub {
         // 認可 (PR #34 一次レビュー 🟡7): renderer 由来の (team_id, agent_id) は信頼境界外。
         // active な team の実在メンバーであることを fail-closed に検証し、live な native
         // binding の上書き (既存 worker の配送乗っ取り) を拒否する。
-        let is_member = self
-            .registry
-            .list_team_members(team_id)
-            .iter()
-            .any(|(member_agent_id, _)| member_agent_id == agent_id);
+        self.authorize_team_agent_binding(team_id, agent_id).await?;
         let endpoint = RuntimeEndpoint {
             endpoint_id,
             backend: RuntimeEndpointBackend::Native,
             session_id,
         };
         let mut state = self.state.lock().await;
-        if !state.active_teams.contains(team_id) {
-            return Err(format!("team '{team_id}' is not active"));
-        }
-        let recruited_here = state
-            .recruit_lifecycles
-            .get(agent_id)
-            .is_some_and(|lifecycle| {
-                lifecycle.team_id == team_id
-                    && !matches!(
-                        lifecycle.state,
-                        crate::team_hub::events::RecruitLifecycleState::Failed
-                            | crate::team_hub::events::RecruitLifecycleState::Cancelled
-                    )
-            });
-        if !is_member
-            && !recruited_here
-            && !state
-                .agents
-                .contains_key(&(team_id.to_string(), agent_id.to_string()))
-        {
-            return Err(format!(
-                "agent '{agent_id}' is not a member of team '{team_id}'"
-            ));
-        }
         let binding = state
             .runtime_endpoints
             .entry(key(team_id, agent_id))
