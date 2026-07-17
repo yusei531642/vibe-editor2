@@ -145,7 +145,7 @@ jobs:
 
             動作確認後にこの draft を publish してください。
           releaseDraft: true
-          prerelease: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
           includeUpdaterJson: true
           args: ${{ matrix.args }}
 
