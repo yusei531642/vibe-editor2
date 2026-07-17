@@ -397,7 +397,12 @@ function AgentNodeCardImpl({
         position={Position.Left}
         style={{ background: accent, width: 10, height: 10 }}
       />
-      <div className="canvas-agent-card" style={cardStyle}>
+      <div
+        className="canvas-agent-card"
+        style={cardStyle}
+        data-workspace-leader={roleProfileId === 'leader' ? '' : undefined}
+        data-workspace-team-id={roleProfileId === 'leader' ? payload.teamId : undefined}
+      >
         <CardPresentation
           cardId={id}
           title={title}

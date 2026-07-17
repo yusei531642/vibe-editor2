@@ -1,0 +1,292 @@
+:root {
+  --workspace-scene-duration: 500ms;
+  --workspace-scene-crossfade-duration: 120ms;
+  --workspace-scene-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --workspace-worker-duration: 280ms;
+  --workspace-worker-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --workspace-flip-x: 0px;
+  --workspace-flip-y: 0px;
+  --workspace-flip-scale-x: 1;
+  --workspace-flip-scale-y: 1;
+}
+
+.workspace-transition-root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg, #f8f8f6);
+  color: var(--fg, #1d1d1f);
+  isolation: isolate;
+}
+
+.workspace-scene {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform var(--workspace-scene-duration) var(--workspace-scene-ease),
+    opacity var(--workspace-scene-duration) var(--workspace-scene-ease);
+}
+
+.workspace-scene--focus {
+  transform: translate3d(-4%, 0, 0);
+}
+
+.workspace-scene--team {
+  transform: translate3d(4%, 0, 0);
+}
+
+.workspace-scene[data-active='true'] {
+  z-index: 2;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate3d(0, 0, 0);
+}
+
+.workspace-scene-switcher {
+  position: absolute;
+  z-index: 10;
+  top: 12px;
+  left: 50%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border, rgba(31, 30, 29, 0.14));
+  border-radius: 9.6px;
+  background: color-mix(in srgb, var(--surface-panel) 88%, transparent);
+  transform: translateX(-50%);
+}
+
+.workspace-scene-switcher button {
+  min-width: 132px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 14px;
+  border-radius: 6px;
+  color: var(--fg-muted, #7b7974);
+  transition:
+    color 150ms var(--workspace-scene-ease),
+    background-color 150ms var(--workspace-scene-ease);
+}
+
+.workspace-scene-switcher button[aria-pressed='true'] {
+  background: var(--surface-elev);
+  color: var(--fg, #1d1d1f);
+}
+
+.workspace-scene-switcher button:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.workspace-flip-frame {
+  position: fixed;
+  z-index: 9;
+  pointer-events: none;
+  transform-origin: top left;
+  border: 1px solid color-mix(in srgb, var(--accent, #d97757) 54%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-panel) 28%, transparent);
+  animation: workspace-flip var(--workspace-scene-duration) var(--workspace-scene-ease) both;
+}
+
+@keyframes workspace-flip {
+  from {
+    opacity: 0.9;
+    transform: translate3d(0, 0, 0) scale(1, 1);
+  }
+  to {
+    opacity: 0;
+    transform:
+      translate3d(var(--workspace-flip-x), var(--workspace-flip-y), 0)
+      scale(var(--workspace-flip-scale-x), var(--workspace-flip-scale-y));
+  }
+}
+
+.workspace-team-scene {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg, #f8f8f6);
+}
+
+.workspace-team-scene__header {
+  position: absolute;
+  z-index: 5;
+  top: 12px;
+  left: 20px;
+  right: 20px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--fg-muted, #7b7974);
+  font-size: 13px;
+  pointer-events: none;
+}
+
+.workspace-team-scene__header div {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--fg, #1d1d1f);
+}
+
+.workspace-team-scene__canvas {
+  position: absolute;
+  inset: 64px 0 0;
+}
+
+.workspace-team-scene__canvas .tc-stage-root {
+  border-top: 1px solid var(--border, rgba(31, 30, 29, 0.12));
+}
+
+.workspace-team-leader {
+  position: absolute;
+  z-index: 4;
+  top: 22%;
+  left: 12%;
+  width: min(520px, 42vw);
+  min-height: 280px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--border, rgba(31, 30, 29, 0.14));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-panel) 88%, transparent);
+  pointer-events: none;
+}
+
+.workspace-team-leader div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.workspace-team-leader span {
+  color: var(--fg-muted, #7b7974);
+  font-size: 12px;
+}
+
+.workspace-recruits {
+  position: absolute;
+  z-index: 6;
+  top: 80px;
+  right: 20px;
+  width: min(280px, calc(100vw - 40px));
+  display: grid;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.workspace-recruit-card {
+  min-height: 88px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--border, rgba(31, 30, 29, 0.14));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-panel) 92%, transparent);
+}
+
+.workspace-recruit-card > svg {
+  flex: 0 0 auto;
+  color: var(--accent, #d97757);
+}
+
+.workspace-recruit-card div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.workspace-recruit-card span,
+.workspace-recruit-card small {
+  overflow: hidden;
+  color: var(--fg-muted, #7b7974);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-recruit-card[data-lifecycle-state='spawning'] > svg,
+.workspace-recruit-card[data-lifecycle-state='handshaking'] > svg {
+  animation: workspace-recruit-spin 900ms linear infinite;
+}
+
+.workspace-recruit-card[data-lifecycle-state='ready'] {
+  animation: workspace-worker-enter var(--workspace-worker-duration) var(--workspace-worker-ease) both;
+}
+
+.workspace-recruit-card[data-exiting='true'] {
+  animation: workspace-worker-exit var(--workspace-worker-duration) var(--workspace-worker-ease) both;
+}
+
+@keyframes workspace-recruit-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes workspace-worker-enter {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes workspace-worker-exit {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(8px); }
+}
+
+.workspace-transition-root[data-reduced-motion='true'] .workspace-scene {
+  transform: none;
+  transition-duration: var(--workspace-scene-crossfade-duration);
+}
+
+.workspace-transition-root[data-reduced-motion='true'] .workspace-recruit-card {
+  animation-duration: 1ms;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-scene {
+    transform: none;
+    transition-duration: var(--workspace-scene-crossfade-duration);
+  }
+
+  .workspace-flip-frame {
+    display: none;
+  }
+
+  .workspace-recruit-card {
+    animation-duration: 1ms;
+    transform: none;
+  }
+}
+
+@media (max-width: 759px) {
+  .workspace-scene-switcher button {
+    min-width: 112px;
+  }
+
+  .workspace-team-leader {
+    left: 16px;
+    width: calc(100vw - 32px);
+  }
+}
+
+/* FLIP 計測中は退避 transform を無効化する (PR #35 レビュー: 非 active scene の
+   translate が掛かったまま測ると移動量がずれる)。同期計測なので paint されない。 */
+.workspace-scene[data-measuring='true'] {
+  transform: none !important;
+  transition: none !important;
+}

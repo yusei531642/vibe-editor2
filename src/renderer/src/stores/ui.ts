@@ -10,11 +10,15 @@ import { persist } from 'zustand/middleware';
 import type { AvailableUpdateInfo } from '../lib/updater-check';
 
 export type ViewMode = 'ide' | 'canvas';
+export type WorkspaceScene = 'focus' | 'team';
 
 interface UiState {
   viewMode: ViewMode;
   setViewMode: (m: ViewMode) => void;
   toggleViewMode: () => void;
+  /** v2 Team session の Conversation / Canvas 表示。transition 進捗は component local に置く。 */
+  workspaceScene: WorkspaceScene;
+  setWorkspaceScene: (scene: WorkspaceScene) => void;
   /** 共通サイドバーから「設定」を開くためのグローバルフラグ */
   settingsOpen: boolean;
   setSettingsOpen: (open: boolean) => void;
@@ -44,6 +48,8 @@ export const useUiStore = create<UiState>()(
       viewMode: 'ide',
       setViewMode: (m) => set({ viewMode: m }),
       toggleViewMode: () => set({ viewMode: get().viewMode === 'ide' ? 'canvas' : 'ide' }),
+      workspaceScene: 'focus',
+      setWorkspaceScene: (scene) => set({ workspaceScene: scene }),
       settingsOpen: false,
       setSettingsOpen: (open) => set({ settingsOpen: open }),
       paletteOpen: false,
@@ -61,6 +67,7 @@ export const useUiStore = create<UiState>()(
       name: 'vibe-editor2:ui',
       partialize: (s) => ({
         viewMode: s.viewMode,
+        workspaceScene: s.workspaceScene,
         sidebarCollapsed: s.sidebarCollapsed
       })
     }

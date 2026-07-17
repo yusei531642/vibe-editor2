@@ -70,13 +70,14 @@ function cssDeclarationsForProperty(
 }
 
 describe('Glass CSS contract', () => {
-  it('main.tsx loads only the v2 base, toast, and GUI-first shell styles', () => {
+  it('main.tsx loads only the v2 base, toast, GUI-first shell, and workspace scene styles', () => {
     const imports = importedCssPaths(readRendererFile('main.tsx'));
     expect(imports).toEqual([
       'styles/fonts.css',
       'styles/v2-base.css',
       'styles/components/toast.css',
       'styles/components/v2-shell.css',
+      'styles/components/workspace-scene.css',
       'styles/components/drag-region.css'
     ]);
     expect(imports).not.toContain('styles/components/glass.css');

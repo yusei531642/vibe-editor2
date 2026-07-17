@@ -61,7 +61,11 @@ const QUICK_ACTIONS = [
   },
 ] as const;
 
-export function V2Shell(): JSX.Element {
+export interface V2ShellProps {
+  shortcutsEnabled?: boolean;
+}
+
+export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Element {
   const t = useT();
   const { projectRoot, handleOpenFolder, gitStatus } = useProject();
   const { claudeCheck, runClaudeCheck } = useTeam();
@@ -145,6 +149,7 @@ export function V2Shell(): JSX.Element {
   }, [cancelFakeReply]);
 
   useEffect(() => {
+    if (!shortcutsEnabled) return;
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.isComposing) return;
       const mod = event.metaKey || event.ctrlKey;
@@ -167,7 +172,7 @@ export function V2Shell(): JSX.Element {
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [stopRun]);
+  }, [shortcutsEnabled, stopRun]);
 
   return (
     <main className={`v2-shell${hasStarted ? " v2-shell--session" : ""}`}>
@@ -264,7 +269,11 @@ export function V2Shell(): JSX.Element {
           )}
         </section>
       ) : (
-        <section className="v2-timeline" aria-live="polite">
+        <section
+          className="v2-timeline"
+          aria-live="polite"
+          data-workspace-focus-frame=""
+        >
           <header>
             <div>
               <span className={`v2-engine-dot v2-engine-dot--${engine}`} />
