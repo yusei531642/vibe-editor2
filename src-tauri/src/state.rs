@@ -31,6 +31,7 @@ pub struct AppState {
     /// resume / fork はこの集合に含まれる thread だけを許可し、renderer 由来の任意
     /// threadId で authority 外プロジェクトの thread を開かせない (project authority の迂回防止)。
     /// process 再起動で消える in-memory guard であり、永続 resume トークンは Phase 8 の復元で扱う。
+    #[cfg_attr(not(unix), allow(dead_code))] // Codex app-server registration is Unix-only.
     pub known_codex_threads: std::sync::Mutex<std::collections::HashSet<String>>,
     pub team_hub: TeamHub,
     /// Issue #952: watcher / cleanup / poller / inject 系 background task の共通 supervisor。
