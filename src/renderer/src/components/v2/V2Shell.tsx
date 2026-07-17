@@ -63,7 +63,11 @@ const QUICK_ACTIONS = [
   },
 ] as const;
 
-export function V2Shell(): JSX.Element {
+export interface V2ShellProps {
+  shortcutsEnabled?: boolean;
+}
+
+export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Element {
   const t = useT();
   const { projectRoot, handleOpenFolder, gitStatus } = useProject();
   const { claudeCheck, runClaudeCheck } = useTeam();
@@ -162,6 +166,7 @@ export function V2Shell(): JSX.Element {
   }, [cancelFakeReply]);
 
   useEffect(() => {
+    if (!shortcutsEnabled) return;
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.isComposing) return;
       const mod = event.metaKey || event.ctrlKey;
@@ -184,7 +189,7 @@ export function V2Shell(): JSX.Element {
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [setInspectorOpen, stopRun]);
+  }, [setInspectorOpen, shortcutsEnabled, stopRun]);
 
   return (
     <main className={`v2-shell${hasStarted ? " v2-shell--session" : ""}`}>
