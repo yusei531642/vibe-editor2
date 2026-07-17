@@ -465,8 +465,18 @@ pub async fn terminal_create(
     // Issue #1200: resume が返した cwd と spawn の check-to-use gap を塞ぐ。cwd が
     // active / workspace root と同一 directory を指す場合のみ、TTL キャッシュを使わず
     // platform identity を再照合し、置換されていれば起動しない (fail-closed)。
-    let spawn_cwd_identity = if managed_cwd_identity.is_some() {
-        managed_cwd_identity
+    let spawn_cwd_identity = if let Some(identity) = managed_cwd_identity {
+        // Issue #1200 と同じく managed worktree も例外にせず spawn 直前に identity を
+        // 再照合する。canonicalize 後にディレクトリが symlink 等へ差し替えられていたら
+        // fail-closed で起動しない (PR #37 レビュー: TOCTOU 対称性)。
+        if let Err(error) = crate::commands::project_identity::verify_identity(&identity).await {
+            return Ok(TerminalCreateResult {
+                ok: false,
+                error: Some(format!("managed worktree identity changed: {error}")),
+                ..Default::default()
+            });
+        }
+        Some(identity)
     } else {
         match crate::commands::authz::assert_spawn_cwd_identity(
             &state.project_root,
