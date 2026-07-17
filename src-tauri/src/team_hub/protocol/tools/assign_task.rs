@@ -233,7 +233,7 @@ pub async fn team_assign_task(
     // task は作成されるが team_send 通知はゼロ宛先で no-op になり、
     // Leader からは「task は登録されたのに何も起こらない」サイレント失敗になる。
     // → 作成前に resolve_targets で検証し、無効ならエラーで弾いて roles を案内する。
-    let members = hub.team_members(&ctx.team_id).await;
+    let members = hub.live_team_members(&ctx.team_id).await;
     let active_leader_agent_id = {
         let state = hub.state.lock().await;
         state
