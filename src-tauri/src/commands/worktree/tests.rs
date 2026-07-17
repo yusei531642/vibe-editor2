@@ -427,6 +427,42 @@ async fn non_git_and_detached_projects_skip_optional_worktree_wiring() {
         .is_none());
 }
 
+/// PR #37 レビュー 🟡: 占有スロットが storage root 外を指す symlink のとき、
+/// canonicalize 済み path をそのまま採ると以降の cleanup が storage root 外を
+/// 削除しうる。create_assignment と同じ封じ込め検証で adopt を拒否する。
+#[cfg(unix)]
+#[tokio::test]
+async fn adopt_refuses_worktree_resolving_outside_storage_root() {
+    let fixture = GitFixture::new();
+    let outside_parent = std::fs::canonicalize(fixture.root.parent().unwrap()).unwrap();
+    let outside = outside_parent.join("escape-worktree");
+    git(
+        &fixture.root,
+        &[
+            "worktree",
+            "add",
+            "-b",
+            "vibe/team-1/worker-1-escape",
+            outside.to_str().unwrap(),
+            "main",
+        ],
+    );
+    let project_key = WorktreeManager::project_key(fixture.project.as_path());
+    let slot_parent = fixture.manager.storage_root.join(&project_key).join("team-1");
+    std::fs::create_dir_all(&slot_parent).unwrap();
+    let slot = slot_parent.join("worker-1");
+    std::os::unix::fs::symlink(&outside, &slot).unwrap();
+
+    let key = WorktreeManager::key(fixture.project.as_path(), "team-1", "worker-1");
+    let adopted = fixture
+        .manager
+        .adopt_managed_assignment(&fixture.project, key, slot)
+        .await
+        .unwrap();
+
+    assert!(!adopted, "storage root 外へ解決される worktree を採用しない");
+}
+
 #[tokio::test]
 async fn leader_can_cancel_candidate_without_owner_membership_dependency() {
     let fixture = GitFixture::new();

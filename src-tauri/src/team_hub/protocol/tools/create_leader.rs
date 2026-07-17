@@ -92,6 +92,7 @@ pub async fn team_create_leader(
         }
         hub.set_engine_policy(&ctx.team_id, parsed_policy).await;
     }
+
     // builtin の leader profile から default engine を引く
     let summary = hub.get_role_profile_summary().await;
     let target = summary.iter().find(|p| p.id == role_profile_id);
@@ -110,8 +111,10 @@ pub async fn team_create_leader(
         return Err(RecruitError::new("create_leader_engine_policy_violation", e)
             .with_phase("engine_policy"));
     }
+
     let provider_selection = crate::team_hub::provider_policy::select_recruit_provider(&role_profile_id, &resolved_engine).await;
     let new_agent_id = format!("vc-{}", Uuid::new_v4());
+
     let started = Instant::now();
     let current_members = hub.team_members(&ctx.team_id).await;
     // Issue #423: 引き継ぎのため singleton=false で登録。同チームに leader が

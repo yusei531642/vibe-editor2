@@ -280,6 +280,17 @@ impl WorktreeManager {
         if !metadata.branch.starts_with(&expected_prefix) {
             return Ok(false);
         }
+        // create_assignment と同じ不変条件をここでも張る: 占有スロットが storage root 外を
+        // 指す symlink だった場合、canonicalize 済み metadata.path を record に採ると以降の
+        // cleanup が storage root 外の worktree を削除しうる (PR #37 レビュー 🟡)。
+        let canonical_storage = tokio::fs::canonicalize(&self.storage_root).await?;
+        if !metadata.path.starts_with(&canonical_storage) {
+            tracing::warn!(
+                path = %metadata.path.display(),
+                "[worktree] refusing to adopt worktree resolving outside the storage root"
+            );
+            return Ok(false);
+        }
         let base_branch = super::git_ops::current_branch(project_root.as_path()).await?;
         let current_base = super::git_ops::rev_parse(project_root.as_path(), "HEAD").await?;
         let base_commit =

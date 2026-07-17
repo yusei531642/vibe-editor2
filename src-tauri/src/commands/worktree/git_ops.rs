@@ -4,8 +4,7 @@ use std::path::Path;
 use tokio::process::Command;
 
 const MIN_GIT_VERSION: (u64, u64) = (2, 38);
-static GIT_VERSION: tokio::sync::OnceCell<Result<(u64, u64), String>> =
-    tokio::sync::OnceCell::const_new();
+static GIT_VERSION: tokio::sync::OnceCell<(u64, u64)> = tokio::sync::OnceCell::const_new();
 
 struct GitOutput {
     success: bool,
@@ -81,25 +80,27 @@ fn parse_git_version(raw: &str) -> Option<(u64, u64)> {
 }
 
 pub(super) async fn ensure_supported_version(cwd: &Path) -> CommandResult<()> {
-    let result = GIT_VERSION
-        .get_or_init(|| async {
-            let output = run(cwd, ["--version"])
-                .await
-                .map_err(|error| error.to_string())?;
-            if !output.success {
-                return Err("git --version failed".to_string());
-            }
-            parse_git_version(&output.stdout)
-                .ok_or_else(|| "git returned an unrecognized version string".to_string())
-        })
-        .await;
-    match result {
-        Ok(version) => validate_git_version(*version),
-        Err(reason) => Err(CommandError::coded(
-            "git_version_unavailable",
-            reason.clone(),
-        )),
+    // get_or_init は Err も「初期化済み」として恒久確定させるため使わない。
+    // 一時的な検出失敗 (PATH 未整備での起動直後等) をプロセス寿命の間固定しないよう、
+    // 成功したときだけキャッシュする (PR #37 レビュー 🟡)。
+    if let Some(version) = GIT_VERSION.get() {
+        return validate_git_version(*version);
     }
+    let output = run(cwd, ["--version"]).await?;
+    if !output.success {
+        return Err(CommandError::coded(
+            "git_version_unavailable",
+            "git --version failed",
+        ));
+    }
+    let version = parse_git_version(&output.stdout).ok_or_else(|| {
+        CommandError::coded(
+            "git_version_unavailable",
+            "git returned an unrecognized version string",
+        )
+    })?;
+    let _ = GIT_VERSION.set(version);
+    validate_git_version(version)
 }
 
 fn validate_git_version((major, minor): (u64, u64)) -> CommandResult<()> {
@@ -278,12 +279,26 @@ pub(super) async fn list_worktree_metadata(
         // 一時的 I/O 失敗で登録済み worktree が一覧から欠けると、reconcile が生きている
         // assignment を drop してしまう。canonicalize 失敗は list 全体のエラーとして扱い、
         // 呼び出し側 (reconcile) を中止させる (PR #37 レビュー: drop より skip を優先)。
-        let canonical = tokio::fs::canonicalize(&raw_path).await.map_err(|error| {
-            crate::commands::error::CommandError::internal(format!(
-                "failed to canonicalize worktree path {}: {error}",
-                raw_path.display()
-            ))
-        })?;
+        // 例外: `git worktree list` はディレクトリが消えた prunable worktree も列挙し
+        // 続けるため、ENOENT だけは「実体が無い登録」として skip する。これを全体エラーに
+        // すると、worker がディレクトリを消した瞬間から reconcile / adopt / assign が
+        // プロジェクト全体で恒久失敗する (PR #37 三次レビュー 🟡)。
+        let canonical = match tokio::fs::canonicalize(&raw_path).await {
+            Ok(path) => path,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                tracing::warn!(
+                    path = %raw_path.display(),
+                    "[worktree] skipping registered worktree whose directory no longer exists"
+                );
+                continue;
+            }
+            Err(error) => {
+                return Err(crate::commands::error::CommandError::internal(format!(
+                    "failed to canonicalize worktree path {}: {error}",
+                    raw_path.display()
+                )))
+            }
+        };
         if let (Some(head), Some(branch)) = (head, branch) {
             worktrees.push(WorktreeMetadata {
                 path: canonical,

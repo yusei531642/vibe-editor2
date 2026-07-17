@@ -40,7 +40,8 @@ pub use persistence::{PersistedRuntimeBinding, RuntimeEventPersistence, RuntimeR
 pub use registry::RuntimeEndpointRegistry;
 pub use provider_policy::{
     capabilities_for, provider_declarations, resolve_node_executable,
-    resolve_sidecar_entrypoint, select_provider, ProviderSelection, RuntimeProvider,
+    resolve_sidecar_entrypoint, select_provider, ProviderAvailability, ProviderSelection,
+    RuntimeProvider,
     RuntimeProviderDeclaration, SystemProviderAvailability,
 };
 pub use pty_compat::PtyCompatAdapter;

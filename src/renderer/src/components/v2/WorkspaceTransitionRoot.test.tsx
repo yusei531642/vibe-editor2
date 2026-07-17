@@ -32,7 +32,7 @@ vi.mock('../../lib/use-recruit-listener', () => ({
 }));
 
 vi.mock('./V2Shell', () => ({
-  V2Shell: () => {
+  V2Shell: ({ shortcutsEnabled = true }: { shortcutsEnabled?: boolean }) => {
     const [draft, setDraft] = useState('');
     useEffect(() => {
       shellLifecycle.mounts += 1;
@@ -41,7 +41,7 @@ vi.mock('./V2Shell', () => ({
       };
     }, []);
     return (
-      <div>
+      <div data-shortcuts-enabled={shortcutsEnabled}>
         <div data-workspace-focus-frame="">Timeline</div>
         <label>
           Draft
@@ -127,6 +127,19 @@ describe('WorkspaceTransitionRoot', () => {
     expect(focus).toHaveAttribute('inert');
     expect(focus).toHaveAttribute('aria-hidden', 'true');
     expect(team).not.toHaveAttribute('aria-hidden');
+  });
+
+  it('非active focus sceneのグローバルショートカットを無効化する', () => {
+    const { container } = render(<WorkspaceTransitionRoot forceTeamSession />);
+    const shell = container.querySelector('[data-shortcuts-enabled]');
+    expect(shell).toHaveAttribute('data-shortcuts-enabled', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Canvas' }));
+    expect(shell).toHaveAttribute('data-shortcuts-enabled', 'false');
+    act(() => vi.advanceTimersByTime(500));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Conversation' }));
+    expect(shell).toHaveAttribute('data-shortcuts-enabled', 'true');
   });
 
   it('Team scene表示中にTeam sessionが消えたらFocusをactiveへ同期する', () => {

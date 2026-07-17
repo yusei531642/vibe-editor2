@@ -263,7 +263,46 @@ impl TeamHub {
         members
     }
 
+    pub(crate) async fn live_team_members(&self, team_id: &str) -> Vec<(String, String)> {
+        let mut members: Vec<(String, String)> = {
+            let state = self.state.lock().await;
+            state
+                .team_member_roles(team_id)
+                .into_iter()
+                .filter(|(agent_id, _)| {
+                    let Some(binding) = state.runtime_endpoints.get(&key(team_id, agent_id)) else {
+                        // binding 未確立の active member は従来どおり配送対象に残し、
+                        // inject_no_session などの構造化失敗を返せるようにする。
+                        return true;
+                    };
+                    binding
+                        .native
+                        .iter()
+                        .chain(binding.pty.iter())
+                        .any(|endpoint| {
+                            self.runtime
+                                .manager
+                                .registry()
+                                .resolve(&endpoint.endpoint_id)
+                                .is_some()
+                        })
+                })
+                .collect()
+        };
+        for member in self.registry.list_team_members(team_id) {
+            if !members.iter().any(|(agent_id, _)| agent_id == &member.0) {
+                members.push(member);
+            }
+        }
+        members
+    }
+
     /// Issue #27: renderer-supplied pair を active team + current member binding へ fail-closed に限定する。
+    ///
+    /// spawn 前の pre-check (terminal_create / worktree assign) から呼ばれるため、まだ PTY も
+    /// hub handshake も無い「recruit 進行中」の agent も許容する。判定基準は bind 側の
+    /// `authorize_runtime_endpoint_binding` (binding.rs) と同一に保つ — ここだけ厳しくすると
+    /// 新規 recruit の初回 spawn が authz で落ちる (PR #37 レビュー 🟡)。
     pub async fn authorize_team_agent_binding(
         &self,
         team_id: &str,
@@ -272,12 +311,22 @@ impl TeamHub {
         crate::commands::validation::validate_id_segment("team_id", team_id)?;
         crate::commands::validation::validate_id_segment("agent_id", agent_id)?;
         crate::commands::authz::assert_active_team(self, team_id).await?;
-        if self
-            .team_members(team_id)
-            .await
-            .iter()
-            .any(|(id, _)| id == agent_id)
-        {
+        let (recruited_here, is_member) = {
+            let state = self.state.lock().await;
+            let recruited_here = state
+                .recruit_lifecycles
+                .get(agent_id)
+                .is_some_and(|lifecycle| {
+                    lifecycle.team_id == team_id
+                        && !matches!(
+                            lifecycle.state,
+                            crate::team_hub::events::RecruitLifecycleState::Failed
+                                | crate::team_hub::events::RecruitLifecycleState::Cancelled
+                        )
+                });
+            (recruited_here, state.bound_role(team_id, agent_id).is_some())
+        };
+        if recruited_here || is_member {
             Ok(())
         } else {
             Err(crate::commands::error::CommandError::authz(
@@ -328,5 +377,20 @@ impl TeamHub {
                     && (endpoint.backend == RuntimeEndpointBackend::Native
                         || self.registry.get_by_agent(agent_id).is_some())
             })
+    }
+
+    /// recruit 直後の liveness 検証用。binding 未確立の member (bind 失敗を warn で続行した
+    /// PTY worker / socket を持たない pull 型 virtual member) は team_members() と同じく
+    /// 「配送時に構造化失敗を返せる正当な状態」として許容し、endpoint を記録した binding が
+    /// あるのに全 endpoint が dead の場合だけ false を返す (PR #34 レビュー)。
+    pub async fn runtime_binding_absent_or_live(&self, team_id: &str, agent_id: &str) -> bool {
+        let has_recorded_endpoint = {
+            let state = self.state.lock().await;
+            state
+                .runtime_endpoints
+                .get(&key(team_id, agent_id))
+                .is_some_and(|binding| binding.native.is_some() || binding.pty.is_some())
+        };
+        !has_recorded_endpoint || self.runtime_endpoint_is_live(team_id, agent_id).await
     }
 }

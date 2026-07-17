@@ -217,19 +217,22 @@ impl Redactor {
     }
 
     pub fn redact(&self, value: &str) -> String {
-        let mut redacted = bounded(value.to_string(), 16 * 1024);
+        let mut redacted = value.to_string();
         for secret in &self.secrets {
             redacted = redacted.replace(secret, "<redacted>");
         }
-        redact_assignments(redacted)
+        bounded(redact_assignments(redacted), 16 * 1024)
     }
 }
 
 fn redact_assignments(mut value: String) -> String {
     for marker in ["api_key=", "api-key=", "token=", "authorization="] {
-        let lower = value.to_ascii_lowercase();
         let mut offset = 0;
-        while let Some(relative) = lower[offset..].find(marker) {
+        loop {
+            let lower = value.to_ascii_lowercase();
+            let Some(relative) = lower[offset..].find(marker) else {
+                break;
+            };
             let start = offset + relative + marker.len();
             let end = value[start..]
                 .find(char::is_whitespace)
@@ -266,5 +269,36 @@ mod tests {
         let redactor = Redactor::new(["secret-value".to_string()]);
         let result = redactor.redact("secret-value token=also-secret next");
         assert_eq!(result, "<redacted> token=<redacted> next");
+    }
+
+    #[test]
+    fn redactor_removes_multiple_assignment_values() {
+        let result = Redactor::default().redact("token=abc token=def");
+        assert_eq!(result, "token=<redacted> token=<redacted>");
+    }
+
+    #[test]
+    fn redactor_recomputes_assignment_indexes_after_shrinking() {
+        let result = Redactor::default().redact(
+            "token=abcdefghijklmnopqrstuvwxyz token=still-secret next",
+        );
+        assert_eq!(result, "token=<redacted> token=<redacted> next");
+    }
+
+    #[test]
+    fn redactor_recomputes_utf8_boundaries_after_shrinking() {
+        let result = Redactor::default().redact("token=abcdefghijk token=あ next");
+        assert_eq!(result, "token=<redacted> token=<redacted> next");
+    }
+
+    #[test]
+    fn redactor_removes_secret_before_truncating_at_boundary() {
+        let secret = "secret-value";
+        let input = format!("{}{}", "x".repeat(16 * 1024 - 4), secret);
+        let result = Redactor::new([secret.to_string()]).redact(&input);
+
+        assert!(!result.contains(secret));
+        assert!(!result.contains("secr"));
+        assert!(result.ends_with('…'));
     }
 }

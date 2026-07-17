@@ -178,10 +178,14 @@ async fn verify_recruit_liveness(
     tokio::time::sleep(RECRUIT_POST_HANDSHAKE_LIVENESS_GRACE).await;
 
     let members = hub.team_members(team_id).await;
+    // binding 未確立 (bind 失敗を warn で続行 / pull 型 virtual member) は roster 一致だけで
+    // 成功とし、endpoint を記録した binding が全滅している場合のみ失敗させる。
+    // runtime_endpoint_is_live を直接使うと binding 無しの正常起動 worker を
+    // recruit_roster_inconsistent → fail_recruit → kill してしまう (PR #34 レビュー)。
     if members
         .iter()
         .any(|(aid, role)| aid == agent_id && role == role_profile_id)
-        && hub.runtime_endpoint_is_live(team_id, agent_id).await
+        && hub.runtime_binding_absent_or_live(team_id, agent_id).await
     {
         let _ = hub
             .transition_recruit_lifecycle(agent_id, RecruitLifecycleState::Ready, None)
