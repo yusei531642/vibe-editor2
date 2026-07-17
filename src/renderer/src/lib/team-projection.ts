@@ -74,7 +74,21 @@ export interface BuildTeamProjectionInput {
   runtimeByEndpoint: Record<string, RuntimeEndpointProjection>;
 }
 
+/** diff 文字列は immutable なので解析結果を cache する (PR #36 レビュー: 3 秒 poll ×
+ * 最大 200 diffs × 行数の再計算を防ぐ)。history cap があるため世代管理は上限 clear で足りる。 */
+const CHANGED_FILES_CACHE_LIMIT = 512;
+const changedFilesCache = new Map<string, string[]>();
+
 export function changedFilesFromDiff(diff: string): string[] {
+  const cached = changedFilesCache.get(diff);
+  if (cached) return cached;
+  const parsed = parseChangedFilesFromDiff(diff);
+  if (changedFilesCache.size >= CHANGED_FILES_CACHE_LIMIT) changedFilesCache.clear();
+  changedFilesCache.set(diff, parsed);
+  return parsed;
+}
+
+function parseChangedFilesFromDiff(diff: string): string[] {
   const paths = new Set<string>();
   for (const line of diff.split('\n')) {
     const gitMatch = /^diff --git a\/(.+?) b\/(.+)$/.exec(line);
