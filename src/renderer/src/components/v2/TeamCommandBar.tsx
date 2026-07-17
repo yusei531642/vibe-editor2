@@ -6,13 +6,19 @@ import { useTeamProjection } from './TeamProjectionProvider';
 
 export function TeamCommandBar(): JSX.Element {
   const t = useT();
-  const { projection, broadcast, setApprovalsOpen } = useTeamProjection();
+  const { projection, broadcast, setApprovalsOpen, teamSceneActive } = useTeamProjection();
   const [message, setMessage] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
 
-  useKeybinding(KEYS.teamApprovals, () => setApprovalsOpen(true));
-  useKeybinding(KEYS.teamApprovalsMac, () => setApprovalsOpen(true));
+  // 両 scene 常時 mount のためグローバル keybinding は Team scene 表示中のみ発火させる
+  // (focus scene で開くと ApprovalCenter が render されず操作不能になる、PR #36 レビュー)。
+  useKeybinding(KEYS.teamApprovals, () => {
+    if (teamSceneActive) setApprovalsOpen(true);
+  });
+  useKeybinding(KEYS.teamApprovalsMac, () => {
+    if (teamSceneActive) setApprovalsOpen(true);
+  });
 
   const submit = async (): Promise<void> => {
     setSending(true);

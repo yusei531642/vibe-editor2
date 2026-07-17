@@ -289,15 +289,17 @@ function EnabledWorkspaceTransitionRoot({
       ) : null}
     </main>
   );
-  return hasTeamSession ? (
+  // Provider を条件で外すと root の element type が入れ替わり workspace subtree が
+  // remount されて V2Shell の会話 state が消える (PR #36 レビュー)。常時 mount し、
+  // team session が無い間は enabled=false で poll を止める。
+  return (
     <TeamProjectionProvider
       team={team}
+      enabled={hasTeamSession}
       teamSceneCommitted={committedScene === 'team'}
     >
       {workspace}
     </TeamProjectionProvider>
-  ) : (
-    workspace
   );
 }
 

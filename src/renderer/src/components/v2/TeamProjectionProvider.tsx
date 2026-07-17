@@ -32,6 +32,12 @@ import { agentPayloadOf, useCanvasStore } from '../../stores/canvas';
 import { useRuntimeStore } from '../../stores/runtime';
 
 interface TeamProjectionContextValue {
+  /** Team scene が committed かつ provider が enabled のときのみ true。
+   * 常時 mount のグローバル keybinding (Approval Center 等) はこれでゲートする。 */
+  teamSceneActive: boolean;
+  /** 実 team session が存在するか (placeholder team の Provider は false)。
+   * `projection.teamId` は placeholder でも埋まるため判定に使わないこと (PR #36)。 */
+  sessionActive: boolean;
   projection: TeamProjection;
   selectedAgent: TeamAgentProjection | null;
   selectedAgentId: string | null;
@@ -144,10 +150,13 @@ function valuesEqual<T>(previous: T, next: T): boolean {
 export function TeamProjectionProvider({
   team,
   teamSceneCommitted,
+  enabled = true,
   children
 }: {
   team: Team;
   teamSceneCommitted: boolean;
+  /** team session が無い間は poll / snapshot 取得を止める (Provider は常時 mount)。 */
+  enabled?: boolean;
   children: React.ReactNode;
 }): JSX.Element {
   const { projectRoot } = useProject();
@@ -270,7 +279,7 @@ export function TeamProjectionProvider({
     };
     const start = (): void => {
       stop();
-      if (!teamSceneCommitted || document.hidden) return;
+      if (!enabled || !teamSceneCommitted || document.hidden) return;
       void refresh();
       timer = window.setInterval(() => void refresh(), 3_000);
     };
@@ -281,7 +290,7 @@ export function TeamProjectionProvider({
       stop();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [refresh, teamSceneCommitted]);
+  }, [enabled, refresh, teamSceneCommitted]);
 
   const endpointIds = useMemo(() => {
     const values = new Set(snapshot?.endpoints.map((endpoint) => endpoint.endpointId) ?? []);
@@ -396,6 +405,8 @@ export function TeamProjectionProvider({
 
   const value = useMemo<TeamProjectionContextValue>(
     () => ({
+      teamSceneActive: enabled && teamSceneCommitted,
+      sessionActive: enabled,
       projection,
       selectedAgent,
       selectedAgentId,
@@ -417,6 +428,8 @@ export function TeamProjectionProvider({
     [
       approvalsOpen,
       broadcast,
+      enabled,
+      teamSceneCommitted,
       dispatchAgentAction,
       error,
       inspectorOpen,
@@ -436,6 +449,8 @@ export function TeamProjectionProvider({
 }
 
 const NO_PROVIDER_CONTEXT: TeamProjectionContextValue = {
+  teamSceneActive: false,
+  sessionActive: false,
   projection: EMPTY_PROJECTION,
   selectedAgent: null,
   selectedAgentId: null,
