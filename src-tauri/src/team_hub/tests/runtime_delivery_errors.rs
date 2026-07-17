@@ -139,6 +139,41 @@ async fn native_only_member_keeps_native_error_instead_of_pty_fallback() {
     assert!(message.contains("codex_turn_start_failed"), "{message}");
 }
 
+/// PR #34 レビュー 🟡: recruit 後の liveness 検証は binding 未確立の member (bind 失敗を
+/// warn で続行した worker / pull 型 virtual member) を許容し、endpoint を記録した binding が
+/// 全滅している場合のみ失敗させる。
+#[tokio::test]
+async fn liveness_gate_allows_missing_binding_but_rejects_dead_endpoints() {
+    let (hub, _registry, manager) = super::runtime_delivery::hub();
+    let team_id = "team-liveness";
+
+    // binding 未確立 → 正常 (roster 一致のみで recruit を成功させる)
+    super::runtime_delivery::seed_member(&hub, team_id, "unbound-member", "worker").await;
+    assert!(
+        hub.runtime_binding_absent_or_live(team_id, "unbound-member")
+            .await
+    );
+
+    // endpoint 記録済み binding が live → 正常、dispose 後 → 失敗
+    super::runtime_delivery::seed_member(&hub, team_id, "dead-member", "worker").await;
+    assert!(manager
+        .register_endpoint("liveness-endpoint".into(), Arc::new(FailingNativeAdapter))
+        .result
+        .is_ok());
+    hub.bind_native_runtime_endpoint(team_id, "dead-member", "liveness-endpoint".into(), None)
+        .await
+        .unwrap();
+    assert!(
+        hub.runtime_binding_absent_or_live(team_id, "dead-member")
+            .await
+    );
+    assert!(manager.dispose("liveness-endpoint").result.is_ok());
+    assert!(
+        !hub.runtime_binding_absent_or_live(team_id, "dead-member")
+            .await
+    );
+}
+
 #[tokio::test]
 async fn pty_delivery_preserves_inject_write_partial_reason_code() {
     let (hub, registry) = hub();

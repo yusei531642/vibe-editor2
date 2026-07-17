@@ -341,4 +341,19 @@ impl TeamHub {
                         || self.registry.get_by_agent(agent_id).is_some())
             })
     }
+
+    /// recruit 直後の liveness 検証用。binding 未確立の member (bind 失敗を warn で続行した
+    /// PTY worker / socket を持たない pull 型 virtual member) は team_members() と同じく
+    /// 「配送時に構造化失敗を返せる正当な状態」として許容し、endpoint を記録した binding が
+    /// あるのに全 endpoint が dead の場合だけ false を返す (PR #34 レビュー)。
+    pub async fn runtime_binding_absent_or_live(&self, team_id: &str, agent_id: &str) -> bool {
+        let has_recorded_endpoint = {
+            let state = self.state.lock().await;
+            state
+                .runtime_endpoints
+                .get(&key(team_id, agent_id))
+                .is_some_and(|binding| binding.native.is_some() || binding.pty.is_some())
+        };
+        !has_recorded_endpoint || self.runtime_endpoint_is_live(team_id, agent_id).await
+    }
 }
