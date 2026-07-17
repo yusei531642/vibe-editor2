@@ -198,7 +198,13 @@ async fn explicit_pty_backend_preserves_legacy_inject_trace_and_skips_native() {
     .unwrap();
     let (handle, pty_writes) = recording_handle(agent_id, team_id, Arc::new(AtomicUsize::new(0)));
     assert!(registry.insert_if_absent("pty-dual".into(), handle).is_ok());
-    hub.bind_pty_runtime_endpoint(team_id, agent_id, Some("pty-dual".into()))
+    // renderer 経由の bind は live native がいる member へは拒否される (乗っ取り防止)。
+    assert!(hub
+        .bind_pty_runtime_endpoint(team_id, agent_id, Some("pty-dual".into()))
+        .await
+        .is_err());
+    // 配送 fallback (信頼済み Rust 経路) は backend=pty 強制時に PTY を成立させる。
+    hub.bind_pty_runtime_endpoint_for_delivery(team_id, agent_id, Some("pty-dual".into()))
         .await
         .unwrap();
     seed_member(&hub, team_id, "leader-pty", "leader").await;

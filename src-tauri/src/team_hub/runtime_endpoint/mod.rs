@@ -171,7 +171,7 @@ impl TeamHub {
                 .and_then(|endpoint| endpoint.session_id.clone())
         };
         let endpoint_id = self
-            .bind_pty_runtime_endpoint(team_id, agent_id, session_id)
+            .bind_pty_runtime_endpoint_for_delivery(team_id, agent_id, session_id)
             .await
             .map_err(|message| {
                 InjectError::WriteInitialFailed(format!(

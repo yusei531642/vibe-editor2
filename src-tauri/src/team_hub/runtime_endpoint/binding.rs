@@ -8,16 +8,63 @@ use crate::team_hub::TeamHub;
 use std::sync::Arc;
 
 impl TeamHub {
+    /// renderer 起点 (terminal_create) の PTY binding。live native member への上書きは
+    /// 乗っ取り防止のため拒否する (PR #34 レビュー)。Rust 内部の配送 fallback は
+    /// `bind_pty_runtime_endpoint_for_delivery` を使う。
     pub async fn bind_pty_runtime_endpoint(
         &self,
         team_id: &str,
         agent_id: &str,
         session_id: Option<String>,
     ) -> Result<String, String> {
+        self.bind_pty_runtime_endpoint_inner(team_id, agent_id, session_id, true)
+            .await
+    }
+
+    /// 配送 fallback (deliver_pty_message) 用: `agentRuntimeBackend=pty` 強制時など、
+    /// live native binding が残っていても PTY 配送を成立させる必要がある信頼済み経路。
+    pub(crate) async fn bind_pty_runtime_endpoint_for_delivery(
+        &self,
+        team_id: &str,
+        agent_id: &str,
+        session_id: Option<String>,
+    ) -> Result<String, String> {
+        self.bind_pty_runtime_endpoint_inner(team_id, agent_id, session_id, false)
+            .await
+    }
+
+    async fn bind_pty_runtime_endpoint_inner(
+        &self,
+        team_id: &str,
+        agent_id: &str,
+        session_id: Option<String>,
+        reject_live_native: bool,
+    ) -> Result<String, String> {
         let _binding_guard = self.runtime.pty_binding_lock.lock().await;
         // 認可 (PR #34 レビュー): terminal_create 経由の (team_id, agent_id) も renderer 由来。
         // native bind と同一の fail-closed 検証を通す。
         self.authorize_team_agent_binding(team_id, agent_id).await?;
+        // native bind 側と対称の乗っ取り防止: live な native endpoint を持つ member への
+        // PTY bind (terminal_create 経由の上書き) は拒否する (PR #34 レビュー)。
+        if reject_live_native {
+            let state = self.state.lock().await;
+            if let Some(binding) = state.runtime_endpoints.get(&key(team_id, agent_id)) {
+                if let Some(native) = &binding.native {
+                    if self
+                        .runtime
+                        .manager
+                        .registry()
+                        .resolve(&native.endpoint_id)
+                        .is_some()
+                    {
+                        return Err(format!(
+                            "agent '{agent_id}' is already running on a live native endpoint '{}'",
+                            native.endpoint_id
+                        ));
+                    }
+                }
+            }
+        }
         let endpoint_id = pty_endpoint_id(agent_id);
         let already_bound = {
             let state = self.state.lock().await;

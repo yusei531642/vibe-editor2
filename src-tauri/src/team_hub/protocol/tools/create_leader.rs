@@ -161,14 +161,21 @@ pub async fn team_create_leader(
             dynamic_role: None,
         };
         if let Err(e) = app.emit("team:recruit-request", payload) {
-            cancel_leader_recruit(hub, &ctx.team_id, &new_agent_id).await;
+            cancel_leader_recruit(hub, &ctx.team_id, &new_agent_id, "create_leader_emit_failed")
+                .await;
             return Err(RecruitError::new(
                 "create_leader_emit_failed",
                 format!("failed to emit recruit-request: {e}"),
             ));
         }
     } else {
-        cancel_leader_recruit(hub, &ctx.team_id, &new_agent_id).await;
+        cancel_leader_recruit(
+            hub,
+            &ctx.team_id,
+            &new_agent_id,
+            "create_leader_renderer_unavailable",
+        )
+        .await;
         return Err(RecruitError::new(
             "create_leader_renderer_unavailable",
             "renderer not available (canvas mode required)",
@@ -189,19 +196,13 @@ pub async fn team_create_leader(
             leader_lifecycle(hub, &new_agent_id, RecruitLifecycleState::Spawning).await;
         }
         Ok(Ok(ack)) => {
-            cancel_leader_recruit(hub, &ctx.team_id, &new_agent_id).await;
             let phase_str = ack
                 .phase
                 .map(|p| p.as_str().to_string())
                 .unwrap_or_else(|| "unknown".to_string());
             let reason = ack.reason.unwrap_or_default();
-            if let Some(app) = &app {
-                let payload = crate::team_hub::events::RecruitCancelledPayload {
-                    new_agent_id: new_agent_id.clone(),
-                    reason: phase_str.clone(),
-                };
-                let _ = app.emit("team:recruit-cancelled", payload);
-            }
+            // 旧 wire 契約どおり reason=phase を finish_recruit_terminal 経由で 1 回だけ emit する。
+            cancel_leader_recruit(hub, &ctx.team_id, &new_agent_id, &phase_str).await;
             let message = if reason.is_empty() {
                 format!("create_leader failed (phase={phase_str})")
             } else {
@@ -216,14 +217,7 @@ pub async fn team_create_leader(
             });
         }
         Ok(Err(_)) => {
-            cancel_leader_recruit(hub, &ctx.team_id, &new_agent_id).await;
-            if let Some(app) = &app {
-                let payload = crate::team_hub::events::RecruitCancelledPayload {
-                    new_agent_id: new_agent_id.clone(),
-                    reason: "ack_dropped".to_string(),
-                };
-                let _ = app.emit("team:recruit-cancelled", payload);
-            }
+            cancel_leader_recruit(hub, &ctx.team_id, &new_agent_id, "ack_dropped").await;
             return Err(RecruitError {
                 code: "create_leader_ack_dropped".into(),
                 message: "renderer ack channel was dropped before reply".into(),
@@ -239,14 +233,7 @@ pub async fn team_create_leader(
                  team_id={team_id} elapsed_ms={elapsed_ms}",
                 team_id = ctx.team_id,
             );
-                cancel_leader_recruit(hub, &ctx.team_id, &new_agent_id).await;
-                if let Some(app) = &app {
-                    let payload = crate::team_hub::events::RecruitCancelledPayload {
-                        new_agent_id: new_agent_id.clone(),
-                        reason: "ack_timeout".to_string(),
-                    };
-                    let _ = app.emit("team:recruit-cancelled", payload);
-                }
+            cancel_leader_recruit(hub, &ctx.team_id, &new_agent_id, "ack_timeout").await;
             return Err(RecruitError {
                 code: "create_leader_ack_timeout".into(),
                 message: format!(
@@ -298,7 +285,8 @@ pub async fn team_create_leader(
             }))
         }
         Ok(Err(_)) => {
-            cancel_leader_recruit(hub, &ctx.team_id, &new_agent_id).await;
+            cancel_leader_recruit(hub, &ctx.team_id, &new_agent_id, "create_leader_cancelled")
+                .await;
             Err(RecruitError {
                 code: "create_leader_cancelled".into(),
                 message: "create_leader cancelled before handshake".into(),
@@ -308,14 +296,7 @@ pub async fn team_create_leader(
             })
         }
         Err(_) => {
-            cancel_leader_recruit(hub, &ctx.team_id, &new_agent_id).await;
-            if let Some(app) = &app {
-                let payload = crate::team_hub::events::RecruitCancelledPayload {
-                    new_agent_id: new_agent_id.clone(),
-                    reason: "handshake_timeout".to_string(),
-                };
-                let _ = app.emit("team:recruit-cancelled", payload);
-            }
+            cancel_leader_recruit(hub, &ctx.team_id, &new_agent_id, "handshake_timeout").await;
             // Issue #811: env override で延長可能であることを message に明示する
             // (運用者がログから即座に対処できるように)。
             Err(RecruitError {
