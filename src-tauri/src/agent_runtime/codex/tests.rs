@@ -142,6 +142,11 @@ async fn serve(
                 let decision = message["result"]["decision"].as_str().unwrap_or_default();
                 let _ = transcript.send(format!("approval:{decision}"));
             }
+            (None, Some(id)) if id == json!(902) => {
+                // 他 thread 宛 approval への自動応答 (decline を期待)。
+                let decision = message["result"]["decision"].as_str().unwrap_or_default();
+                let _ = transcript.send(format!("cross-thread-approval:{decision}"));
+            }
             (None, Some(id)) if id == json!(901) => {
                 let code = message["error"]["code"].as_i64().unwrap_or_default();
                 let _ = transcript.send(format!("unknown:{code}"));
@@ -161,6 +166,7 @@ async fn scripted_notifications(ws: &mut WsStream<UnixStream>) -> Result<(), App
         json!({ "method": "turn/diff/updated", "params": { "diff": "@@ -1 +1 @@" } }),
         json!({ "method": "thread/tokenUsage/updated", "params": { "usage": { "inputTokens": 4, "cachedInputTokens": 2, "outputTokens": 3 } } }),
         json!({ "id": 900, "method": "item/commandExecution/requestApproval", "params": { "reason": "test", "command": ["git", "status"], "cwd": "/tmp/project" } }),
+        json!({ "id": 902, "method": "item/commandExecution/requestApproval", "params": { "threadId": "thread-other", "reason": "cross-thread", "command": ["rm", "-rf"], "cwd": "/tmp/other" } }),
         json!({ "id": 901, "method": "unknown/request", "params": { "threadId": "thread-new" } }),
     ] {
         send(ws, notification).await?;
@@ -311,7 +317,15 @@ async fn projects_turn_steer_and_approval_as_envelopes() {
     // transcript は fixture 側 task が socket を読んでから流れる。respond_approval の
     // return は client 側 write 完了までしか保証しないため、非同期に到着を待つ。
     let mut transcript: Vec<String> = Vec::new();
-    for expected in ["steer:turn-active", "approval:accept", "unknown:-32601"] {
+    // 他 thread (thread-other) の approval は wire 上で自動 decline され、
+    // renderer には bound thread の approval 1 件しか届かない (PR #33 六次レビュー)。
+    let approval_requests = manager
+        .event_snapshot()
+        .iter()
+        .filter(|event| matches!(event.payload, RuntimeEventPayload::ApprovalRequest { .. }))
+        .count();
+    assert_eq!(approval_requests, 1);
+    for expected in ["steer:turn-active", "approval:accept", "cross-thread-approval:decline", "unknown:-32601"] {
         wait_until(|| {
             transcript.extend(fixture.transcript.try_iter());
             transcript.iter().any(|line| line == expected)

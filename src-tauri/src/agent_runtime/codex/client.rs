@@ -54,21 +54,24 @@ impl ClientHandle {
     pub fn connect(
         socket_path: String,
         sink: ClientEventSink,
+        bound_thread: SharedThreadBinding,
     ) -> Result<Self, RuntimeAdapterError> {
-        Self::connect_source(ClientSource::Path(socket_path), sink)
+        Self::connect_source(ClientSource::Path(socket_path), sink, bound_thread)
     }
 
     #[cfg(test)]
     pub fn connect_stream(
         stream: UnixStream,
         sink: ClientEventSink,
+        bound_thread: SharedThreadBinding,
     ) -> Result<Self, RuntimeAdapterError> {
-        Self::connect_source(ClientSource::Stream(stream), sink)
+        Self::connect_source(ClientSource::Stream(stream), sink, bound_thread)
     }
 
     fn connect_source(
         source: ClientSource,
         sink: ClientEventSink,
+        bound_thread: SharedThreadBinding,
     ) -> Result<Self, RuntimeAdapterError> {
         let (commands, receiver) = mpsc::unbounded_channel();
         let (ready_tx, ready_rx) = std_mpsc::sync_channel(1);
@@ -79,7 +82,7 @@ impl ClientHandle {
                     .enable_all()
                     .build()
                     .expect("build codex app-server runtime");
-                runtime.block_on(run(source, receiver, sink, ready_tx));
+                runtime.block_on(run(source, receiver, sink, ready_tx, bound_thread));
             })
             .map_err(|error| fatal("runtime_app_server_thread", error.to_string()))?;
         let actor_thread_id = thread.thread().id();
@@ -157,11 +160,15 @@ impl ClientHandle {
     }
 }
 
+/// adapter と共有する thread 束縛。approval (server→client request) の thread 照合に使う。
+pub type SharedThreadBinding = Arc<std::sync::RwLock<Option<String>>>;
+
 async fn run(
     source: ClientSource,
     mut commands: mpsc::UnboundedReceiver<ClientCommand>,
     sink: ClientEventSink,
     ready: std_mpsc::SyncSender<Result<(), RuntimeAdapterError>>,
+    bound_thread: SharedThreadBinding,
 ) {
     let mut ws = match tokio::time::timeout(REQUEST_TIMEOUT, connect_and_initialize(source)).await {
         Ok(Ok(ws)) => {
@@ -195,7 +202,7 @@ async fn run(
             },
             incoming = ws.read_text() => match incoming {
                 Ok(Some(text)) => if let Err(error) = handle_incoming(
-                    &text, &mut ws, &mut pending, &mut approvals, &sink,
+                    &text, &mut ws, &mut pending, &mut approvals, &sink, &bound_thread,
                 ).await { break error; },
                 Ok(None) => break disconnected(),
                 Err(error) => break map_wire_error(error),
@@ -283,6 +290,7 @@ async fn handle_incoming(
     pending: &mut Pending,
     approvals: &mut HashMap<String, Value>,
     sink: &ClientEventSink,
+    bound_thread: &SharedThreadBinding,
 ) -> Result<(), RuntimeAdapterError> {
     let value: Value = serde_json::from_str(text).map_err(|error| {
         fatal(
@@ -310,6 +318,32 @@ async fn handle_incoming(
             )
         })?;
         if is_supported_approval_method(&method) {
+            // Notification 分岐と同じ thread 束縛照合 (PR #33 六次レビュー)。共有 daemon が
+            // 他 thread の approval を同一接続へ流しても、自 endpoint のものとして renderer に
+            // 出さず wire 上で即 decline する (無応答で daemon 側を待たせない)。
+            let request_thread = params
+                .get("threadId")
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            let bound = bound_thread
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .clone();
+            if let (Some(bound), Some(request_thread)) = (&bound, &request_thread) {
+                if bound != request_thread {
+                    tracing::warn!(
+                        bound_thread = %bound,
+                        request_thread = %request_thread,
+                        "[runtime] declining approval for unbound thread"
+                    );
+                    write_json(
+                        ws,
+                        &json!({ "id": id, "result": { "decision": "decline" } }),
+                    )
+                    .await?;
+                    return Ok(());
+                }
+            }
             approvals.insert(request_id.clone(), id);
             sink(ClientEvent::ServerRequest {
                 request_id,
