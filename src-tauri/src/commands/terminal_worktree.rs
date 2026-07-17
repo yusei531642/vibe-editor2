@@ -36,11 +36,19 @@ pub(super) fn terminal_team_agent_pair<'a>(
 
 pub(super) async fn resolve_worker_worktree(
     state: &tauri::State<'_, AppState>,
-    role: Option<&str>,
     team_id: &str,
     agent_id: &str,
 ) -> WorktreeResolution {
-    if !super::terminal::uses_managed_worker_worktree(role) {
+    // opts.role is renderer-controlled. The Hub binding/lifecycle is the policy authority.
+    let role = match state
+        .team_hub
+        .authorized_team_agent_role(team_id, agent_id)
+        .await
+    {
+        Ok(role) => role,
+        Err(error) => return fail(format!("team role authorization failed: {error}")),
+    };
+    if !super::terminal::uses_managed_worker_worktree(Some(&role)) {
         return WorktreeResolution::PlainCwd;
     }
     let Some(active_root) = crate::state::current_project_root(&state.project_root) else {

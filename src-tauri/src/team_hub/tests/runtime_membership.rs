@@ -164,6 +164,11 @@ async fn authorize_team_agent_binding_allows_recruit_in_progress_member() {
     hub.begin_recruit_lifecycle("team-precheck", "fresh-recruit", "programmer")
         .await;
 
+    let authoritative_role = hub
+        .authorized_team_agent_role("team-precheck", "fresh-recruit")
+        .await
+        .expect("recruit lifecycle role is authoritative before handshake");
+    assert_eq!(authoritative_role, "programmer");
     hub.authorize_team_agent_binding("team-precheck", "fresh-recruit")
         .await
         .expect("recruit 進行中の agent は spawn 前 pre-check を通過する");

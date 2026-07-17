@@ -295,14 +295,7 @@ pub async fn terminal_create(
         crate::pty::session::resolve_valid_cwd(&opts.cwd, opts.fallback_cwd.as_deref());
     let mut managed_cwd_identity = None;
     if let Some((team_id, agent_id)) = &runtime_team_agent {
-        match super::terminal_worktree::resolve_worker_worktree(
-            &state,
-            opts.role.as_deref(),
-            team_id,
-            agent_id,
-        )
-        .await
-        {
+        match super::terminal_worktree::resolve_worker_worktree(&state, team_id, agent_id).await {
             super::terminal_worktree::WorktreeResolution::Managed(managed_cwd, identity) => {
                 cwd = managed_cwd;
                 warning = None;
