@@ -130,8 +130,18 @@ function EnabledWorkspaceTransitionRoot({
 
   useEffect(() => clearTransitionTimer, [clearTransitionTimer]);
 
+  // 起動直後は teams が非同期 populate 前で hasTeamSession=false になるため、無条件に
+  // persist を focus へ書き戻すと「Canvas を開いたまま再起動 → 必ず会話 scene」になる。
+  // 一度 team session を観測した後に消えた場合だけ persist を戻す (PR #35 レビュー)。
+  const sawTeamSessionRef = useRef(hasTeamSession);
   useEffect(() => {
-    if (!hasTeamSession && persistedScene !== 'focus') setPersistedScene('focus');
+    if (hasTeamSession) {
+      sawTeamSessionRef.current = true;
+      return;
+    }
+    if (sawTeamSessionRef.current && persistedScene !== 'focus') {
+      setPersistedScene('focus');
+    }
   }, [hasTeamSession, persistedScene, setPersistedScene]);
 
   const measure = useCallback((scene: WorkspaceSceneName): DOMRect | null => {
