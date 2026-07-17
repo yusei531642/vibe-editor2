@@ -27,15 +27,15 @@ pub async fn deliver_message(
     {
         match result {
             Ok(()) => return Ok(()),
+            // native 失敗時も即 PTY へ落とさず、下の legacy app-server 経路を
+            // 試してから PTY fallback する (Issue #1062 の app-server 優先契約、
+            // PR #34 一次レビュー 🟡5)。
             Err(error) => tracing::warn!(
                 agent_id,
                 code = error.code(),
-                "[teamhub] native delivery failed; falling back to PTY"
+                "[teamhub] native delivery failed; trying legacy app-server then PTY"
             ),
         }
-        return hub
-            .deliver_pty_message(team_id, agent_id, from_role, text)
-            .await;
     }
     if !hub.prefers_legacy_codex_pty() {
         if let Some(session) = hub.registry.get_by_agent(agent_id) {

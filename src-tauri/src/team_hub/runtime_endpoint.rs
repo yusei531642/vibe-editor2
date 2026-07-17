@@ -200,16 +200,63 @@ impl TeamHub {
                 "runtime endpoint '{endpoint_id}' is not registered"
             ));
         }
+        // 認可 (PR #34 一次レビュー 🟡7): renderer 由来の (team_id, agent_id) は信頼境界外。
+        // active な team の実在メンバーであることを fail-closed に検証し、live な native
+        // binding の上書き (既存 worker の配送乗っ取り) を拒否する。
+        let is_member = self
+            .registry
+            .list_team_members(team_id)
+            .iter()
+            .any(|(member_agent_id, _)| member_agent_id == agent_id);
         let endpoint = RuntimeEndpoint {
             endpoint_id,
             backend: RuntimeEndpointBackend::Native,
             session_id,
         };
         let mut state = self.state.lock().await;
+        if !state.active_teams.contains(team_id) {
+            return Err(format!("team '{team_id}' is not active"));
+        }
+        let recruited_here = state
+            .recruit_lifecycles
+            .get(agent_id)
+            .is_some_and(|lifecycle| {
+                lifecycle.team_id == team_id
+                    && !matches!(
+                        lifecycle.state,
+                        crate::team_hub::events::RecruitLifecycleState::Failed
+                            | crate::team_hub::events::RecruitLifecycleState::Cancelled
+                    )
+            });
+        if !is_member
+            && !recruited_here
+            && !state
+                .agents
+                .contains_key(&(team_id.to_string(), agent_id.to_string()))
+        {
+            return Err(format!(
+                "agent '{agent_id}' is not a member of team '{team_id}'"
+            ));
+        }
         let binding = state
             .runtime_endpoints
             .entry(key(team_id, agent_id))
             .or_default();
+        if let Some(existing) = &binding.native {
+            if existing.endpoint_id != endpoint.endpoint_id
+                && self
+                    .runtime
+                    .manager
+                    .registry()
+                    .resolve(&existing.endpoint_id)
+                    .is_some()
+            {
+                return Err(format!(
+                    "agent '{agent_id}' already has a live native endpoint '{}'",
+                    existing.endpoint_id
+                ));
+            }
+        }
         binding.native = Some(endpoint.clone());
         state.attach_runtime_to_recruit(team_id, agent_id, &endpoint);
         Ok(())
@@ -444,12 +491,13 @@ impl TeamHub {
     ) {
         let mut state = self.state.lock().await;
         for (agent_id, _) in targets {
-            let binding = state
-                .runtime_endpoints
-                .entry(key(team_id, agent_id))
-                .or_default();
-            if !binding.task_ids.contains(&task_id) {
-                binding.task_ids.push(task_id);
+            // binding が無い agent に空 entry を作らない。作ると team teardown の
+            // cleanup_agent_runtime 走査対象になり、bind していない PTY session まで
+            // kill されてしまう (PR #34 一次レビュー 🟡4)。
+            if let Some(binding) = state.runtime_endpoints.get_mut(&key(team_id, agent_id)) {
+                if !binding.task_ids.contains(&task_id) {
+                    binding.task_ids.push(task_id);
+                }
             }
             state.attach_task_to_recruit(team_id, agent_id, task_id);
         }
