@@ -251,9 +251,30 @@ impl TeamHub {
     }
 
     pub async fn team_members(&self, team_id: &str) -> Vec<(String, String)> {
-        let mut members = {
+        let mut members: Vec<(String, String)> = {
             let state = self.state.lock().await;
-            state.team_member_roles(team_id)
+            state
+                .team_member_roles(team_id)
+                .into_iter()
+                .filter(|(agent_id, _)| {
+                    let Some(binding) = state.runtime_endpoints.get(&key(team_id, agent_id)) else {
+                        // binding 未確立の active member は従来どおり配送対象に残し、
+                        // inject_no_session などの構造化失敗を返せるようにする。
+                        return true;
+                    };
+                    binding
+                        .native
+                        .iter()
+                        .chain(binding.pty.iter())
+                        .any(|endpoint| {
+                            self.runtime
+                                .manager
+                                .registry()
+                                .resolve(&endpoint.endpoint_id)
+                                .is_some()
+                        })
+                })
+                .collect()
         };
         for member in self.registry.list_team_members(team_id) {
             if !members.iter().any(|(agent_id, _)| agent_id == &member.0) {
