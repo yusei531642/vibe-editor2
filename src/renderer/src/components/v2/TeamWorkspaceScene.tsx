@@ -67,13 +67,23 @@ export function TeamWorkspaceScene({ team }: { team: Team }): JSX.Element {
         addCard({
           type: 'agent',
           title: 'Claude',
-          payload: { agent: 'claude', teamId: team.id, teamName: team.name }
+          payload: {
+            agent: 'claude',
+            teamId: team.id,
+            teamName: team.name,
+            agentId: randomAgentId('claude')
+          }
         }),
       addCodex: () =>
         addCard({
           type: 'agent',
           title: 'Codex',
-          payload: { agent: 'codex', teamId: team.id, teamName: team.name }
+          payload: {
+            agent: 'codex',
+            teamId: team.id,
+            teamName: team.name,
+            agentId: randomAgentId('codex')
+          }
         }),
       addApiAgent: () =>
         addCard({
