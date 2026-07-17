@@ -164,6 +164,9 @@ impl TeamHub {
         endpoint_id: String,
         session_id: Option<String>,
     ) -> Result<(), String> {
+        // PTY / native の相互 live 判定は同一 lock 下で行う。並行 invoke で互いの
+        // 書き込みをすり抜ける TOCTOU を防ぐ (PR #34 レビュー)。
+        let _binding_guard = self.runtime.pty_binding_lock.lock().await;
         if self
             .runtime
             .manager
