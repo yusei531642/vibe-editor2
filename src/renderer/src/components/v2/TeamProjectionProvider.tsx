@@ -12,7 +12,9 @@ import type {
   Team,
   TeamOrchestrationState,
   TeamProjectionSnapshot,
-  TeamRuntimeEventCursor
+  TeamRuntimeEventCursor,
+  WorktreeCommand,
+  WorktreeManagerSnapshot
 } from '../../../../types/shared';
 import { useProject } from '../../lib/app-state-context';
 import { useRecruitLifecycleProjection } from '../../lib/recruit-lifecycle-projection';
@@ -54,6 +56,8 @@ interface TeamProjectionContextValue {
     requestId: string,
     decision: RuntimeApprovalDecision
   ) => Promise<void>;
+  worktreeSnapshot: WorktreeManagerSnapshot | null;
+  runWorktreeCommand: (command: WorktreeCommand) => Promise<boolean>;
 }
 
 const EMPTY_PROJECTION: TeamProjection = {
@@ -153,6 +157,7 @@ export function TeamProjectionProvider({
   const resolveApproval = useRuntimeStore((state) => state.resolveApproval);
   const [snapshot, setSnapshot] = useState<TeamProjectionSnapshot | null>(null);
   const [orchestration, setOrchestration] = useState<TeamOrchestrationState | null>(null);
+  const [worktreeSnapshot, setWorktreeSnapshot] = useState<WorktreeManagerSnapshot | null>(null);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [approvalsOpen, setApprovalsOpen] = useState(false);
@@ -186,9 +191,10 @@ export function TeamProjectionProvider({
         snapshot,
         orchestration,
         recruits,
-        runtimeByEndpoint
+        runtimeByEndpoint,
+        worktreeSnapshot
       }),
-    [members, orchestration, recruits, runtimeByEndpoint, snapshot, team.id]
+    [members, orchestration, recruits, runtimeByEndpoint, snapshot, team.id, worktreeSnapshot]
   );
 
   useEffect(() => {
@@ -208,8 +214,9 @@ export function TeamProjectionProvider({
   }, [projection.agents, selectedAgentId]);
 
   const refresh = useCallback(async () => {
-    try {
-      const [nextSnapshot, nextOrchestration] = await Promise.all([
+    const refreshProjection = async (): Promise<string | null> => {
+      try {
+        const [nextSnapshot, nextOrchestration] = await Promise.all([
         window.api.team.projectionSnapshot({
           teamId: team.id,
           sinceSequence: snapshotCursors.current
@@ -217,18 +224,42 @@ export function TeamProjectionProvider({
         projectRoot
           ? window.api.teamState.read(projectRoot, team.id)
           : Promise.resolve(null)
-      ]);
-      projectBufferedEvents(nextSnapshot, replayedSnapshotEvents.current);
-      pruneReplayedEvents(nextSnapshot, replayedSnapshotEvents.current);
-      snapshotCursors.current = latestCursors(nextSnapshot);
-      setSnapshot((previous) => snapshotsEqual(previous, nextSnapshot) ? previous : nextSnapshot);
-      setOrchestration((previous) =>
-        valuesEqual(previous, nextOrchestration) ? previous : nextOrchestration
-      );
-      setError(null);
-    } catch (refreshError) {
-      setError(messageOf(refreshError));
-    }
+        ]);
+        projectBufferedEvents(nextSnapshot, replayedSnapshotEvents.current);
+        pruneReplayedEvents(nextSnapshot, replayedSnapshotEvents.current);
+        snapshotCursors.current = latestCursors(nextSnapshot);
+        setSnapshot((previous) => snapshotsEqual(previous, nextSnapshot) ? previous : nextSnapshot);
+        setOrchestration((previous) =>
+          valuesEqual(previous, nextOrchestration) ? previous : nextOrchestration
+        );
+        return null;
+      } catch (refreshError) {
+        return messageOf(refreshError);
+      }
+    };
+    const refreshWorktrees = async (): Promise<string | null> => {
+      if (!projectRoot) {
+        setWorktreeSnapshot(null);
+        return null;
+      }
+      try {
+        const nextWorktrees = await window.api.worktree.snapshot({
+          projectRoot,
+          teamId: team.id
+        });
+        setWorktreeSnapshot((previous) =>
+          valuesEqual(previous, nextWorktrees) ? previous : nextWorktrees
+        );
+        return null;
+      } catch (refreshError) {
+        return messageOf(refreshError);
+      }
+    };
+    const [projectionError, worktreeError] = await Promise.all([
+      refreshProjection(),
+      refreshWorktrees()
+    ]);
+    setError(worktreeError ?? projectionError);
   }, [projectRoot, team.id]);
 
   useEffect(() => {
@@ -340,6 +371,29 @@ export function TeamProjectionProvider({
     setTerminalAgentId(agentId);
   }, []);
 
+  const runWorktreeCommand = useCallback(
+    async (command: WorktreeCommand): Promise<boolean> => {
+      if (!projectRoot) {
+        setError('No active project');
+        return false;
+      }
+      try {
+        const result = await window.api.worktree.command({
+          projectRoot,
+          teamId: team.id,
+          command
+        });
+        setWorktreeSnapshot(result.snapshot);
+        setError(null);
+        return true;
+      } catch (commandError) {
+        setError(messageOf(commandError));
+        return false;
+      }
+    },
+    [projectRoot, team.id]
+  );
+
   const value = useMemo<TeamProjectionContextValue>(
     () => ({
       projection,
@@ -356,7 +410,9 @@ export function TeamProjectionProvider({
       openTerminal,
       dispatchAgentAction,
       broadcast,
-      respondApproval
+      respondApproval,
+      worktreeSnapshot,
+      runWorktreeCommand
     }),
     [
       approvalsOpen,
@@ -368,9 +424,11 @@ export function TeamProjectionProvider({
       openTerminal,
       projection,
       respondApproval,
+      runWorktreeCommand,
       selectedAgent,
       selectedAgentId,
-      terminalAgentId
+      terminalAgentId,
+      worktreeSnapshot
     ]
   );
 
@@ -392,7 +450,9 @@ const NO_PROVIDER_CONTEXT: TeamProjectionContextValue = {
   openTerminal: () => undefined,
   dispatchAgentAction: () => Promise.reject(new Error(MISSING_PROVIDER_ERROR)),
   broadcast: () => Promise.reject(new Error(MISSING_PROVIDER_ERROR)),
-  respondApproval: () => Promise.reject(new Error(MISSING_PROVIDER_ERROR))
+  respondApproval: () => Promise.reject(new Error(MISSING_PROVIDER_ERROR)),
+  worktreeSnapshot: null,
+  runWorktreeCommand: () => Promise.resolve(false)
 };
 
 export function useTeamProjection(): TeamProjectionContextValue {

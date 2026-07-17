@@ -2,6 +2,7 @@
 import type { FileLockConflictSnapshot } from './generated/team-events';
 import type { AgentRuntimeBackend } from './agent-runtime';
 export type { TeamMemberCommand, TeamMemberCommandRequest, TeamMemberCommandResult, TeamProjectionSnapshot, TeamProjectionSnapshotRequest, TeamRuntimeEndpointSnapshot, TeamRuntimeEventCursor } from './team-projection';
+export type { MergeCandidateSnapshot, MergeCandidateStatus, MergeConflictSnapshot, WorktreeAssignmentSnapshot, WorktreeCommand, WorktreeCommandRequest, WorktreeCommandResult, WorktreeManagerSnapshot, WorktreeSnapshotRequest } from './worktree';
 export type { TerminalWriteOutcome, TerminalWriteResult } from './terminal-write';
 export type ThemeName =
   | 'claude-dark'

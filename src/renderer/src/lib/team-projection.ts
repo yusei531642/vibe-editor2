@@ -3,7 +3,9 @@ import type {
   TeamOrchestrationState,
   TeamProjectionSnapshot,
   TeamRuntimeEndpointSnapshot,
-  TeamTaskSnapshot
+  TeamTaskSnapshot,
+  WorktreeAssignmentSnapshot,
+  WorktreeManagerSnapshot
 } from '../../../types/shared';
 import type { RecruitProjection } from './recruit-lifecycle-projection';
 import type {
@@ -52,7 +54,7 @@ export interface TeamAgentProjection {
   latestDiff: string | null;
   latestUsage: RuntimeUsage | null;
   approvals: TeamApprovalProjection[];
-  worktree: { state: 'phase6'; label: string };
+  worktree: WorktreeAssignmentSnapshot | null;
 }
 
 export interface TeamProjection {
@@ -72,6 +74,7 @@ export interface BuildTeamProjectionInput {
   orchestration: TeamOrchestrationState | null;
   recruits: RecruitProjection[];
   runtimeByEndpoint: Record<string, RuntimeEndpointProjection>;
+  worktreeSnapshot: WorktreeManagerSnapshot | null;
 }
 
 export function changedFilesFromDiff(diff: string): string[] {
@@ -232,7 +235,10 @@ export function buildTeamProjection(input: BuildTeamProjectionInput): TeamProjec
       latestDiff: latest(runtime?.diffs ?? []),
       latestUsage: latest(runtime?.usage ?? []),
       approvals,
-      worktree: { state: 'phase6', label: 'Phase 6' }
+      worktree:
+        input.worktreeSnapshot?.assignments.find(
+          (assignment) => assignment.agentId === member.agentId
+        ) ?? null
     };
   });
 

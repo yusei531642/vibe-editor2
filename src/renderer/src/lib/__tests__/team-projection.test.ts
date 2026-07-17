@@ -79,7 +79,8 @@ describe('team projection integration', () => {
       snapshot,
       orchestration,
       recruits: [],
-      runtimeByEndpoint: useRuntimeStore.getState().byEndpoint
+      runtimeByEndpoint: useRuntimeStore.getState().byEndpoint,
+      worktreeSnapshot: null
     });
 
     expect(projection.agents[0]).toMatchObject({

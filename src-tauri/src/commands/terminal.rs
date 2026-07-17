@@ -24,6 +24,17 @@ fn resolve_command(command: Option<String>, args: Option<Vec<String>>) -> (Strin
     command_validation::normalize_terminal_command(command, args)
 }
 
+/// Issue #27 isolates write-enabled team workers. Coordinating leader/planner terminals must stay
+/// on the base project so they can inspect and integrate the whole team without owning a branch.
+fn uses_managed_worker_worktree(role: Option<&str>) -> bool {
+    role.is_some_and(|role| {
+        !matches!(
+            role.trim().to_ascii_lowercase().as_str(),
+            "leader" | "planner"
+        )
+    })
+}
+
 /// Issue #607 (security): args に含まれる `--resume <id>` / `--resume=<id>` を validate して
 /// 不正な id を含むペアは strip + warn する defense-in-depth ヘルパー。
 ///
@@ -151,6 +162,20 @@ pub async fn terminal_create(
     }
     let is_codex_command = command_validation::is_codex_command(&command);
     let runtime_team_agent = opts.team_id.clone().zip(opts.agent_id.clone());
+    match (&opts.team_id, &opts.agent_id) {
+        (Some(team_id), Some(agent_id)) => {
+            state
+                .team_hub
+                .authorize_team_agent_binding(team_id, agent_id)
+                .await?;
+        }
+        (None, None) => {}
+        _ => {
+            return Err(crate::commands::error::CommandError::validation(
+                "team_id and agent_id must be supplied together",
+            ));
+        }
+    }
 
     // Issue #607 (security): Claude `--resume <id>` に渡される session id は renderer
     // (CardFrame / TerminalCard / use-team-launch-helpers) が `args.push("--resume", id)`
@@ -255,8 +280,38 @@ pub async fn terminal_create(
         });
     }
 
-    let (cwd, warning) =
+    let (mut cwd, mut warning) =
         crate::pty::session::resolve_valid_cwd(&opts.cwd, opts.fallback_cwd.as_deref());
+    let mut managed_cwd_identity = None;
+    if let Some((team_id, agent_id)) = &runtime_team_agent {
+        if uses_managed_worker_worktree(opts.role.as_deref()) {
+            let active_root =
+                crate::state::current_project_root(&state.project_root).ok_or_else(|| {
+                    crate::commands::error::CommandError::authz("no active project root")
+                })?;
+            let project_root = crate::commands::authz::assert_active_project_root(
+                &state.project_root,
+                &state.project_root_identity,
+                &active_root,
+            )
+            .await?;
+            if let Some((managed_cwd, identity)) = state
+                .worktree_manager
+                .optional_spawn_target(&project_root, team_id, agent_id)
+                .await?
+            {
+                cwd = managed_cwd;
+                warning = None;
+                managed_cwd_identity = Some(identity);
+            } else {
+                tracing::warn!(
+                    team_id,
+                    agent_id,
+                    "[terminal] project is not a git repository or is on detached HEAD; using plain cwd"
+                );
+            }
+        }
+    }
     if is_codex_command {
         let cleanup_cwd = cwd.clone();
         if let Err(error) = tokio::task::spawn_blocking(move || {
@@ -410,20 +465,24 @@ pub async fn terminal_create(
     // Issue #1200: resume が返した cwd と spawn の check-to-use gap を塞ぐ。cwd が
     // active / workspace root と同一 directory を指す場合のみ、TTL キャッシュを使わず
     // platform identity を再照合し、置換されていれば起動しない (fail-closed)。
-    let spawn_cwd_identity = match crate::commands::authz::assert_spawn_cwd_identity(
-        &state.project_root,
-        &state.project_root_identity,
-        &cwd,
-    )
-    .await
-    {
-        Ok(identity) => identity,
-        Err(error) => {
-            return Ok(TerminalCreateResult {
-                ok: false,
-                error: Some(format!("spawn cwd authorization failed: {error}")),
-                ..Default::default()
-            });
+    let spawn_cwd_identity = if managed_cwd_identity.is_some() {
+        managed_cwd_identity
+    } else {
+        match crate::commands::authz::assert_spawn_cwd_identity(
+            &state.project_root,
+            &state.project_root_identity,
+            &cwd,
+        )
+        .await
+        {
+            Ok(identity) => identity,
+            Err(error) => {
+                return Ok(TerminalCreateResult {
+                    ok: false,
+                    error: Some(format!("spawn cwd authorization failed: {error}")),
+                    ..Default::default()
+                });
+            }
         }
     };
 
@@ -847,6 +906,20 @@ mod codex_resume_filter_tests {
         let input = s(&["-c", "k=v", "resume", "abc;rm -rf /"]);
         let out = filter_codex_resume_id_in_place(true, input.clone());
         assert_eq!(out, input);
+    }
+}
+
+#[cfg(test)]
+mod managed_worktree_role_tests {
+    use super::uses_managed_worker_worktree;
+
+    #[test]
+    fn isolates_workers_but_not_coordinators() {
+        assert!(uses_managed_worker_worktree(Some("programmer")));
+        assert!(uses_managed_worker_worktree(Some("reviewer")));
+        assert!(!uses_managed_worker_worktree(Some("leader")));
+        assert!(!uses_managed_worker_worktree(Some("planner")));
+        assert!(!uses_managed_worker_worktree(None));
     }
 }
 

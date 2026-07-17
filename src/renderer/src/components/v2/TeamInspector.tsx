@@ -1,10 +1,11 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { FileCode2, GitBranch, TerminalSquare, TestTube2, X } from 'lucide-react';
+import { FileCode2, GitBranch, GitCommit, TerminalSquare, TestTube2, X } from 'lucide-react';
 import { useT } from '../../lib/i18n';
 import { useTeamProjection } from './TeamProjectionProvider';
+import { MergeQueuePanel } from './MergeQueuePanel';
 
-type InspectorTab = 'diff' | 'test' | 'artifact' | 'raw';
-const TABS: InspectorTab[] = ['diff', 'test', 'artifact', 'raw'];
+type InspectorTab = 'diff' | 'test' | 'artifact' | 'worktree' | 'raw';
+const TABS: InspectorTab[] = ['diff', 'test', 'artifact', 'worktree', 'raw'];
 
 export function TeamInspector({ embedded = false }: { embedded?: boolean }): JSX.Element | null {
   const t = useT();
@@ -13,7 +14,8 @@ export function TeamInspector({ embedded = false }: { embedded?: boolean }): JSX
     setInspectorOpen,
     selectedAgent,
     projection,
-    openTerminal
+    openTerminal,
+    runWorktreeCommand
   } = useTeamProjection();
   const tabIdPrefix = useId();
   const [tab, setTab] = useState<InspectorTab>('diff');
@@ -58,7 +60,7 @@ export function TeamInspector({ embedded = false }: { embedded?: boolean }): JSX
             <div><dt>{t('v2.inspector.endpoint')}</dt><dd>{selectedAgent.endpoint?.endpointId ?? '—'}</dd></div>
             <div><dt>{t('v2.inspector.backend')}</dt><dd>{selectedAgent.endpoint?.backend ?? '—'}</dd></div>
             <div><dt>{t('v2.inspector.thread')}</dt><dd>{selectedAgent.endpoint?.sessionId ?? '—'}</dd></div>
-            <div><dt>{t('v2.inspector.worktree')}</dt><dd>{selectedAgent.worktree.label}</dd></div>
+            <div><dt>{t('v2.inspector.worktree')}</dt><dd>{selectedAgent.worktree?.branchName ?? t('v2.worktree.unassigned')}</dd></div>
           </dl>
           <div className="team-inspector__files">
             <FileCode2 size={16} strokeWidth={1.75} aria-hidden="true" />
@@ -121,6 +123,40 @@ export function TeamInspector({ embedded = false }: { embedded?: boolean }): JSX
           selectedAgent.task?.artifactPath ? (
             <p><GitBranch size={18} aria-hidden="true" />{selectedAgent.task.artifactPath}</p>
           ) : <p>{t('v2.inspector.artifactEmpty')}</p>
+        ) : tab === 'worktree' ? (
+          <div className="worktree-inspector">
+            {selectedAgent.worktree ? (
+              <>
+                <dl>
+                  <div><dt>{t('v2.worktree.branch')}</dt><dd>{selectedAgent.worktree.branchName}</dd></div>
+                  <div><dt>{t('v2.worktree.baseBranch')}</dt><dd>{selectedAgent.worktree.baseBranch}</dd></div>
+                  <div><dt>{t('v2.worktree.baseCommit')}</dt><dd><code>{selectedAgent.worktree.baseCommit}</code></dd></div>
+                  <div><dt>{t('v2.worktree.headCommit')}</dt><dd><code>{selectedAgent.worktree.headCommit}</code></dd></div>
+                  <div><dt>{t('v2.worktree.clean')}</dt><dd>{t(selectedAgent.worktree.clean ? 'v2.worktree.status.clean' : 'v2.worktree.status.dirty')}</dd></div>
+                </dl>
+                <button type="button" onClick={() => void runWorktreeCommand({ action: 'resume', agentId: selectedAgent.agentId })}>
+                  <GitBranch size={16} aria-hidden="true" />{t('v2.worktree.resume')}
+                </button>
+                <CandidateForm agentId={selectedAgent.agentId} />
+                <button
+                  type="button"
+                  disabled={!selectedAgent.worktree.cleanupEligible}
+                  onClick={() => {
+                    if (window.confirm(t('v2.worktree.cleanupConfirm'))) {
+                      void runWorktreeCommand({ action: 'cleanup', agentId: selectedAgent.agentId });
+                    }
+                  }}
+                >
+                  {t('v2.worktree.cleanup')}
+                </button>
+              </>
+            ) : (
+              <button type="button" onClick={() => void runWorktreeCommand({ action: 'create', agentId: selectedAgent.agentId })}>
+                <GitBranch size={16} aria-hidden="true" />{t('v2.worktree.create')}
+              </button>
+            )}
+            <MergeQueuePanel />
+          </div>
         ) : (
           <ol className="team-inspector__raw">
             {(selectedAgent.runtime?.eventHistory ?? []).map((event) => (
@@ -149,5 +185,28 @@ export function TeamInspector({ embedded = false }: { embedded?: boolean }): JSX
         <small>{t('v2.inspector.runtimeDropped', { count: projection.runtimeDroppedCount })}</small>
       ) : null}
     </aside>
+  );
+}
+
+export function CandidateForm({ agentId }: { agentId: string }): JSX.Element {
+  const t = useT();
+  const { runWorktreeCommand } = useTeamProjection();
+  const [evidence, setEvidence] = useState('');
+  const [pending, setPending] = useState(false);
+  return (
+    <form onSubmit={async (event) => {
+      event.preventDefault();
+      setPending(true);
+      try {
+        const succeeded = await runWorktreeCommand({ action: 'enqueue', agentId, evidence });
+        if (succeeded) setEvidence('');
+      } finally {
+        setPending(false);
+      }
+    }}>
+      <label htmlFor={`candidate-evidence-${agentId}`}>{t('v2.worktree.evidence')}</label>
+      <textarea id={`candidate-evidence-${agentId}`} value={evidence} disabled={pending} onChange={(event) => setEvidence(event.target.value)} />
+      <button type="submit" disabled={pending}><GitCommit size={16} aria-hidden="true" />{t('v2.worktree.enqueue')}</button>
+    </form>
   );
 }

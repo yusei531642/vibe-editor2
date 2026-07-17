@@ -39,6 +39,7 @@ pub mod terminal_tabs;
 // Issue #624 (Security): IPC 入力検証 (id segment / size cap / log sanitize) の共通 helper。
 pub mod validation;
 pub mod vibe_team_skill;
+pub mod worktree;
 // Issue #825: 音声指揮モード (Voice Direction Mode, Beta)。OpenAI Realtime API の
 // ephemeral key 発行 + active leader への inject を担当する。
 pub mod voice;

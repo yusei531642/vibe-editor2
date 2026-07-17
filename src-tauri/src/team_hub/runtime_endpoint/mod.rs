@@ -1,11 +1,10 @@
 //! TeamHub が所有する agentId -> runtime endpoint 対応と統合配送。
 
-pub(crate) mod types;
 mod snapshot;
 #[cfg(test)]
 mod test_support;
+pub(crate) mod types;
 
-use types::*;
 use crate::agent_runtime::{
     BackendKind, PtyCompatAdapter, RuntimeDeliveryRequest, RuntimeEventEnvelope, RuntimeManager,
 };
@@ -18,7 +17,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::Emitter;
 use tokio::sync::Mutex;
-
+use types::*;
 
 #[derive(Clone)]
 pub(crate) struct RuntimeRouting {
@@ -143,7 +142,10 @@ impl TeamHub {
                 self.registry.clone(),
                 agent_id,
             ));
-            let operation = self.runtime.manager.register_endpoint(endpoint_id.clone(), adapter);
+            let operation = self
+                .runtime
+                .manager
+                .register_endpoint(endpoint_id.clone(), adapter);
             self.emit_runtime_events(&operation.events).await;
             operation
                 .result
@@ -252,7 +254,6 @@ impl TeamHub {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .unwrap_or_else(crate::agent_runtime::requested_backend)
     }
-
 
     pub(crate) fn prefers_legacy_codex_pty(&self) -> bool {
         #[cfg(test)]
@@ -422,6 +423,29 @@ impl TeamHub {
             }
         }
         members
+    }
+
+    /// Issue #27: renderer-supplied pair を active team + current member binding へ fail-closed に限定する。
+    pub async fn authorize_team_agent_binding(
+        &self,
+        team_id: &str,
+        agent_id: &str,
+    ) -> crate::commands::error::CommandResult<()> {
+        crate::commands::validation::validate_id_segment("team_id", team_id)?;
+        crate::commands::validation::validate_id_segment("agent_id", agent_id)?;
+        crate::commands::authz::assert_active_team(self, team_id).await?;
+        if self
+            .team_members(team_id)
+            .await
+            .iter()
+            .any(|(id, _)| id == agent_id)
+        {
+            Ok(())
+        } else {
+            Err(crate::commands::error::CommandError::authz(
+                "agent is not an active member of this team",
+            ))
+        }
     }
 
     pub async fn associate_task_runtime(
