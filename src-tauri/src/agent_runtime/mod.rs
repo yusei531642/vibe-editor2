@@ -4,13 +4,19 @@
 //! registry / normalized event envelope を提供する。Phase 2 では Unix の Codex app-server
 //! adapter を native backend として公開し、Windows は PTY へ安全に fallback する。
 
+#[cfg_attr(not(unix), allow(dead_code))] // unix-gated codex 経路からのみ使用
 mod adapter;
 #[cfg(unix)]
 pub mod codex;
+#[cfg_attr(not(unix), allow(dead_code))] // unix-gated codex 経路からのみ使用
 mod delivery;
+#[cfg_attr(not(unix), allow(dead_code))] // unix-gated codex 経路からのみ使用
 mod event;
+#[cfg_attr(not(unix), allow(dead_code))] // unix-gated codex 経路からのみ使用
 mod event_buffer;
+#[cfg_attr(not(unix), allow(dead_code))] // unix-gated codex 経路からのみ使用
 mod manager;
+#[cfg_attr(not(unix), allow(dead_code))] // unix-gated codex 経路からのみ使用
 mod pty_compat;
 
 pub use adapter::{
