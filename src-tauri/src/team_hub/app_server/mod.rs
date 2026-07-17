@@ -11,7 +11,7 @@
 pub mod client;
 pub mod error;
 mod protocol;
-mod wire;
+pub(crate) mod wire;
 
 #[cfg(test)]
 mod tests;

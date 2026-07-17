@@ -9,6 +9,10 @@ use ts_rs::TS;
 pub enum RuntimeEventKind {
     MessageDelta,
     MessageComplete,
+    ToolUse,
+    Diff,
+    Usage,
+    ApprovalRequest,
     Lifecycle,
     Error,
     Diagnostic,
@@ -42,6 +46,30 @@ pub enum RuntimeEventPayload {
     MessageComplete {
         message: String,
     },
+    ToolUse {
+        tool_name: String,
+        call_id: Option<String>,
+        status: String,
+        detail: Option<String>,
+    },
+    Diff {
+        diff: String,
+    },
+    Usage {
+        #[ts(type = "number")]
+        input_tokens: u64,
+        #[ts(type = "number")]
+        cached_input_tokens: u64,
+        #[ts(type = "number")]
+        output_tokens: u64,
+    },
+    ApprovalRequest {
+        request_id: String,
+        method: String,
+        reason: Option<String>,
+        command: Option<String>,
+        cwd: Option<String>,
+    },
     Lifecycle {
         state: RuntimeLifecycleState,
         detail: Option<String>,
@@ -61,6 +89,10 @@ impl RuntimeEventPayload {
         match self {
             Self::MessageDelta { .. } => RuntimeEventKind::MessageDelta,
             Self::MessageComplete { .. } => RuntimeEventKind::MessageComplete,
+            Self::ToolUse { .. } => RuntimeEventKind::ToolUse,
+            Self::Diff { .. } => RuntimeEventKind::Diff,
+            Self::Usage { .. } => RuntimeEventKind::Usage,
+            Self::ApprovalRequest { .. } => RuntimeEventKind::ApprovalRequest,
             Self::Lifecycle { .. } => RuntimeEventKind::Lifecycle,
             Self::Error { .. } => RuntimeEventKind::Error,
             Self::Diagnostic { .. } => RuntimeEventKind::Diagnostic,

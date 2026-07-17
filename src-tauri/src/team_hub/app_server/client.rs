@@ -22,6 +22,15 @@ impl AppServerConn {
         let stream = UnixStream::connect(socket_path)
             .await
             .map_err(AppServerError::Connect)?;
+        Self::connect_stream_inner(stream).await
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn connect_stream(stream: UnixStream) -> Result<Self, AppServerError> {
+        Self::connect_stream_inner(stream).await
+    }
+
+    async fn connect_stream_inner(stream: UnixStream) -> Result<Self, AppServerError> {
         let mut ws = WsStream::new(stream, /* mask_outgoing */ true);
         ws.client_handshake().await?;
         Ok(Self { ws, next_id: 1 })

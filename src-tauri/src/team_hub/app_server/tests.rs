@@ -5,6 +5,7 @@
 
 use super::error::AppServerError;
 use super::wire::WsStream;
+use super::AppServerConn;
 use serde_json::{json, Value};
 use tokio::net::{UnixListener, UnixStream};
 
@@ -18,19 +19,71 @@ enum TurnBehavior {
 
 /// temp socket に mock app-server を立て、接続を 1 本さばくタスクを spawn する。
 /// 返り値はクライアントが繋ぐ socket パス。
-fn spawn_mock(behavior: TurnBehavior) -> String {
+/// socket bind が禁止された sandbox だけは同じ wire protocol を UnixStream pair で通す。
+enum MockTransport {
+    Socket(String),
+    Stream(Option<UnixStream>),
+}
+
+fn spawn_mock(behavior: TurnBehavior) -> MockTransport {
     let id = uuid::Uuid::new_v4().simple().to_string();
     let path = std::env::temp_dir().join(format!("vibe-as-{}.sock", &id[..8]));
     let path_str = path.to_string_lossy().into_owned();
     let _ = std::fs::remove_file(&path);
-    let listener = UnixListener::bind(&path).expect("bind mock socket");
-
-    tokio::spawn(async move {
-        if let Ok((stream, _)) = listener.accept().await {
-            let _ = serve_conn(stream, behavior).await;
+    match UnixListener::bind(&path) {
+        Ok(listener) => {
+            tokio::spawn(async move {
+                if let Ok((stream, _)) = listener.accept().await {
+                    let _ = serve_conn(stream, behavior).await;
+                }
+            });
+            MockTransport::Socket(path_str)
         }
-    });
-    path_str
+        Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => {
+            let (client, server) = UnixStream::pair().expect("create mock stream pair");
+            tokio::spawn(async move {
+                let _ = serve_conn(server, behavior).await;
+            });
+            MockTransport::Stream(Some(client))
+        }
+        Err(error) => panic!("bind mock socket: {error}"),
+    }
+}
+
+async fn connect_mock(transport: &mut MockTransport) -> Result<AppServerConn, AppServerError> {
+    match transport {
+        MockTransport::Socket(path) => AppServerConn::connect(path).await,
+        MockTransport::Stream(stream) => {
+            AppServerConn::connect_stream(stream.take().expect("unused mock stream")).await
+        }
+    }
+}
+
+async fn deliver_mock(
+    transport: &mut MockTransport,
+    thread_id: &str,
+    text: &str,
+) -> Result<(), AppServerError> {
+    let mut conn = connect_mock(transport).await?;
+    conn.initialize().await?;
+    conn.start_turn(thread_id, text).await
+}
+
+async fn steer_mock(
+    transport: &mut MockTransport,
+    thread_id: &str,
+    turn_id: &str,
+    text: &str,
+) -> Result<(), AppServerError> {
+    let mut conn = connect_mock(transport).await?;
+    conn.initialize().await?;
+    conn.steer_turn(thread_id, turn_id, text).await
+}
+
+fn cleanup_mock(transport: &MockTransport) {
+    if let MockTransport::Socket(path) = transport {
+        let _ = std::fs::remove_file(path);
+    }
 }
 
 async fn serve_conn(stream: UnixStream, behavior: TurnBehavior) -> Result<(), AppServerError> {
@@ -144,30 +197,30 @@ fn valid_text_input(params: Option<&Value>) -> bool {
 
 #[tokio::test]
 async fn deliver_happy_path_round_trips() {
-    let path = spawn_mock(TurnBehavior::Ok);
-    let result = super::deliver(&path, "thread-123", "hello team").await;
+    let mut transport = spawn_mock(TurnBehavior::Ok);
+    let result = deliver_mock(&mut transport, "thread-123", "hello team").await;
     assert!(result.is_ok(), "expected Ok, got {result:?}");
-    let _ = std::fs::remove_file(&path);
+    cleanup_mock(&transport);
 }
 
 #[tokio::test]
 async fn deliver_surfaces_rpc_error() {
-    let path = spawn_mock(TurnBehavior::RpcError);
-    let result = super::deliver(&path, "thread-123", "hello team").await;
+    let mut transport = spawn_mock(TurnBehavior::RpcError);
+    let result = deliver_mock(&mut transport, "thread-123", "hello team").await;
     match result {
         Err(AppServerError::Rpc { code, .. }) => assert_eq!(code, -32000),
         other => panic!("expected Rpc error, got {other:?}"),
     }
     assert_eq!(result.err().map(|e| e.code()), Some("app_server_rpc_error"));
-    let _ = std::fs::remove_file(&path);
+    cleanup_mock(&transport);
 }
 
 #[tokio::test]
 async fn steer_requires_expected_turn_id_and_round_trips() {
-    let path = spawn_mock(TurnBehavior::ExpectSteer);
-    let result = super::steer(&path, "thread-123", "turn-active", "steer text").await;
+    let mut transport = spawn_mock(TurnBehavior::ExpectSteer);
+    let result = steer_mock(&mut transport, "thread-123", "turn-active", "steer text").await;
     assert!(result.is_ok(), "expected Ok, got {result:?}");
-    let _ = std::fs::remove_file(&path);
+    cleanup_mock(&transport);
 }
 
 #[tokio::test]

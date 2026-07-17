@@ -200,9 +200,15 @@ mod tests {
     #[tokio::test]
     async fn folder_empty_keeps_fail_closed_contract() {
         let home = dirs::home_dir().expect("home directory");
+        let current_dir = std::env::current_dir().expect("current directory");
+        let writable_home_descendant = if current_dir.starts_with(&home) {
+            current_dir
+        } else {
+            home
+        };
         let root = tempfile::Builder::new()
             .prefix("vibe-dialog-empty-")
-            .tempdir_in(home)
+            .tempdir_in(writable_home_descendant)
             .expect("home tempdir");
 
         assert!(dialog_is_folder_empty(root.path().to_string_lossy().into_owned()).await);

@@ -11,7 +11,11 @@ export type AgentRuntimeCapability =
   | 'ptyExecution'
   | 'nativeProcessExecution'
   | 'structuredEventStream'
-  | 'cooperativeCancellation';
+  | 'cooperativeCancellation'
+  | 'sessionResume'
+  | 'sessionFork'
+  | 'turnSteering'
+  | 'approvalResponses';
 
 export type AgentRuntimeSelectionReason =
   | 'explicitPty'
@@ -45,6 +49,43 @@ export interface RuntimeTurnRequest {
   submit: boolean;
 }
 
+export type CodexThreadAction =
+  | { mode: 'start' }
+  | { mode: 'resume'; threadId: string }
+  | { mode: 'fork'; threadId: string };
+
+/**
+ * DESIGN.md "Runtime boundary": renderer は endpoint 意図のみを渡す。
+ * codex 実行コマンドは settings.json、control socket は Rust 側 daemon 検出が正本で、
+ * renderer から raw path / argv は受け付けない。cwd は project authority 照合を通る。
+ */
+export interface RegisterCodexRuntimeEndpointRequest {
+  endpointId: string;
+  cwd?: string | null;
+  thread: CodexThreadAction;
+}
+
+export interface RuntimeSteerRequest {
+  endpointId: string;
+  input: string;
+}
+
+export type RuntimeApprovalDecision =
+  | 'accept'
+  | 'acceptForSession'
+  | 'decline'
+  | 'cancel';
+
+export interface RuntimeApprovalResponseRequest {
+  endpointId: string;
+  requestId: string;
+  decision: RuntimeApprovalDecision;
+}
+
 export interface RuntimeEndpointResult {
   endpointId: string;
+}
+
+export interface CodexRuntimeEndpointResult extends RuntimeEndpointResult {
+  threadId: string;
 }
