@@ -1961,6 +1961,9 @@ export interface RecruitRequestPayload {
   newAgentId: string;
   roleProfileId: string;
   engine: 'claude' | 'codex';
+  runtimeProvider: 'codex-native' | 'claude-native' | 'pty' | 'api';
+  /** Native unavailable のときだけ設定される explicit fallback source. */
+  fallbackFrom?: 'codex-native' | 'claude-native' | null;
   agentLabelHint?: string;
   waitPolicy?: WaitPolicy;
   /** Leader が team_recruit(role_definition=...) で 1 ステップ採用した場合に同梱される */

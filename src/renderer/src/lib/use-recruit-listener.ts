@@ -271,6 +271,8 @@ export function useRecruitListener(): void {
             payload: {
               // command override で custom CLI を起動する (CardFrame は payload.command を優先)。
               agent: p.engine,
+              runtimeProvider: p.runtimeProvider,
+              fallbackFrom: p.fallbackFrom,
               command: customAgent.command || undefined,
               args: customAgent.args ? cliArgs.args : undefined,
               // Issue #1193: custom settingsのraw cwdはauthorityにしない。CardFrameが
@@ -293,6 +295,8 @@ export function useRecruitListener(): void {
             position: pos,
             payload: {
               agent: p.engine,
+              runtimeProvider: p.runtimeProvider,
+              fallbackFrom: p.fallbackFrom,
               roleProfileId: p.roleProfileId,
               // 旧コード互換: role 旧フィールドにも書く (一時的)
               role: p.roleProfileId,

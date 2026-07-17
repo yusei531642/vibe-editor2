@@ -7,7 +7,6 @@
 //   ローカル IPC (Unix domain socket / Windows named pipe) 接続を受ける
 // - JSON-RPC line protocol (初期化 / tools/list / tools/call) を処理
 // - team_send 等のツール呼び出しを PTY に直接 write 注入する (64B / 15ms)
-
 // Issue #1062: codex 公式 app-server JSON-RPC (turn/start / turn/steer) 配送クライアント。
 // unix domain socket 上の WebSocket に直結するため unix 専用 (Windows は当面 PTY 注入のまま)。
 #[cfg(unix)]
@@ -26,6 +25,7 @@ pub mod file_locks;
 pub mod inbox_watch;
 pub mod inject;
 pub mod protocol;
+pub(crate) mod provider_policy;
 // Issue #1072 Part2: online (handshake) 時の未読一括再配信 (Pty mode 限定)。
 pub mod redeliver;
 // Issue #517: 動的ロール同士の責務境界 lint (recruit / assign_task で warning 発火)。

@@ -1,6 +1,9 @@
 use super::*;
+#[cfg(unix)]
 use crate::agent_runtime::codex::CodexRuntimeAdapter;
+use crate::agent_runtime::claude_agent::{ClaudeAgentRuntimeAdapter, SidecarLaunchConfig};
 
+#[cfg(unix)]
 pub(super) async fn register_codex_endpoint(
     app: &AppHandle,
     state: &State<'_, AppState>,
@@ -50,7 +53,7 @@ pub(super) async fn register_codex_endpoint(
     let socket_path = crate::pty::codex_app_server::ensure_control_socket(&codex_command)
         .await
         .ok_or_else(|| {
-            finish_codex_failure(
+            finish_native_failure(
                 app,
                 &state.runtime_manager,
                 &endpoint_id,
@@ -70,7 +73,7 @@ pub(super) async fn register_codex_endpoint(
         run_blocking(move || CodexRuntimeAdapter::connect(socket_path, cwd, sink)).await?;
     let adapter = Arc::new(
         adapter_result.map_err(|error| {
-            finish_codex_failure(app, &state.runtime_manager, &endpoint_id, error)
+            finish_native_failure(app, &state.runtime_manager, &endpoint_id, error)
         })?,
     );
     let manager = state.runtime_manager.clone();
@@ -95,7 +98,7 @@ pub(super) async fn register_codex_endpoint(
     let thread_id = match adapter.thread_id() {
         Some(thread_id) => thread_id,
         None => {
-            return Err(finish_codex_failure(
+            return Err(finish_native_failure(
                 app,
                 &state.runtime_manager,
                 &endpoint_id,
@@ -118,7 +121,7 @@ pub(super) async fn register_codex_endpoint(
             )
             .await
         {
-            return Err(finish_codex_failure(
+            return Err(finish_native_failure(
                 app,
                 &state.runtime_manager,
                 &endpoint_id,
@@ -136,5 +139,113 @@ pub(super) async fn register_codex_endpoint(
     Ok(CodexRuntimeEndpointResult {
         endpoint_id,
         thread_id,
+    })
+}
+
+pub(super) async fn register_claude_endpoint(
+    app: &AppHandle,
+    state: &State<'_, AppState>,
+    request: RegisterClaudeEndpointRequest,
+) -> CommandResult<ClaudeRuntimeEndpointResult> {
+    let RegisterClaudeEndpointRequest {
+        endpoint_id,
+        team_id,
+        agent_id,
+        system_prompt,
+        session,
+    } = request;
+    validate_endpoint_id(&endpoint_id)?;
+    if team_id.is_some() != agent_id.is_some() {
+        return Err(CommandError::validation(
+            "teamId and agentId must be provided together",
+        ));
+    }
+    if let Some((team_id, agent_id)) = team_id.as_deref().zip(agent_id.as_deref()) {
+        state
+            .team_hub
+            .authorize_team_agent_binding(team_id, agent_id)
+            .await?;
+    }
+    if let Some(prompt) = system_prompt.as_deref() {
+        validate_bounded_no_nul("systemPrompt", prompt, 256 * 1024)?;
+    }
+    let resume_session = match &session {
+        ClaudeSessionAction::Resume { session_id } | ClaudeSessionAction::Fork { session_id } => {
+            crate::commands::validation::validate_id_segment("session_id", session_id)?;
+            authorize_known_thread(&state.known_claude_sessions, session_id)?;
+            Some(session_id.clone())
+        }
+        ClaudeSessionAction::Start => None,
+    };
+    let cwd = crate::state::current_project_root(&state.project_root);
+    let settings = crate::commands::settings::settings_load().await?;
+    let launch = SidecarLaunchConfig::production(settings.claude_command)
+        .map_err(|error| CommandError::coded(error.code, error.message))?;
+    let sink = claude_event_sink(
+        app.clone(),
+        state.runtime_manager.clone(),
+        endpoint_id.clone(),
+        state.known_claude_sessions.clone(),
+    );
+    let adapter_result = run_blocking(move || {
+        ClaudeAgentRuntimeAdapter::connect(launch, cwd, system_prompt, sink)
+    })
+    .await?;
+    let adapter = Arc::new(adapter_result.map_err(|error| {
+        let operation = state.runtime_manager.fail_endpoint(&endpoint_id, error.clone());
+        emit_events(app, &operation.events);
+        CommandError::coded(error.code, error.message)
+    })?);
+    let manager = state.runtime_manager.clone();
+    let operation_endpoint = endpoint_id.clone();
+    let operation_adapter = adapter.clone();
+    let operation = run_blocking(move || match session {
+        ClaudeSessionAction::Start => {
+            manager.register_endpoint(operation_endpoint, operation_adapter)
+        }
+        ClaudeSessionAction::Resume { session_id } => manager.register_resumed_endpoint(
+            operation_endpoint,
+            operation_adapter,
+            session_id,
+        ),
+        ClaudeSessionAction::Fork { session_id } => manager.register_forked_endpoint(
+            operation_endpoint,
+            operation_adapter,
+            session_id,
+        ),
+    })
+    .await?;
+    emit_events(app, &operation.events);
+    operation
+        .result
+        .map_err(|error| CommandError::coded(error.code, error.message))?;
+    let session_id = adapter.session_id().or(resume_session);
+    if let Some((team_id, agent_id)) = team_id.zip(agent_id) {
+        state
+            .team_hub
+            .bind_native_runtime_endpoint(
+                &team_id,
+                &agent_id,
+                endpoint_id.clone(),
+                session_id.clone(),
+            )
+            .await
+            .map_err(|message| {
+                finish_native_failure(
+                    app,
+                    &state.runtime_manager,
+                    &endpoint_id,
+                    crate::agent_runtime::RuntimeAdapterError::new(
+                        "runtime_team_binding_failed",
+                        message,
+                        false,
+                    ),
+                )
+            })?;
+    }
+    record_known_thread(&state.known_claude_sessions, session_id.clone());
+    Ok(ClaudeRuntimeEndpointResult {
+        endpoint_id,
+        session_id,
     })
 }

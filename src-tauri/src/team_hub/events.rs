@@ -29,6 +29,10 @@ pub struct RecruitRequestPayload {
     pub new_agent_id: String,
     pub role_profile_id: String,
     pub engine: String,
+    pub runtime_provider: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub fallback_from: Option<String>,
     pub agent_label_hint: String,
     /// create_leader 経路では None (leader に wait_policy 概念が無い)。
     /// 従来どおり「キー自体を載せない」形を保つため skip する。

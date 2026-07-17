@@ -20,6 +20,7 @@ interface CardFrameProps {
   title: string;
   accent?: string;
   children: ReactNode;
+  headerMeta?: ReactNode;
   /** NodeResizer の最小幅 (default 240) */
   minWidth?: number;
   /** NodeResizer の最小高さ (default 160) */
@@ -31,6 +32,7 @@ export function CardFrame({
   title,
   accent,
   children,
+  headerMeta,
   minWidth = DEFAULT_MIN_W,
   minHeight = DEFAULT_MIN_H
 }: CardFrameProps): JSX.Element {
@@ -56,6 +58,7 @@ export function CardFrame({
           <span className="canvas-card-frame__title" title={title}>
             {title}
           </span>
+          {headerMeta}
         </span>
         <button
           type="button"

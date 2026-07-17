@@ -3,7 +3,6 @@
 // Phase 1: Tauri shell + 8 IPC モジュール
 // 各 commands/*.rs は IPC 契約 (src/types/ipc.ts) に合わせた #[tauri::command] を提供する。
 // PTY backend (portable-pty + batcher) は src/pty/ に集約。
-
 mod agent_runtime;
 mod commands;
 mod mcp_config;
@@ -184,6 +183,7 @@ pub fn run() {
             commands::agent_runtime::agent_runtime_diagnostics,
             commands::agent_runtime::agent_runtime_register_pty_endpoint,
             commands::agent_runtime::agent_runtime_register_codex_endpoint,
+            commands::agent_runtime::agent_runtime_register_claude_endpoint,
             commands::agent_runtime::agent_runtime_reconnect_codex,
             commands::agent_runtime::agent_runtime_spawn_turn,
             commands::agent_runtime::agent_runtime_write,

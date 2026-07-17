@@ -49,7 +49,8 @@ const request: RecruitRequestPayload = {
   requesterRole: 'leader',
   newAgentId: 'worker-1',
   roleProfileId: 'programmer',
-  engine: 'codex'
+  engine: 'codex',
+  runtimeProvider: 'codex-native'
 };
 
 function lifecycle(sequence: number, state: RecruitLifecyclePayload['state']): RecruitLifecyclePayload {

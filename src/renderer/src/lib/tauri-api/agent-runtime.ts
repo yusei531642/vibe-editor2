@@ -5,8 +5,10 @@ import { subscribeEventReady } from '../subscribe-event';
 import type {
   AgentRuntimeBackend,
   AgentRuntimeDiagnostics,
+  ClaudeRuntimeEndpointResult,
   CodexRuntimeEndpointResult,
   RegisterCodexRuntimeEndpointRequest,
+  RegisterClaudeRuntimeEndpointRequest,
   RegisterPtyRuntimeEndpointRequest,
   RuntimeApprovalResponseRequest,
   RuntimeEndpointResult,
@@ -28,6 +30,11 @@ export const agentRuntime = {
     request: RegisterCodexRuntimeEndpointRequest
   ): Promise<CodexRuntimeEndpointResult> =>
     invokeCommand('agent_runtime_register_codex_endpoint', { request }),
+
+  registerClaudeEndpoint: (
+    request: RegisterClaudeRuntimeEndpointRequest
+  ): Promise<ClaudeRuntimeEndpointResult> =>
+    invokeCommand('agent_runtime_register_claude_endpoint', { request }),
 
   reconnectCodex: (
     request: RegisterCodexRuntimeEndpointRequest

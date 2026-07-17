@@ -2,8 +2,9 @@
 #[cfg(unix)]
 use crate::agent_runtime::codex::{CodexAdapterEvent, CodexAdapterEventSink};
 use crate::agent_runtime::{
-    select_backend, BackendKind, PtyCompatAdapter, RuntimeCapability, RuntimeEventEnvelope,
-    RuntimeOperation, RuntimeTurnSpawnRequest, SelectionReason, SystemCapabilityDetector,
+    provider_declarations, select_backend, BackendKind, PtyCompatAdapter, RuntimeCapability,
+    RuntimeEventEnvelope, RuntimeOperation, RuntimeProviderDeclaration, RuntimeTurnSpawnRequest,
+    SelectionReason, SystemCapabilityDetector, SystemProviderAvailability,
 };
 use crate::commands::error::{CommandError, CommandResult};
 use crate::state::AppState;
@@ -11,7 +12,6 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
 
-#[cfg(unix)]
 mod registration;
 
 const MAX_RUNTIME_INPUT_BYTES: usize = 64 * 1024;
@@ -23,6 +23,7 @@ pub struct AgentRuntimeDiagnostics {
     pub selected_backend: BackendKind,
     pub reason: SelectionReason,
     pub capabilities: Vec<RuntimeCapability>,
+    pub providers: Vec<RuntimeProviderDeclaration>,
 }
 /// Renderer の未保存 draft も診断できるよう backend を引数で受ける。
 /// system detector は Unix で native adapter、Windows で PTY fallback を報告する。
@@ -32,11 +33,17 @@ pub async fn agent_runtime_diagnostics(backend: String) -> CommandResult<AgentRu
     let requested_backend =
         BackendKind::try_from(backend.as_str()).map_err(CommandError::validation)?;
     let selection = select_backend(requested_backend, &SystemCapabilityDetector);
+    let claude_command = crate::commands::settings::settings_load()
+        .await
+        .map(|settings| settings.claude_command)
+        .unwrap_or_else(|_| "claude".to_string());
+    let providers = provider_declarations(&SystemProviderAvailability::new(claude_command));
     Ok(AgentRuntimeDiagnostics {
         requested_backend: selection.requested_backend,
         selected_backend: selection.selected_backend,
         reason: selection.reason,
         capabilities: selection.capabilities,
+        providers,
     })
 }
 #[derive(Debug, Deserialize)]
@@ -81,6 +88,30 @@ pub struct RegisterCodexEndpointRequest {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(
+    tag = "mode",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum ClaudeSessionAction {
+    Start,
+    Resume { session_id: String },
+    Fork { session_id: String },
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+/// Sidecar executable / Claude command / cwd は Rust が解決する。renderer は identity と
+/// role instructions だけを渡し、raw path / argv / credential は渡せない。
+pub struct RegisterClaudeEndpointRequest {
+    pub endpoint_id: String,
+    pub team_id: Option<String>,
+    pub agent_id: Option<String>,
+    pub system_prompt: Option<String>,
+    pub session: ClaudeSessionAction,
+}
+
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeSteerCommandRequest {
     pub endpoint_id: String,
@@ -109,6 +140,13 @@ pub struct CodexRuntimeEndpointResult {
     pub thread_id: String,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaudeRuntimeEndpointResult {
+    pub endpoint_id: String,
+    pub session_id: Option<String>,
+}
+
 /// TeamHub が内部管理する endpoint id の予約 prefix。renderer からの
 /// register / dispose / write 等で内部 endpoint を乗っ取れないよう fail-closed に拒否する
 /// (PR #34 四次レビュー: `team-pty-{agentId}` は予測可能なため名前空間を分離する)。
@@ -131,7 +169,6 @@ fn validate_runtime_input(input: &str) -> CommandResult<()> {
     crate::commands::validation::assert_max_size(input.len(), MAX_RUNTIME_INPUT_BYTES)
 }
 
-#[cfg(unix)]
 fn validate_bounded_no_nul(name: &str, value: &str, max: usize) -> CommandResult<()> {
     if value.contains('\0') {
         return Err(CommandError::validation(format!(
@@ -215,8 +252,28 @@ fn codex_event_sink(
     })
 }
 
-#[cfg(unix)]
-fn finish_codex_failure(
+fn claude_event_sink(
+    app: AppHandle,
+    manager: Arc<crate::agent_runtime::RuntimeManager>,
+    endpoint_id: String,
+    known_sessions: Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
+) -> crate::agent_runtime::claude_agent::ClaudeAdapterEventSink {
+    Arc::new(move |event| match event {
+        crate::agent_runtime::claude_agent::ClaudeAdapterEvent::Session(session_id) => {
+            record_known_thread(&known_sessions, Some(session_id));
+        }
+        crate::agent_runtime::claude_agent::ClaudeAdapterEvent::Payload(payload) => {
+            let event = manager.record_event(&endpoint_id, payload);
+            emit_events(&app, std::slice::from_ref(&event));
+        }
+        crate::agent_runtime::claude_agent::ClaudeAdapterEvent::Failure(error) => {
+            let operation = manager.fail_endpoint(&endpoint_id, error);
+            emit_events(&app, &operation.events);
+        }
+    })
+}
+
+fn finish_native_failure(
     app: &AppHandle,
     manager: &crate::agent_runtime::RuntimeManager,
     endpoint_id: &str,
@@ -297,6 +354,15 @@ pub async fn agent_runtime_register_codex_endpoint(
     }
     #[cfg(unix)]
     registration::register_codex_endpoint(&app, &state, request).await
+}
+
+#[tauri::command]
+pub async fn agent_runtime_register_claude_endpoint(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    request: RegisterClaudeEndpointRequest,
+) -> CommandResult<ClaudeRuntimeEndpointResult> {
+    registration::register_claude_endpoint(&app, &state, request).await
 }
 
 #[tauri::command]
