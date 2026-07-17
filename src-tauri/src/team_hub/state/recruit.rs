@@ -312,6 +312,10 @@ impl TeamHub {
         }
         entry.last_handshake_at = Some(now_iso.clone());
         entry.last_seen_at = Some(now_iso);
+        drop(s);
+        // rescue 経由でも placeholder が解決するよう、handshake 成功時に lifecycle を
+        // Ready まで前進させる (冪等、PR #34 二次レビュー)。
+        self.advance_recruit_to_ready(agent_id).await;
         true
     }
 

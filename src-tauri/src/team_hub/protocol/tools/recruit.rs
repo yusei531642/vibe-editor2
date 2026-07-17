@@ -584,14 +584,14 @@ pub async fn team_recruit(
             }
             Ok(Ok(ack)) => {
                 // renderer から ack(ok=false) が来た = 起動失敗を即時通知された
-                let _ = hub
-                    .fail_recruit(&new_agent_id, "renderer_spawn_failed")
-                    .await;
-                hub.discard_pending_recruit(&new_agent_id).await;
                 let phase_str = ack
                     .phase
                     .map(|p| p.as_str().to_string())
                     .unwrap_or_else(|| "unknown".to_string());
+                // 旧実装は `team:recruit-cancelled` の reason に ack.phase を載せていた。
+                // renderer の wire 契約を維持するため phase を reason として使う (PR #34 二次レビュー)。
+                let _ = hub.fail_recruit(&new_agent_id, phase_str.clone()).await;
+                hub.discard_pending_recruit(&new_agent_id).await;
                 let reason = ack.reason.unwrap_or_default();
                 let message = if reason.is_empty() {
                     format!("recruit failed (phase={phase_str})")

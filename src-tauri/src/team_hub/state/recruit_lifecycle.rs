@@ -153,6 +153,22 @@ impl TeamHub {
         Some(payload)
     }
 
+    /// handshake 完了済み member の lifecycle を Ready まで進める (冪等)。
+    ///
+    /// 通常経路では `verify_recruit_liveness` が Ready を打つが、Issue #577 の遅着 ack rescue
+    /// では `team_recruit` が既に timeout で return しているため到達しない。rescue 後の
+    /// handshake 成功時にここで前進させ、placeholder が spawning のまま解決しない事態を防ぐ
+    /// (PR #34 二次レビュー)。既に Ready / terminal の場合は各遷移が拒否されて no-op。
+    pub async fn advance_recruit_to_ready(&self, agent_id: &str) {
+        for next in [
+            RecruitLifecycleState::Spawning,
+            RecruitLifecycleState::Handshaking,
+            RecruitLifecycleState::Ready,
+        ] {
+            let _ = self.transition_recruit_lifecycle(agent_id, next, None).await;
+        }
+    }
+
     pub async fn fail_recruit(&self, agent_id: &str, reason: impl Into<String>) -> bool {
         self.finish_recruit_terminal(agent_id, RecruitLifecycleState::Failed, reason.into())
             .await

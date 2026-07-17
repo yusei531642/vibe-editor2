@@ -424,6 +424,21 @@ async fn production_timeout_cancellation_keeps_grace_rescue_reachable() {
     let rescued = hub.take_recruit_rescued_events_for_test();
     assert_eq!(rescued.len(), 1);
     assert_eq!(rescued[0].0, agent_id);
+
+    // rescue 後の handshake 成功で lifecycle が Ready まで解決すること
+    // (PR #34 二次レビュー: spawning のまま取り残されない)。
+    assert!(
+        hub.resolve_pending_recruit(agent_id, team_id, "programmer")
+            .await
+    );
+    let lifecycle_state = hub
+        .state
+        .lock()
+        .await
+        .recruit_lifecycles
+        .get(agent_id)
+        .map(|l| l.state);
+    assert_eq!(lifecycle_state, Some(RecruitLifecycleState::Ready));
 }
 
 /// PR #34 一次レビュー 🟡7: bind_native_runtime_endpoint は renderer 由来の
