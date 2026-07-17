@@ -103,6 +103,7 @@ async fn dismiss_during_handshake_window_cannot_be_resurrected() {
 
 /// PR #34 レビュー: ack rescue 済み (handshake 待ち) の pending は grace 満了でも
 /// terminal cancel されない (worker が起動中に kill されない)。
+#[allow(clippy::await_holding_lock)] // 既存 rescue テストと同じ test 専用 guard
 #[tokio::test(flavor = "current_thread")]
 async fn grace_expiry_after_ack_rescue_does_not_cancel() {
     let _rescue_guard = TeamHub::lock_recruit_rescue_for_test();
