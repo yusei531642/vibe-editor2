@@ -378,7 +378,7 @@ async fn resolve_send_targets(
     to: &str,
     message_kind: MessageKind,
 ) -> SendTargets {
-    let team_members = hub.team_members(&ctx.team_id).await;
+    let team_members = hub.live_team_members(&ctx.team_id).await;
     let active_leader_agent_id = {
         let state = hub.state.lock().await;
         state
