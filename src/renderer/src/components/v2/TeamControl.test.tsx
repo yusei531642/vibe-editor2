@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApprovalCenter } from './ApprovalCenter';
 import { TeamInspector } from './TeamInspector';
@@ -40,6 +40,10 @@ describe('Team controls keyboard interaction', () => {
       respondApproval: vi.fn()
     };
     render(<ApprovalCenter />);
+    expect(screen.getByRole('dialog', { name: 'v2.approval.center' })).toHaveAttribute(
+      'aria-modal',
+      'true'
+    );
     const items = screen.getAllByRole('listitem');
     items[0].focus();
     fireEvent.keyDown(items[0], { key: 'ArrowDown' });
@@ -48,6 +52,51 @@ describe('Team controls keyboard interaction', () => {
     expect(screen.getAllByRole('button', { name: 'v2.approval.acceptSession' })).toHaveLength(2);
     expect(screen.getAllByRole('button', { name: 'v2.approval.decline' })).toHaveLength(2);
     expect(screen.getAllByRole('button', { name: 'v2.approval.cancel' })).toHaveLength(2);
+  });
+
+  it('traps focus, closes on Escape, and safely focuses close when empty', () => {
+    const setApprovalsOpen = vi.fn();
+    harness.context = {
+      approvalsOpen: true,
+      setApprovalsOpen,
+      projection: { approvals: [] },
+      respondApproval: vi.fn()
+    };
+    render(<ApprovalCenter />);
+    const close = screen.getByRole('button', { name: 'common.close' });
+    expect(close).toHaveFocus();
+    fireEvent.keyDown(close, { key: 'Tab' });
+    expect(close).toHaveFocus();
+    fireEvent.keyDown(close, { key: 'Escape' });
+    expect(setApprovalsOpen).toHaveBeenCalledWith(false);
+  });
+
+  it('focuses the adjacent approval after a successful response', async () => {
+    const second = { ...approval, requestId: 'request-2', agentTitle: 'Agent Two' };
+    const respondApproval = vi.fn().mockResolvedValue(undefined);
+    harness.context = {
+      approvalsOpen: true,
+      setApprovalsOpen: vi.fn(),
+      projection: { approvals: [approval, second] },
+      respondApproval
+    };
+    const { rerender } = render(<ApprovalCenter />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'v2.approval.accept' })[0]);
+    await waitFor(() =>
+      expect(respondApproval).toHaveBeenCalledWith(
+        'agent-1',
+        'endpoint-1',
+        'request-1',
+        'accept'
+      )
+    );
+    harness.context = {
+      ...harness.context,
+      projection: { approvals: [second] }
+    };
+    rerender(<ApprovalCenter />);
+    await waitFor(() => expect(screen.getByRole('listitem')).toHaveFocus());
+    expect(screen.getByRole('listitem')).toHaveTextContent('Agent Two');
   });
 
   it('uses roving tabs in Inspector and opens Terminal only from the explicit action', () => {

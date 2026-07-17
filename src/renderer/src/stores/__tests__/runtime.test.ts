@@ -4,6 +4,7 @@ import type {
   RuntimeEventPayload
 } from '../../../../types/agent-runtime';
 import {
+  RESOLVED_APPROVAL_HISTORY_LIMIT,
   RUNTIME_PROJECTION_HISTORY_LIMIT,
   useRuntimeStore
 } from '../runtime';
@@ -188,5 +189,35 @@ describe('runtime projection store', () => {
         (request) => request.requestId
       )
     ).toEqual(['two']);
+  });
+
+  it('does not resurrect a resolved approval after endpoint clear and buffer replay', () => {
+    const approval = event(1, {
+      type: 'approvalRequest',
+      requestId: 'resolved-one',
+      method: 'command/requestApproval',
+      reason: null,
+      command: 'npm test',
+      cwd: null
+    });
+    const store = useRuntimeStore.getState();
+    store.projectEvent(approval);
+    store.resolveApproval('endpoint-1', 'resolved-one');
+    store.clearEndpoint('endpoint-1');
+    useRuntimeStore.getState().projectEvent(approval);
+
+    expect(
+      useRuntimeStore.getState().byEndpoint['endpoint-1'].approvalRequests
+    ).toEqual([]);
+  });
+
+  it('bounds the persistent resolved approval Set', () => {
+    const store = useRuntimeStore.getState();
+    for (let index = 0; index <= RESOLVED_APPROVAL_HISTORY_LIMIT; index += 1) {
+      store.resolveApproval('endpoint-1', `request-${index}`);
+    }
+    const resolved = useRuntimeStore.getState().resolvedApprovalRequestIds;
+    expect(resolved.size).toBe(RESOLVED_APPROVAL_HISTORY_LIMIT);
+    expect(resolved.has('endpoint-1\u0000request-0')).toBe(false);
   });
 });

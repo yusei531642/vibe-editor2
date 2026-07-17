@@ -380,8 +380,10 @@ function AgentNodeCardImpl({
   );
   const terminalStatus = useMemo(() => formatTerminalRuntimeStatus(status, t), [status, t]);
   const { projection: teamProjection, terminalAgentId } = useTeamProjection();
+  // agentId の無い v1 card は projection の対象外なので、従来どおり Terminal を開いたままにする。
   const terminalOpen =
     teamProjection.teamId === '' ||
+    !payload.agentId ||
     Boolean(payload.agentId && terminalAgentId === payload.agentId);
 
   const handleClose = useCallback(

@@ -11,7 +11,8 @@ import type { RuntimeApprovalDecision } from '../../../../types/agent-runtime';
 import type {
   Team,
   TeamOrchestrationState,
-  TeamProjectionSnapshot
+  TeamProjectionSnapshot,
+  TeamRuntimeEventCursor
 } from '../../../../types/shared';
 import { useProject } from '../../lib/app-state-context';
 import { useRecruitLifecycleProjection } from '../../lib/recruit-lifecycle-projection';
@@ -22,7 +23,7 @@ import {
 } from '../../lib/team-projection';
 import {
   dispatchTeamAgentAction,
-  respondAndResolveApproval,
+  respondAndResolveTeamApproval,
   type TeamAgentAction
 } from '../../lib/team-actions';
 import { agentPayloadOf, useCanvasStore } from '../../stores/canvas';
@@ -48,6 +49,7 @@ interface TeamProjectionContextValue {
   ) => Promise<void>;
   broadcast: (message: string) => Promise<void>;
   respondApproval: (
+    agentId: string,
     endpointId: string,
     requestId: string,
     decision: RuntimeApprovalDecision
@@ -65,6 +67,8 @@ const EMPTY_PROJECTION: TeamProjection = {
 };
 
 const TeamProjectionContext = createContext<TeamProjectionContextValue | null>(null);
+
+const MISSING_PROVIDER_ERROR = 'TeamProjectionProvider is missing';
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -97,11 +101,49 @@ function projectBufferedEvents(
   }
 }
 
+function cursorKey(cursor: TeamRuntimeEventCursor): string {
+  return `${cursor.endpointId}\u0000${cursor.sequence}\u0000${cursor.timestamp}`;
+}
+
+function pruneReplayedEvents(
+  snapshot: TeamProjectionSnapshot,
+  replayedEvents: Set<string>
+): void {
+  const retained = new Set(snapshot.retainedEventCursors.map(cursorKey));
+  for (const key of replayedEvents) {
+    if (!retained.has(key)) replayedEvents.delete(key);
+  }
+}
+
+function latestCursors(snapshot: TeamProjectionSnapshot): TeamRuntimeEventCursor[] {
+  const cursors = new Map<string, TeamRuntimeEventCursor>();
+  for (const cursor of snapshot.retainedEventCursors) cursors.set(cursor.endpointId, cursor);
+  return [...cursors.values()];
+}
+
+function snapshotsEqual(
+  previous: TeamProjectionSnapshot | null,
+  next: TeamProjectionSnapshot
+): boolean {
+  if (!previous) return false;
+  return (
+    previous.teamId === next.teamId &&
+    previous.runtimeDroppedCount === next.runtimeDroppedCount &&
+    JSON.stringify(previous.endpoints) === JSON.stringify(next.endpoints)
+  );
+}
+
+function valuesEqual<T>(previous: T, next: T): boolean {
+  return JSON.stringify(previous) === JSON.stringify(next);
+}
+
 export function TeamProjectionProvider({
   team,
+  teamSceneCommitted,
   children
 }: {
   team: Team;
+  teamSceneCommitted: boolean;
   children: React.ReactNode;
 }): JSX.Element {
   const { projectRoot } = useProject();
@@ -117,6 +159,7 @@ export function TeamProjectionProvider({
   const [terminalAgentId, setTerminalAgentId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const replayedSnapshotEvents = useRef(new Set<string>());
+  const snapshotCursors = useRef<TeamRuntimeEventCursor[]>([]);
 
   const members = useMemo(
     () =>
@@ -167,14 +210,21 @@ export function TeamProjectionProvider({
   const refresh = useCallback(async () => {
     try {
       const [nextSnapshot, nextOrchestration] = await Promise.all([
-        window.api.team.projectionSnapshot(team.id),
+        window.api.team.projectionSnapshot({
+          teamId: team.id,
+          sinceSequence: snapshotCursors.current
+        }),
         projectRoot
           ? window.api.teamState.read(projectRoot, team.id)
           : Promise.resolve(null)
       ]);
       projectBufferedEvents(nextSnapshot, replayedSnapshotEvents.current);
-      setSnapshot(nextSnapshot);
-      setOrchestration(nextOrchestration);
+      pruneReplayedEvents(nextSnapshot, replayedSnapshotEvents.current);
+      snapshotCursors.current = latestCursors(nextSnapshot);
+      setSnapshot((previous) => snapshotsEqual(previous, nextSnapshot) ? previous : nextSnapshot);
+      setOrchestration((previous) =>
+        valuesEqual(previous, nextOrchestration) ? previous : nextOrchestration
+      );
       setError(null);
     } catch (refreshError) {
       setError(messageOf(refreshError));
@@ -182,10 +232,25 @@ export function TeamProjectionProvider({
   }, [projectRoot, team.id]);
 
   useEffect(() => {
-    void refresh();
-    const timer = window.setInterval(() => void refresh(), 3_000);
-    return () => window.clearInterval(timer);
-  }, [refresh]);
+    let timer: number | null = null;
+    const stop = (): void => {
+      if (timer !== null) window.clearInterval(timer);
+      timer = null;
+    };
+    const start = (): void => {
+      stop();
+      if (!teamSceneCommitted || document.hidden) return;
+      void refresh();
+      timer = window.setInterval(() => void refresh(), 3_000);
+    };
+    const handleVisibilityChange = (): void => start();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    start();
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [refresh, teamSceneCommitted]);
 
   const endpointIds = useMemo(() => {
     const values = new Set(snapshot?.endpoints.map((endpoint) => endpoint.endpointId) ?? []);
@@ -244,19 +309,22 @@ export function TeamProjectionProvider({
 
   const respondApproval = useCallback(
     async (
+      agentId: string,
       endpointId: string,
       requestId: string,
       decision: RuntimeApprovalDecision
     ): Promise<void> => {
-      await respondAndResolveApproval(
+      await respondAndResolveTeamApproval(
         window.api,
+        team.id,
+        agentId,
         endpointId,
         requestId,
         decision,
         resolveApproval
       );
     },
-    [resolveApproval]
+    [resolveApproval, team.id]
   );
 
   const openInspector = useCallback(
@@ -309,26 +377,25 @@ export function TeamProjectionProvider({
   return <TeamProjectionContext.Provider value={value}>{children}</TeamProjectionContext.Provider>;
 }
 
+const NO_PROVIDER_CONTEXT: TeamProjectionContextValue = {
+  projection: EMPTY_PROJECTION,
+  selectedAgent: null,
+  selectedAgentId: null,
+  inspectorOpen: false,
+  approvalsOpen: false,
+  terminalAgentId: null,
+  error: null,
+  selectAgent: () => undefined,
+  setInspectorOpen: () => undefined,
+  setApprovalsOpen: () => undefined,
+  openInspector: () => undefined,
+  openTerminal: () => undefined,
+  dispatchAgentAction: () => Promise.reject(new Error(MISSING_PROVIDER_ERROR)),
+  broadcast: () => Promise.reject(new Error(MISSING_PROVIDER_ERROR)),
+  respondApproval: () => Promise.reject(new Error(MISSING_PROVIDER_ERROR))
+};
+
 export function useTeamProjection(): TeamProjectionContextValue {
   const context = useContext(TeamProjectionContext);
-  if (!context) {
-    return {
-      projection: EMPTY_PROJECTION,
-      selectedAgent: null,
-      selectedAgentId: null,
-      inspectorOpen: false,
-      approvalsOpen: false,
-      terminalAgentId: null,
-      error: null,
-      selectAgent: () => undefined,
-      setInspectorOpen: () => undefined,
-      setApprovalsOpen: () => undefined,
-      openInspector: () => undefined,
-      openTerminal: () => undefined,
-      dispatchAgentAction: () => Promise.reject(new Error('TeamProjectionProvider is missing')),
-      broadcast: () => Promise.reject(new Error('TeamProjectionProvider is missing')),
-      respondApproval: () => Promise.reject(new Error('TeamProjectionProvider is missing'))
-    };
-  }
-  return context;
+  return context ?? NO_PROVIDER_CONTEXT;
 }

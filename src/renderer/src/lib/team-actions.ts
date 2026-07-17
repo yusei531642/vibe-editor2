@@ -40,13 +40,18 @@ export async function dispatchTeamAgentAction(
   }
 }
 
-export async function respondAndResolveApproval(
+export async function respondAndResolveTeamApproval(
   api: Api,
+  teamId: string,
+  agentId: string,
   endpointId: string,
   requestId: string,
   decision: RuntimeApprovalDecision,
   resolve: (endpointId: string, requestId: string) => void
 ): Promise<void> {
-  await api.agentRuntime.respondApproval({ endpointId, requestId, decision });
+  await api.team.memberCommand({
+    teamId,
+    command: { action: 'respondApproval', agentId, requestId, decision }
+  });
   resolve(endpointId, requestId);
 }

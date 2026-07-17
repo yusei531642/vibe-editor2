@@ -26,6 +26,7 @@ const snapshot: TeamProjectionSnapshot = {
     live: true
   }],
   runtimeEvents: [],
+  retainedEventCursors: [],
   runtimeDroppedCount: 3
 };
 

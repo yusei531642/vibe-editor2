@@ -24,7 +24,8 @@ import type {
   TeamDiagnosticsMemberRow,
   TeamMemberCommandRequest,
   TeamMemberCommandResult,
-  TeamProjectionSnapshot
+  TeamProjectionSnapshot,
+  TeamProjectionSnapshotRequest
 } from '../../../../types/shared';
 import { invokeCommand } from './command-error';
 
@@ -88,8 +89,8 @@ export const team = {
   diagnosticsRead: (teamId: string): Promise<TeamDiagnosticsResponse> =>
     invokeCommand('team_diagnostics_read', { teamId }),
   /** Issue #26: active team に限定した runtime binding + buffered event snapshot。 */
-  projectionSnapshot: (teamId: string): Promise<TeamProjectionSnapshot> =>
-    invokeCommand('team_projection_snapshot', { teamId }),
+  projectionSnapshot: (request: TeamProjectionSnapshotRequest): Promise<TeamProjectionSnapshot> =>
+    invokeCommand('team_projection_snapshot', { request }),
   /** Issue #26: TeamHub の active leader 権限で認可済み member を操作する。 */
   memberCommand: (request: TeamMemberCommandRequest): Promise<TeamMemberCommandResult> =>
     invokeCommand('team_member_command', { request })

@@ -77,4 +77,30 @@ impl TeamHub {
         };
         Ok((endpoint_id, operation))
     }
+
+    /// Approval 応答は renderer の endpointId を信用せず、member binding の live endpoint を使う。
+    pub(crate) async fn approval_runtime_endpoint(
+        &self,
+        team_id: &str,
+        agent_id: &str,
+    ) -> Result<String, String> {
+        let state = self.state.lock().await;
+        let binding = state
+            .runtime_endpoints
+            .get(&(team_id.to_string(), agent_id.to_string()))
+            .ok_or_else(|| "runtime endpoint is not bound for this member".to_string())?;
+        binding
+            .native
+            .iter()
+            .chain(binding.pty.iter())
+            .find(|endpoint| {
+                self.runtime
+                    .manager
+                    .registry()
+                    .resolve(&endpoint.endpoint_id)
+                    .is_some()
+            })
+            .map(|endpoint| endpoint.endpoint_id.clone())
+            .ok_or_else(|| "runtime endpoint is not live for this member".to_string())
+    }
 }

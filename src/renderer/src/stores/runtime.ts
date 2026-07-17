@@ -7,6 +7,7 @@ import type {
 } from '../../../types/agent-runtime';
 
 export const RUNTIME_PROJECTION_HISTORY_LIMIT = 200;
+export const RESOLVED_APPROVAL_HISTORY_LIMIT = 512;
 
 export interface RuntimeSequenceGap {
   from: number;
@@ -68,6 +69,7 @@ export interface RuntimeEndpointProjection {
 
 interface RuntimeProjectionState {
   byEndpoint: Record<string, RuntimeEndpointProjection>;
+  resolvedApprovalRequestIds: Set<string>;
   projectEvent: (event: RuntimeEventEnvelope) => void;
   resolveApproval: (endpointId: string, requestId: string) => void;
   clearEndpoint: (endpointId: string) => void;
@@ -106,6 +108,10 @@ function appendCapped<T>(items: T[], value: T): { items: T[]; truncated: number 
   };
 }
 
+function approvalKey(endpointId: string, requestId: string): string {
+  return `${endpointId}\u0000${requestId}`;
+}
+
 function appendDelta(
   projection: RuntimeEndpointProjection,
   delta: string
@@ -131,7 +137,8 @@ function appendDelta(
 
 function applyPayload(
   projection: RuntimeEndpointProjection,
-  event: RuntimeEventEnvelope
+  event: RuntimeEventEnvelope,
+  resolvedApprovalRequestIds: ReadonlySet<string>
 ): RuntimeEndpointProjection {
   const history = appendCapped(projection.eventHistory, event);
   const base = {
@@ -196,6 +203,14 @@ function applyPayload(
     case 'approvalRequest':
       {
         const payload = event.payload;
+        if (resolvedApprovalRequestIds.has(approvalKey(event.endpointId, payload.requestId))) {
+          return {
+            ...base,
+            approvalRequests: projection.approvalRequests.filter(
+              (request) => request.requestId !== payload.requestId
+            )
+          };
+        }
         const withoutDuplicate = projection.approvalRequests.filter(
           (request) => request.requestId !== payload.requestId
         );
@@ -252,13 +267,18 @@ function isSpawning(event: RuntimeEventEnvelope): boolean {
 
 function project(
   projection: RuntimeEndpointProjection,
-  event: RuntimeEventEnvelope
+  event: RuntimeEventEnvelope,
+  resolvedApprovalRequestIds: ReadonlySet<string>
 ): RuntimeEndpointProjection {
   // Rust 側の sequence counter は「登録 epoch」単位 (detach/dispose で削除、再登録で 1 から)。
   // lifecycle `spawning` は新 epoch の開始なので、巻き戻った sequence を out-of-order として
   // 捨てずに projection を作り直す。
   if (isSpawning(event) && event.sequence <= projection.lastSequence) {
-    return applyPayload(emptyProjection(projection.endpointId), event);
+    return applyPayload(
+      emptyProjection(projection.endpointId),
+      event,
+      resolvedApprovalRequestIds
+    );
   }
   if (event.sequence <= projection.lastSequence) {
     return { ...projection, outOfOrderCount: projection.outOfOrderCount + 1 };
@@ -269,26 +289,43 @@ function project(
     event.sequence > expected
       ? [...projection.missingSequences, { from: expected, to: event.sequence - 1 }]
       : projection.missingSequences;
-  return applyPayload({ ...projection, missingSequences }, event);
+  return applyPayload(
+    { ...projection, missingSequences },
+    event,
+    resolvedApprovalRequestIds
+  );
 }
 
 export const useRuntimeStore = create<RuntimeProjectionState>((set) => ({
   byEndpoint: {},
+  resolvedApprovalRequestIds: new Set<string>(),
   projectEvent: (event) =>
     set((state) => {
       const previous = state.byEndpoint[event.endpointId] ?? emptyProjection(event.endpointId);
-      const next = project(previous, event);
+      const next = project(previous, event, state.resolvedApprovalRequestIds);
       return { byEndpoint: { ...state.byEndpoint, [event.endpointId]: next } };
     }),
   resolveApproval: (endpointId, requestId) =>
     set((state) => {
+      const resolvedApprovalRequestIds = new Set(state.resolvedApprovalRequestIds);
+      const key = approvalKey(endpointId, requestId);
+      resolvedApprovalRequestIds.delete(key);
+      resolvedApprovalRequestIds.add(key);
+      while (resolvedApprovalRequestIds.size > RESOLVED_APPROVAL_HISTORY_LIMIT) {
+        const oldest = resolvedApprovalRequestIds.values().next().value;
+        if (oldest === undefined) break;
+        resolvedApprovalRequestIds.delete(oldest);
+      }
       const projection = state.byEndpoint[endpointId];
-      if (!projection) return state;
+      if (!projection) return { resolvedApprovalRequestIds };
       const approvalRequests = projection.approvalRequests.filter(
         (request) => request.requestId !== requestId
       );
-      if (approvalRequests.length === projection.approvalRequests.length) return state;
+      if (approvalRequests.length === projection.approvalRequests.length) {
+        return { resolvedApprovalRequestIds };
+      }
       return {
+        resolvedApprovalRequestIds,
         byEndpoint: {
           ...state.byEndpoint,
           [endpointId]: { ...projection, approvalRequests }
@@ -302,5 +339,5 @@ export const useRuntimeStore = create<RuntimeProjectionState>((set) => ({
       delete byEndpoint[endpointId];
       return { byEndpoint };
     }),
-  clear: () => set({ byEndpoint: {} })
+  clear: () => set({ byEndpoint: {}, resolvedApprovalRequestIds: new Set<string>() })
 }));

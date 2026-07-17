@@ -60,7 +60,7 @@ export const jaWorkspaceScene: Dict = {
   'v2.inspector.tab.raw': 'Raw',
   'v2.inspector.artifactEmpty': '成果物はまだありません',
   'v2.inspector.truncated': '以前のイベント {count} 件を省略',
-  'v2.inspector.runtimeDropped': 'Rust bufferで {count} 件を省略',
+  'v2.inspector.runtimeDropped': '全endpoint共通のruntime bufferで {count} 件を省略',
   'v2.recruit.requested': '採用を受け付けました',
   'v2.recruit.spawning': '起動中',
   'v2.recruit.handshaking': '接続を確認中',

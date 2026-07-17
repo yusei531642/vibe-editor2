@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Api } from '../tauri-api';
 import type { TeamAgentProjection } from '../team-projection';
-import { dispatchTeamAgentAction, respondAndResolveApproval } from '../team-actions';
+import { dispatchTeamAgentAction, respondAndResolveTeamApproval } from '../team-actions';
 
 function agent(backend: 'native' | 'pty'): TeamAgentProjection {
   return {
@@ -64,19 +64,42 @@ describe('team card action dispatch', () => {
   it('removes approval only after the runtime response succeeds', async () => {
     const api = apiMock();
     const resolve = vi.fn();
-    await respondAndResolveApproval(api, 'native-1', 'approval-1', 'acceptForSession', resolve);
-    expect(api.agentRuntime.respondApproval).toHaveBeenCalledWith({
-      endpointId: 'native-1', requestId: 'approval-1', decision: 'acceptForSession'
+    await respondAndResolveTeamApproval(
+      api,
+      'team-1',
+      'worker-1',
+      'native-1',
+      'approval-1',
+      'acceptForSession',
+      resolve
+    );
+    expect(api.team.memberCommand).toHaveBeenCalledWith({
+      teamId: 'team-1',
+      command: {
+        action: 'respondApproval',
+        agentId: 'worker-1',
+        requestId: 'approval-1',
+        decision: 'acceptForSession'
+      }
     });
+    expect(api.agentRuntime.respondApproval).not.toHaveBeenCalled();
     expect(resolve).toHaveBeenCalledWith('native-1', 'approval-1');
   });
 
   it('keeps approval pending when the runtime response fails', async () => {
     const api = apiMock();
     const resolve = vi.fn();
-    vi.mocked(api.agentRuntime.respondApproval).mockRejectedValueOnce(new Error('transport failed'));
+    vi.mocked(api.team.memberCommand).mockRejectedValueOnce(new Error('transport failed'));
     await expect(
-      respondAndResolveApproval(api, 'native-1', 'approval-1', 'decline', resolve)
+      respondAndResolveTeamApproval(
+        api,
+        'team-1',
+        'worker-1',
+        'native-1',
+        'approval-1',
+        'decline',
+        resolve
+      )
     ).rejects.toThrow('transport failed');
     expect(resolve).not.toHaveBeenCalled();
   });

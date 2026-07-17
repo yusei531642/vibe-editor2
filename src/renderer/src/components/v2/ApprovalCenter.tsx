@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Check, CheckCheck, CircleX, X } from 'lucide-react';
 import type { RuntimeApprovalDecision } from '../../../../types/agent-runtime';
 import { useT } from '../../lib/i18n';
@@ -21,13 +21,60 @@ export function ApprovalCenter(): JSX.Element | null {
   const [activeIndex, setActiveIndex] = useState(0);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pendingFocus, setPendingFocus] = useState<{
+    endpointId: string;
+    requestId: string;
+    index: number;
+  } | null>(null);
   const itemRefs = useRef<Array<HTMLElement | null>>([]);
+  const dialogRef = useRef<HTMLElement | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const wasOpenRef = useRef(false);
+  const titleId = useId();
 
   useEffect(() => {
-    if (!approvalsOpen) return;
-    setActiveIndex((current) => Math.min(current, Math.max(0, projection.approvals.length - 1)));
-    window.requestAnimationFrame(() => itemRefs.current[0]?.focus());
-  }, [approvalsOpen, projection.approvals.length]);
+    if (approvalsOpen) {
+      if (!wasOpenRef.current) {
+        previousFocusRef.current =
+          document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      }
+      wasOpenRef.current = true;
+      const frame = window.requestAnimationFrame(() => {
+        (itemRefs.current[0] ?? closeButtonRef.current)?.focus();
+      });
+      return () => window.cancelAnimationFrame(frame);
+    }
+    if (wasOpenRef.current) previousFocusRef.current?.focus();
+    wasOpenRef.current = false;
+  }, [approvalsOpen]);
+
+  useEffect(() => {
+    setActiveIndex((current) =>
+      Math.min(current, Math.max(0, projection.approvals.length - 1))
+    );
+  }, [projection.approvals.length]);
+
+  useEffect(() => {
+    if (
+      !pendingFocus ||
+      projection.approvals.some(
+        (approval) =>
+          approval.endpointId === pendingFocus.endpointId &&
+          approval.requestId === pendingFocus.requestId
+      )
+    ) {
+      return;
+    }
+    const nextIndex = Math.min(pendingFocus.index, projection.approvals.length - 1);
+    setActiveIndex(Math.max(0, nextIndex));
+    const frame = window.requestAnimationFrame(() => {
+      if (nextIndex >= 0) itemRefs.current[nextIndex]?.focus();
+      else closeButtonRef.current?.focus();
+      setPendingFocus(null);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [pendingFocus, projection.approvals]);
 
   if (!approvalsOpen) return null;
 
@@ -38,6 +85,7 @@ export function ApprovalCenter(): JSX.Element | null {
   };
 
   const decide = async (
+    agentId: string,
     endpointId: string,
     requestId: string,
     decision: RuntimeApprovalDecision
@@ -45,8 +93,12 @@ export function ApprovalCenter(): JSX.Element | null {
     const id = `${endpointId}:${requestId}`;
     setBusyId(id);
     setError(null);
+    const index = projection.approvals.findIndex(
+      (approval) => approval.endpointId === endpointId && approval.requestId === requestId
+    );
     try {
-      await respondApproval(endpointId, requestId, decision);
+      await respondApproval(agentId, endpointId, requestId, decision);
+      setPendingFocus({ endpointId, requestId, index: Math.max(0, index) });
     } catch (responseError) {
       setError(responseError instanceof Error ? responseError.message : String(responseError));
     } finally {
@@ -55,14 +107,44 @@ export function ApprovalCenter(): JSX.Element | null {
   };
 
   return (
-    <aside className="approval-center glass-surface" aria-label={t('v2.approval.center')}>
+    <aside
+      ref={dialogRef}
+      className="approval-center glass-surface"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          setApprovalsOpen(false);
+          return;
+        }
+        if (event.key !== 'Tab') return;
+        const focusable = Array.from(
+          dialogRef.current?.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), [tabindex="0"]'
+          ) ?? []
+        );
+        const first = focusable[0];
+        const last = focusable.at(-1);
+        if (!first || !last) return;
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }}
+    >
       <header>
         <div>
           <CheckCheck size={20} strokeWidth={1.75} aria-hidden="true" />
-          <strong>{t('v2.approval.center')}</strong>
+          <strong id={titleId}>{t('v2.approval.center')}</strong>
           <span>{projection.approvals.length}</span>
         </div>
         <button
+          ref={closeButtonRef}
           type="button"
           onClick={() => setApprovalsOpen(false)}
           aria-label={t('common.close')}
@@ -113,7 +195,14 @@ export function ApprovalCenter(): JSX.Element | null {
                       key={decision}
                       type="button"
                       disabled={busyId !== null}
-                      onClick={() => void decide(approval.endpointId, approval.requestId, decision)}
+                      onClick={() =>
+                        void decide(
+                          approval.agentId,
+                          approval.endpointId,
+                          approval.requestId,
+                          decision
+                        )
+                      }
                     >
                       <Icon size={16} strokeWidth={1.75} aria-hidden="true" />
                       {t(labelKey)}

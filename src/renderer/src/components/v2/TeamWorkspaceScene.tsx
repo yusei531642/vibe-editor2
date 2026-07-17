@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Bot, CircleAlert, LoaderCircle, UserRound } from 'lucide-react';
 import { Canvas, type CanvasActions } from '../canvas/Canvas';
 import { useProject } from '../../lib/app-state-context';
@@ -14,6 +14,7 @@ import { ApprovalCenter } from './ApprovalCenter';
 import { TeamInspector } from './TeamInspector';
 import { TeamActivityFeed } from './TeamActivityFeed';
 import { useTeamProjection } from './TeamProjectionProvider';
+import { useSemanticEdgeStore } from '../../stores/semantic-edges';
 import '../../styles/components/canvas.css';
 import '../../styles/components/canvas-agent-card.css';
 import '../../styles/components/team-control.css';
@@ -62,8 +63,8 @@ export function TeamWorkspaceScene({ team }: { team: Team }): JSX.Element {
   const t = useT();
   const addCard = useCanvasStore((state) => state.addCard);
   const pulseEdge = useCanvasStore((state) => state.pulseEdge);
+  const markSemanticEdgeSeen = useSemanticEdgeStore((state) => state.markSeen);
   const { projection } = useTeamProjection();
-  const seenSemanticEdges = useRef(new Set<string>());
   const hasLeader = useCanvasStore((state) =>
     state.nodes.some((node) => {
       const payload = agentPayloadOf(node.data);
@@ -148,13 +149,12 @@ export function TeamWorkspaceScene({ team }: { team: Team }): JSX.Element {
     if (!leader) return;
     for (const task of projection.tasks) {
       const edgeId = `delegation:${team.id}:${task.id}`;
-      if (seenSemanticEdges.current.has(edgeId)) continue;
       const target = teamNodes.find((node) => {
         const payload = agentPayloadOf(node.data);
         return payload?.agentId === task.assignedTo || payload?.roleProfileId === task.assignedTo;
       });
       if (!target || target.id === leader.id) continue;
-      seenSemanticEdges.current.add(edgeId);
+      if (!markSemanticEdgeSeen(edgeId)) continue;
       pulseEdge({
         id: edgeId,
         source: leader.id,
@@ -170,12 +170,11 @@ export function TeamWorkspaceScene({ team }: { team: Team }): JSX.Element {
     }
     for (const report of projection.reports) {
       const edgeId = `report:${team.id}:${report.id}`;
-      if (seenSemanticEdges.current.has(edgeId)) continue;
       const source = teamNodes.find(
         (node) => agentPayloadOf(node.data)?.agentId === report.fromAgentId
       );
       if (!source || source.id === leader.id) continue;
-      seenSemanticEdges.current.add(edgeId);
+      if (!markSemanticEdgeSeen(edgeId)) continue;
       pulseEdge({
         id: edgeId,
         source: source.id,
@@ -189,7 +188,7 @@ export function TeamWorkspaceScene({ team }: { team: Team }): JSX.Element {
         }
       }, 60_000);
     }
-  }, [projection.reports, projection.tasks, pulseEdge, team.id]);
+  }, [markSemanticEdgeSeen, projection.reports, projection.tasks, pulseEdge, team.id]);
 
   return (
     <section className="workspace-team-scene" aria-label={t('v2.team.canvas')}>

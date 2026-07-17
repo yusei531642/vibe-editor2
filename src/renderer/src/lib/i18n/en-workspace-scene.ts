@@ -60,7 +60,7 @@ export const enWorkspaceScene: Dict = {
   'v2.inspector.tab.raw': 'Raw',
   'v2.inspector.artifactEmpty': 'No artifacts yet',
   'v2.inspector.truncated': '{count} earlier events omitted',
-  'v2.inspector.runtimeDropped': '{count} events omitted by the Rust buffer',
+  'v2.inspector.runtimeDropped': '{count} events omitted by the global runtime buffer',
   'v2.recruit.requested': 'Recruitment requested',
   'v2.recruit.spawning': 'Starting',
   'v2.recruit.handshaking': 'Connecting',

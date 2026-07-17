@@ -261,7 +261,12 @@ function EnabledWorkspaceTransitionRoot({
     </main>
   );
   return hasTeamSession ? (
-    <TeamProjectionProvider team={team}>{workspace}</TeamProjectionProvider>
+    <TeamProjectionProvider
+      team={team}
+      teamSceneCommitted={committedScene === 'team'}
+    >
+      {workspace}
+    </TeamProjectionProvider>
   ) : (
     workspace
   );
