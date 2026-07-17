@@ -10,11 +10,14 @@ export interface TeamRuntimeEndpointSnapshot {
   sessionId: string | null;
   taskIds: number[];
   live: boolean;
+  provider: 'codex-native' | 'claude-native' | 'native' | 'pty';
+  restoreState: 'live' | 'reconnectable' | 'terminated';
 }
 
 /** Team Card / Inspector の初期同期用 snapshot。 */
 export interface TeamRuntimeEventCursor {
   endpointId: string;
+  epoch: number;
   sequence: number;
   timestamp: string;
 }

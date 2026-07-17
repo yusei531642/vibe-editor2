@@ -193,7 +193,7 @@ pub fn run() {
             commands::agent_runtime::agent_runtime_respond_approval,
             commands::agent_runtime::agent_runtime_stop,
             commands::agent_runtime::agent_runtime_dispose,
-            commands::team_projection::team_projection_snapshot, commands::team_projection::team_member_command, commands::worktree::ipc::worktree_manager_snapshot, commands::worktree::ipc::worktree_manager_command,
+            commands::team_projection::team_projection_snapshot, commands::team_projection::session_restore_snapshot, commands::team_projection::team_member_command, commands::worktree::ipc::worktree_manager_snapshot, commands::worktree::ipc::worktree_manager_command,
             // ---- app ----
             commands::app::app_get_project_root,
             commands::project_authority::app_restore_authorized_project_root,

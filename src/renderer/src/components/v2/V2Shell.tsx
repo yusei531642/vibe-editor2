@@ -94,6 +94,7 @@ export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Ele
     [hasTeamProjection, inspectorOpen, teamProjection],
   );
   const [entries, setEntries] = useState<TimelineEntry[]>([]);
+  const restoredTimelineHydratedRef = useRef(false);
   // fake runtime (placeholder) の応答 timer。停止/新規タスク/unmount で必ず破棄する。
   const fakeReplyTimerRef = useRef<number | null>(null);
 
@@ -117,6 +118,29 @@ export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Ele
   }, [projectRoot, t]);
   const branch = gitStatus?.branch || "main";
   const model = engine === "claude" ? "Fable 5" : "5.6 Sol";
+
+  useEffect(() => {
+    if (restoredTimelineHydratedRef.current || entries.length > 0) return;
+    const restored = teamProjection.projection.agents
+      .flatMap((agent) =>
+        (agent.runtime?.eventHistory ?? []).flatMap((event) =>
+          event.payload.type === "messageComplete"
+            ? [{
+                id: `restore:${event.endpointId}:${event.epoch}:${event.sequence}`,
+                role: "agent" as const,
+                text: event.payload.message,
+                engine: agent.endpoint?.provider === "codex-native" ? "codex" as const : "claude" as const,
+                timestamp: event.timestamp,
+              }]
+            : [],
+        ),
+      )
+      .sort((left, right) => left.timestamp.localeCompare(right.timestamp));
+    if (restored.length === 0) return;
+    restoredTimelineHydratedRef.current = true;
+    setEntries(restored.map(({ timestamp: _timestamp, ...entry }) => entry));
+    setHasStarted(true);
+  }, [entries.length, teamProjection.projection.agents]);
 
   const selectQuickAction = (template: string): void => {
     setPrompt((current) =>

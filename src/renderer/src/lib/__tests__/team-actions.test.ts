@@ -9,7 +9,7 @@ function agent(backend: 'native' | 'pty'): TeamAgentProjection {
     status: 'running', recruit: null, task: null,
     endpoint: {
       teamId: 'team-1', agentId: 'worker-1', endpointId: `${backend}-1`, backend,
-      sessionId: null, taskIds: [], live: true
+      sessionId: null, taskIds: [], live: true, provider: backend, restoreState: 'live'
     },
     runtime: null, changedFiles: [], latestTool: null, latestDiff: null, latestUsage: null,
     approvals: [], worktree: null

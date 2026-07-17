@@ -9,6 +9,10 @@ export type RuntimeEventPayload = { "type": "messageDelta", delta: string, } | {
 
 export type RuntimeEventEnvelope = { endpointId: string, 
 /**
+ * endpoint registration unit. sequence is monotonic only within this epoch.
+ */
+epoch: number, 
+/**
  * JSON/JS renderer では number として扱う。endpoint ごとの process-local counter なので
  * JavaScript の safe integer 上限へ到達する前に session lifetime が終わる。
  */

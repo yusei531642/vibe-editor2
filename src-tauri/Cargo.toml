@@ -22,6 +22,7 @@ tauri-plugin-opener = "2"
 tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "macros", "time", "sync", "net", "io-util", "fs", "process"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+rusqlite = { version = "0.32.1", features = ["bundled"] }
 # Issue #79: 以前ここに `toml = "0.8"` / `thiserror = "1"` / `percent-encoding = "2"` が
 # 宣言されていたが、ソースのどこからも `use` されていなかったため削除。TOML 出力は
 # mcp_config/codex.rs が手組み、エラーは anyhow::Result 一本、URL エンコードは未使用。

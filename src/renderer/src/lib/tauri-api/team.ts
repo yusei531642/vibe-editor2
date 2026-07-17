@@ -91,6 +91,9 @@ export const team = {
   /** Issue #26: active team に限定した runtime binding + buffered event snapshot。 */
   projectionSnapshot: (request: TeamProjectionSnapshotRequest): Promise<TeamProjectionSnapshot> =>
     invokeCommand('team_projection_snapshot', { request }),
+  /** Phase 8: latest durable team runtime replay, using the same five-point snapshot shape. */
+  restoreSnapshot: (projectRoot: string): Promise<TeamProjectionSnapshot | null> =>
+    invokeCommand('session_restore_snapshot', { request: { projectRoot } }),
   /** Issue #26: TeamHub の active leader 権限で認可済み member を操作する。 */
   memberCommand: (request: TeamMemberCommandRequest): Promise<TeamMemberCommandResult> =>
     invokeCommand('team_member_command', { request })

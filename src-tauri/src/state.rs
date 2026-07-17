@@ -86,6 +86,9 @@ pub fn current_project_root_identity(
 impl AppState {
     pub fn new() -> Self {
         let pty_registry = Arc::new(SessionRegistry::new());
+        #[cfg(not(test))]
+        let runtime_manager = Arc::new(RuntimeManager::persistent_default());
+        #[cfg(test)]
         let runtime_manager = Arc::new(RuntimeManager::new());
         let known_codex_threads = std::sync::Mutex::new(std::collections::HashSet::new());
         let known_claude_sessions =

@@ -43,6 +43,7 @@ export interface RuntimeApprovalRequest {
 
 export interface RuntimeEndpointProjection {
   endpointId: string;
+  epoch: number;
   lastSequence: number;
   lastKind: RuntimeEventKind | null;
   lifecycle: RuntimeLifecycleState | null;
@@ -71,6 +72,7 @@ interface RuntimeProjectionState {
   byEndpoint: Record<string, RuntimeEndpointProjection>;
   resolvedApprovalRequestIds: Set<string>;
   projectEvent: (event: RuntimeEventEnvelope) => void;
+  projectEvents: (events: RuntimeEventEnvelope[]) => void;
   resolveApproval: (endpointId: string, requestId: string) => void;
   clearEndpoint: (endpointId: string) => void;
   clear: () => void;
@@ -79,6 +81,7 @@ interface RuntimeProjectionState {
 function emptyProjection(endpointId: string): RuntimeEndpointProjection {
   return {
     endpointId,
+    epoch: 0,
     lastSequence: 0,
     lastKind: null,
     lifecycle: null,
@@ -143,6 +146,7 @@ function applyPayload(
   const history = appendCapped(projection.eventHistory, event);
   const base = {
     ...projection,
+    epoch: event.epoch,
     lastSequence: event.sequence,
     lastKind: event.kind,
     eventHistory: history.items,
@@ -273,14 +277,14 @@ function project(
   // Rust 側の sequence counter は「登録 epoch」単位 (detach/dispose で削除、再登録で 1 から)。
   // lifecycle `spawning` は新 epoch の開始なので、巻き戻った sequence を out-of-order として
   // 捨てずに projection を作り直す。
-  if (isSpawning(event) && event.sequence <= projection.lastSequence) {
+  if (event.epoch > projection.epoch || (isSpawning(event) && event.epoch !== projection.epoch)) {
     return applyPayload(
       emptyProjection(projection.endpointId),
       event,
       resolvedApprovalRequestIds
     );
   }
-  if (event.sequence <= projection.lastSequence) {
+  if (event.epoch < projection.epoch || event.sequence <= projection.lastSequence) {
     return { ...projection, outOfOrderCount: projection.outOfOrderCount + 1 };
   }
 
@@ -296,6 +300,62 @@ function project(
   );
 }
 
+function projectDiagnosticBatch(
+  initial: RuntimeEndpointProjection,
+  events: RuntimeEventEnvelope[]
+): RuntimeEndpointProjection | null {
+  if (events.some((event) => event.payload.type !== 'diagnostic')) return null;
+  let next: RuntimeEndpointProjection = {
+    ...initial,
+    diagnostics: [...initial.diagnostics],
+    eventHistory: [...initial.eventHistory],
+    missingSequences: [...initial.missingSequences]
+  };
+  const trim = (): void => {
+    const historyOverflow = Math.max(
+      0,
+      next.eventHistory.length - RUNTIME_PROJECTION_HISTORY_LIMIT
+    );
+    if (historyOverflow > 0) {
+      next.eventHistory.splice(0, historyOverflow);
+      next.eventTruncatedCount += historyOverflow;
+    }
+    const diagnosticOverflow = Math.max(
+      0,
+      next.diagnostics.length - RUNTIME_PROJECTION_HISTORY_LIMIT
+    );
+    if (diagnosticOverflow > 0) {
+      next.diagnostics.splice(0, diagnosticOverflow);
+      next.truncatedCount += diagnosticOverflow;
+    }
+  };
+
+  for (const event of events) {
+    const payload = event.payload;
+    if (payload.type !== 'diagnostic') return null;
+    let startedEpoch = false;
+    if (event.epoch > next.epoch) {
+      next = emptyProjection(event.endpointId);
+      startedEpoch = true;
+    } else if (event.epoch < next.epoch || event.sequence <= next.lastSequence) {
+      next.outOfOrderCount += 1;
+      continue;
+    }
+    const expected = next.lastSequence + 1;
+    if (!startedEpoch && event.sequence > expected) {
+      next.missingSequences.push({ from: expected, to: event.sequence - 1 });
+    }
+    next.epoch = event.epoch;
+    next.lastSequence = event.sequence;
+    next.lastKind = event.kind;
+    next.eventHistory.push(event);
+    next.diagnostics.push(payload.message);
+    if (next.eventHistory.length >= RUNTIME_PROJECTION_HISTORY_LIMIT * 2) trim();
+  }
+  trim();
+  return next;
+}
+
 export const useRuntimeStore = create<RuntimeProjectionState>((set) => ({
   byEndpoint: {},
   resolvedApprovalRequestIds: new Set<string>(),
@@ -304,6 +364,30 @@ export const useRuntimeStore = create<RuntimeProjectionState>((set) => ({
       const previous = state.byEndpoint[event.endpointId] ?? emptyProjection(event.endpointId);
       const next = project(previous, event, state.resolvedApprovalRequestIds);
       return { byEndpoint: { ...state.byEndpoint, [event.endpointId]: next } };
+    }),
+  projectEvents: (events) =>
+    set((state) => {
+      if (events.length === 0) return state;
+      const byEndpoint = { ...state.byEndpoint };
+      const batches = new Map<string, RuntimeEventEnvelope[]>();
+      for (const event of events) {
+        const batch = batches.get(event.endpointId) ?? [];
+        batch.push(event);
+        batches.set(event.endpointId, batch);
+      }
+      for (const [endpointId, batch] of batches) {
+        let projection = byEndpoint[endpointId] ?? emptyProjection(endpointId);
+        const diagnosticBatch = projectDiagnosticBatch(projection, batch);
+        if (diagnosticBatch) {
+          byEndpoint[endpointId] = diagnosticBatch;
+          continue;
+        }
+        for (const event of batch) {
+          projection = project(projection, event, state.resolvedApprovalRequestIds);
+        }
+        byEndpoint[endpointId] = projection;
+      }
+      return { byEndpoint };
     }),
   resolveApproval: (endpointId, requestId) =>
     set((state) => {

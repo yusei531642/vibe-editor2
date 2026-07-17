@@ -5,6 +5,17 @@ use crate::agent_runtime::RuntimeOperation;
 use crate::team_hub::TeamHub;
 
 impl TeamHub {
+    /// Runtime persistence is scoped to the project that owns the active team. Callers must not
+    /// fall back to renderer input when this ownership metadata is absent.
+    pub(crate) async fn team_project_root(&self, team_id: &str) -> Option<String> {
+        self.state
+            .lock()
+            .await
+            .teams
+            .get(team_id)
+            .and_then(|team| team.project_root.clone())
+    }
+
     /// renderer projection の初期同期用。caller は active team authz を先に通す。
     pub(crate) async fn runtime_bindings_snapshot(
         &self,
@@ -34,6 +45,12 @@ impl TeamHub {
                         .registry()
                         .resolve(&endpoint.endpoint_id)
                         .is_some(),
+                    provider: match endpoint.backend {
+                        RuntimeEndpointBackend::Native => "native",
+                        RuntimeEndpointBackend::Pty => "pty",
+                    }
+                    .to_string(),
+                    restore_state: "live".to_string(),
                 });
             }
         }

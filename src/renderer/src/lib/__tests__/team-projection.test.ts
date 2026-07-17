@@ -7,6 +7,7 @@ import { buildTeamProjection, changedFilesFromDiff } from '../team-projection';
 function event(sequence: number, payload: RuntimeEventPayload): RuntimeEventEnvelope {
   return {
     endpointId: 'native-worker-1',
+    epoch: 1,
     sequence,
     kind: payload.type,
     payload,
@@ -23,7 +24,9 @@ const snapshot: TeamProjectionSnapshot = {
     backend: 'native',
     sessionId: 'thread-1',
     taskIds: [1],
-    live: true
+    live: true,
+    provider: 'codex-native',
+    restoreState: 'live'
   }],
   runtimeEvents: [],
   retainedEventCursors: [],
@@ -66,7 +69,8 @@ describe('team projection integration', () => {
     store.projectEvent(event(4, {
       type: 'usage', inputTokens: 10, cachedInputTokens: 2, outputTokens: 8
     }));
-    store.projectEvent(event(5, {
+    store.projectEvent(event(5, { type: 'messageComplete', message: 'Restored response' }));
+    store.projectEvent(event(6, {
       type: 'approvalRequest', requestId: 'approve-1', method: 'command/requestApproval',
       reason: 'run tests', command: 'npm test', cwd: '/repo'
     }));
@@ -91,6 +95,9 @@ describe('team projection integration', () => {
       changedFiles: ['src/base.ts', 'src/new.ts']
     });
     expect(projection.approvals[0]).toMatchObject({ requestId: 'approve-1', agentId: 'worker-1' });
+    expect(projection.activity).toContainEqual(expect.objectContaining({
+      kind: 'message', message: 'Restored response'
+    }));
     expect(projection.runtimeDroppedCount).toBe(3);
   });
 

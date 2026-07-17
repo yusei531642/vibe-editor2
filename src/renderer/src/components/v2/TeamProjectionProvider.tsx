@@ -24,12 +24,20 @@ import {
   type TeamProjection
 } from '../../lib/team-projection';
 import {
+  latestCursors,
+  projectBufferedEvents,
+  pruneReplayedEvents,
+  snapshotsEqual,
+  valuesEqual
+} from '../../lib/team-projection-replay';
+import {
   dispatchTeamAgentAction,
   respondAndResolveTeamApproval,
   type TeamAgentAction
 } from '../../lib/team-actions';
 import { agentPayloadOf, useCanvasStore } from '../../stores/canvas';
 import { useRuntimeStore } from '../../stores/runtime';
+import { useSessionRestoreStore } from '../../stores/session-restore';
 
 interface TeamProjectionContextValue {
   /** Team scene が committed かつ provider が enabled のときのみ true。
@@ -62,6 +70,7 @@ interface TeamProjectionContextValue {
     requestId: string,
     decision: RuntimeApprovalDecision
   ) => Promise<void>;
+  reconnect: (agentId: string) => Promise<void>;
   worktreeSnapshot: WorktreeManagerSnapshot | null;
   runWorktreeCommand: (command: WorktreeCommand) => Promise<boolean>;
 }
@@ -82,69 +91,6 @@ const MISSING_PROVIDER_ERROR = 'TeamProjectionProvider is missing';
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function projectBufferedEvents(
-  snapshot: TeamProjectionSnapshot,
-  replayedEvents: Set<string>
-): void {
-  const store = useRuntimeStore.getState();
-  // Rust の buffer 順は epoch をまたいだ発生順。sequence は登録 epoch ごとに 1 へ戻るため、
-  // sequence sort すると旧/new epoch が混ざる。snapshot の canonical order を維持する。
-  for (const event of snapshot.runtimeEvents) {
-    const current = useRuntimeStore.getState().byEndpoint[event.endpointId];
-    const eventKey = `${event.endpointId}\u0000${event.sequence}\u0000${event.timestamp}`;
-    const alreadyProjected = current?.eventHistory.some(
-      (projected) =>
-        projected.sequence === event.sequence && projected.timestamp === event.timestamp
-    );
-    if (replayedEvents.has(eventKey) || alreadyProjected) {
-      replayedEvents.add(eventKey);
-      continue;
-    }
-    const startsEpoch =
-      event.payload.type === 'lifecycle' && event.payload.state === 'spawning';
-    if (!current || event.sequence > current.lastSequence || startsEpoch) {
-      store.projectEvent(event);
-    }
-    replayedEvents.add(eventKey);
-  }
-}
-
-function cursorKey(cursor: TeamRuntimeEventCursor): string {
-  return `${cursor.endpointId}\u0000${cursor.sequence}\u0000${cursor.timestamp}`;
-}
-
-function pruneReplayedEvents(
-  snapshot: TeamProjectionSnapshot,
-  replayedEvents: Set<string>
-): void {
-  const retained = new Set(snapshot.retainedEventCursors.map(cursorKey));
-  for (const key of replayedEvents) {
-    if (!retained.has(key)) replayedEvents.delete(key);
-  }
-}
-
-function latestCursors(snapshot: TeamProjectionSnapshot): TeamRuntimeEventCursor[] {
-  const cursors = new Map<string, TeamRuntimeEventCursor>();
-  for (const cursor of snapshot.retainedEventCursors) cursors.set(cursor.endpointId, cursor);
-  return [...cursors.values()];
-}
-
-function snapshotsEqual(
-  previous: TeamProjectionSnapshot | null,
-  next: TeamProjectionSnapshot
-): boolean {
-  if (!previous) return false;
-  return (
-    previous.teamId === next.teamId &&
-    previous.runtimeDroppedCount === next.runtimeDroppedCount &&
-    JSON.stringify(previous.endpoints) === JSON.stringify(next.endpoints)
-  );
-}
-
-function valuesEqual<T>(previous: T, next: T): boolean {
-  return JSON.stringify(previous) === JSON.stringify(next);
 }
 
 export function TeamProjectionProvider({
@@ -174,6 +120,14 @@ export function TeamProjectionProvider({
   const [error, setError] = useState<string | null>(null);
   const replayedSnapshotEvents = useRef(new Set<string>());
   const snapshotCursors = useRef<TeamRuntimeEventCursor[]>([]);
+  const restoredSnapshot = useSessionRestoreStore((state) => state.snapshot);
+
+  useEffect(() => {
+    if (!restoredSnapshot || restoredSnapshot.teamId !== team.id) return;
+    projectBufferedEvents(restoredSnapshot, replayedSnapshotEvents.current);
+    snapshotCursors.current = latestCursors(restoredSnapshot);
+    setSnapshot((current) => current ?? restoredSnapshot);
+  }, [restoredSnapshot, team.id]);
 
   const members = useMemo(
     () =>
@@ -367,6 +321,38 @@ export function TeamProjectionProvider({
     [resolveApproval, team.id]
   );
 
+  const reconnect = useCallback(async (agentId: string): Promise<void> => {
+    const endpoint = snapshot?.endpoints.find((item) => item.agentId === agentId);
+    if (!endpoint || endpoint.restoreState !== 'reconnectable' || !endpoint.sessionId) {
+      throw new Error('runtime session is not resumable');
+    }
+    if (endpoint.provider === 'codex-native') {
+      await window.api.agentRuntime.reconnectCodex({
+        endpointId: endpoint.endpointId,
+        teamId: team.id,
+        agentId,
+        cwd: null,
+        thread: { mode: 'resume', threadId: endpoint.sessionId }
+      });
+    } else if (endpoint.provider === 'claude-native') {
+      await window.api.agentRuntime.reconnectClaude({
+        endpointId: endpoint.endpointId,
+        teamId: team.id,
+        agentId,
+        systemPrompt: null,
+        session: { mode: 'resume', sessionId: endpoint.sessionId }
+      });
+    } else {
+      throw new Error('runtime session is not resumable');
+    }
+    setSnapshot((current) => current ? {
+      ...current,
+      endpoints: current.endpoints.map((item) => item.agentId === agentId
+        ? { ...item, live: true, restoreState: 'live' }
+        : item)
+    } : current);
+  }, [snapshot?.endpoints, team.id]);
+
   const openInspector = useCallback(
     (agentId?: string) => {
       if (agentId) setSelectedAgentId(agentId);
@@ -422,6 +408,7 @@ export function TeamProjectionProvider({
       dispatchAgentAction,
       broadcast,
       respondApproval,
+      reconnect,
       worktreeSnapshot,
       runWorktreeCommand
     }),
@@ -436,6 +423,7 @@ export function TeamProjectionProvider({
       openInspector,
       openTerminal,
       projection,
+      reconnect,
       respondApproval,
       runWorktreeCommand,
       selectedAgent,
@@ -466,6 +454,7 @@ const NO_PROVIDER_CONTEXT: TeamProjectionContextValue = {
   dispatchAgentAction: () => Promise.reject(new Error(MISSING_PROVIDER_ERROR)),
   broadcast: () => Promise.reject(new Error(MISSING_PROVIDER_ERROR)),
   respondApproval: () => Promise.reject(new Error(MISSING_PROVIDER_ERROR)),
+  reconnect: () => Promise.reject(new Error(MISSING_PROVIDER_ERROR)),
   worktreeSnapshot: null,
   runWorktreeCommand: () => Promise.resolve(false)
 };

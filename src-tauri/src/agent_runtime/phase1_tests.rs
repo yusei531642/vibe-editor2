@@ -158,12 +158,14 @@ fn bounded_buffer_coalesces_deltas_and_evicts_old_delta_first() {
     buffer.push(RuntimeEventEnvelope::new(
         "endpoint-1".to_string(),
         1,
+        1,
         RuntimeEventPayload::MessageDelta {
             delta: "hel".to_string(),
         },
     ));
     buffer.push(RuntimeEventEnvelope::new(
         "endpoint-1".to_string(),
+        1,
         2,
         RuntimeEventPayload::MessageDelta {
             delta: "lo".to_string(),
@@ -178,6 +180,7 @@ fn bounded_buffer_coalesces_deltas_and_evicts_old_delta_first() {
     assert_eq!(coalesced[0].sequence, 2);
     buffer.push(RuntimeEventEnvelope::new(
         "endpoint-1".to_string(),
+        1,
         3,
         RuntimeEventPayload::Lifecycle {
             state: RuntimeLifecycleState::Ready,
@@ -186,6 +189,7 @@ fn bounded_buffer_coalesces_deltas_and_evicts_old_delta_first() {
     ));
     buffer.push(RuntimeEventEnvelope::new(
         "endpoint-1".to_string(),
+        1,
         4,
         RuntimeEventPayload::Diagnostic {
             message: "kept".to_string(),

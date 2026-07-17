@@ -3,6 +3,7 @@ import {
   CirclePause,
   ExternalLink,
   Send,
+  RotateCcw,
   Square,
   Trash2,
   X
@@ -15,7 +16,8 @@ export function AgentCardRuntime({ agentId }: { agentId?: string }): JSX.Element
   const {
     projection,
     dispatchAgentAction,
-    openInspector
+    openInspector,
+    reconnect
   } = useTeamProjection();
   const agent = useMemo(
     () => projection.agents.find((candidate) => candidate.agentId === agentId) ?? null,
@@ -28,11 +30,12 @@ export function AgentCardRuntime({ agentId }: { agentId?: string }): JSX.Element
 
   if (!agentId || !agent) return null;
 
-  const run = async (action: 'steer' | 'interrupt' | 'stop' | 'dismiss'): Promise<void> => {
+  const run = async (action: 'steer' | 'interrupt' | 'stop' | 'dismiss' | 'reconnect'): Promise<void> => {
     setBusyAction(action);
     setError(null);
     try {
-      await dispatchAgentAction(agentId, action, instruction);
+      if (action === 'reconnect') await reconnect(agentId);
+      else await dispatchAgentAction(agentId, action, instruction);
       if (action === 'steer') setInstruction('');
       if (action === 'dismiss') setConfirmingDismiss(false);
     } catch (actionError) {
@@ -62,6 +65,21 @@ export function AgentCardRuntime({ agentId }: { agentId?: string }): JSX.Element
         </span>
       </div>
       <p className="canvas-agent-runtime__latest">{latestSummary}</p>
+      {agent.endpoint?.restoreState === 'reconnectable' ? (
+        <button
+          type="button"
+          className="canvas-agent-runtime__reconnect"
+          disabled={busyAction !== null}
+          onClick={() => void run('reconnect')}
+        >
+          <RotateCcw size={16} strokeWidth={1.75} aria-hidden="true" />
+          {t('v2.team.card.reconnect')}
+        </button>
+      ) : agent.endpoint?.restoreState === 'terminated' ? (
+        <p className="canvas-agent-runtime__terminated" role="status">
+          {t('v2.team.card.terminated')}
+        </p>
+      ) : null}
       <form
         className="canvas-agent-runtime__steer"
         onSubmit={(event) => {
@@ -80,7 +98,9 @@ export function AgentCardRuntime({ agentId }: { agentId?: string }): JSX.Element
         </label>
         <button
           type="submit"
-          disabled={!instruction.trim() || busyAction !== null}
+          disabled={
+            !instruction.trim() || busyAction !== null || Boolean(agent.endpoint && !agent.endpoint.live)
+          }
           aria-label={t('v2.team.card.steer')}
           title={t('v2.team.card.steer')}
         >
