@@ -1,5 +1,10 @@
 //! TeamHub が所有する agentId -> runtime endpoint 対応と統合配送。
 
+pub(crate) mod types;
+#[cfg(test)]
+mod test_support;
+
+use types::*;
 use crate::agent_runtime::{
     BackendKind, PtyCompatAdapter, RuntimeDeliveryRequest, RuntimeEventEnvelope, RuntimeManager,
 };
@@ -13,29 +18,6 @@ use std::sync::Arc;
 use tauri::Emitter;
 use tokio::sync::Mutex;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum RuntimeEndpointBackend {
-    Native,
-    Pty,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct RuntimeEndpoint {
-    pub endpoint_id: String,
-    pub backend: RuntimeEndpointBackend,
-    pub session_id: Option<String>,
-}
-
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub(crate) struct AgentRuntimeBinding {
-    pub native: Option<RuntimeEndpoint>,
-    pub pty: Option<RuntimeEndpoint>,
-    pub task_ids: Vec<u32>,
-}
-
-pub(crate) type RuntimeEndpointMap = HashMap<(String, String), AgentRuntimeBinding>;
-#[cfg(test)]
-pub(crate) type LegacyAppServerDelivery = (String, String, String, String);
 
 #[derive(Clone)]
 pub(crate) struct RuntimeRouting {
@@ -270,48 +252,6 @@ impl TeamHub {
             .unwrap_or_else(crate::agent_runtime::requested_backend)
     }
 
-    #[cfg(test)]
-    pub(crate) fn set_runtime_backend_for_test(&self, backend: BackendKind) {
-        *self
-            .runtime
-            .backend_override
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(backend);
-    }
-
-    #[cfg(test)]
-    pub(crate) fn set_codex_delivery_for_test(
-        &self,
-        delivery: crate::team_hub::codex_delivery::CodexDelivery,
-    ) {
-        *self
-            .runtime
-            .codex_delivery_override
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(delivery);
-    }
-
-    #[cfg(test)]
-    pub(crate) fn set_legacy_app_server_result_for_test(&self, result: bool) {
-        *self
-            .runtime
-            .legacy_app_server_override
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(result);
-    }
-
-    #[cfg(test)]
-    pub(crate) fn take_legacy_app_server_deliveries_for_test(
-        &self,
-    ) -> Vec<LegacyAppServerDelivery> {
-        std::mem::take(
-            &mut *self
-                .runtime
-                .legacy_app_server_deliveries
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner()),
-        )
-    }
 
     pub(crate) fn prefers_legacy_codex_pty(&self) -> bool {
         #[cfg(test)]
