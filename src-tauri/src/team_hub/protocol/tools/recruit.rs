@@ -441,11 +441,9 @@ pub async fn team_recruit(
     // singleton / default_engine は builtin にしか無いので summary 側だけで判定する
     let target = summary_match.as_ref();
     let is_singleton = target.map(|t| t.singleton).unwrap_or(false);
-
     // Issue #518: チーム単位の engine policy を取得。`MixedAllowed` (default) なら従来通り、
     // `ClaudeOnly` / `CodexOnly` ならここで policy 違反 / 既定 engine を強制する。
     let engine_policy = hub.get_engine_policy(&ctx.team_id).await;
-
     // engine: 引数省略時は role profile の default。動的ロールは builtin と違い default を
     // 持たないので claude を既定にする。Issue #518: ClaudeOnly / CodexOnly の policy が立って
     // いるなら engine 引数省略時に role profile の default ではなく policy の既定を採用する
@@ -458,7 +456,6 @@ pub async fn team_recruit(
     } else {
         engine
     };
-
     // Issue #518: 解決後の engine が policy に違反していれば構造化エラーで拒否する。
     // 引数で明示的に違反 engine を渡された場合 (例: CodexOnly チームで engine="claude") に
     // ハード拒否し、HR / Leader が誤って混合してしまう経路を構造的に潰す。
@@ -466,7 +463,6 @@ pub async fn team_recruit(
         return Err(RecruitError::new("recruit_engine_policy_violation", msg)
             .with_phase("engine_policy"));
     }
-
     let provider_selection = crate::team_hub::provider_policy::select_recruit_provider(&role_profile_id, &resolved_engine).await;
     // 動的ロールの場合は agent_label_hint をロール label で補完する (renderer 側カード表示が綺麗になる)
     let agent_label_hint = if agent_label_hint.is_empty() {
