@@ -233,6 +233,30 @@ impl TeamHub {
             session_id,
         };
         let mut state = self.state.lock().await;
+        // 初回 native bind は spawn 中 (非 Ready の recruit lifecycle) に限定する。Ready 済み
+        // member への後付けは既存 native binding の再接続のみ許可 (PTY を持たない API/virtual
+        // member の乗っ取り防止、PR #34)。binding の可変借用前に判定する。
+        let has_prior_native = state
+            .runtime_endpoints
+            .get(&key(team_id, agent_id))
+            .is_some_and(|binding| binding.native.is_some());
+        if !has_prior_native {
+            let spawning = state.recruit_lifecycles.get(agent_id).is_some_and(|l| {
+                l.team_id == team_id
+                    && matches!(
+                        l.state,
+                        crate::team_hub::events::RecruitLifecycleState::Requested
+                            | crate::team_hub::events::RecruitLifecycleState::Spawning
+                            | crate::team_hub::events::RecruitLifecycleState::Handshaking
+                    )
+            });
+            if !spawning {
+                return Err(format!(
+                    "agent '{agent_id}' has no active recruit; native binding is only \
+                     established during spawn or by reconnecting an existing binding"
+                ));
+            }
+        }
         let binding = state
             .runtime_endpoints
             .entry(key(team_id, agent_id))

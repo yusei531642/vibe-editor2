@@ -87,9 +87,20 @@ pub(super) fn hub() -> (TeamHub, Arc<SessionRegistry>, Arc<RuntimeManager>) {
 }
 
 pub(super) async fn seed_member(hub: &TeamHub, team_id: &str, agent_id: &str, role: &str) {
-    let mut state = hub.state.lock().await;
-    state.active_teams.insert(team_id.to_string());
-    state.seed_role_binding(team_id, agent_id, role);
+    {
+        let mut state = hub.state.lock().await;
+        state.active_teams.insert(team_id.to_string());
+        state.seed_role_binding(team_id, agent_id, role);
+    }
+    // native bind の spawn-phase gate を満たすため、spawn 中の lifecycle も登録する。
+    hub.begin_recruit_lifecycle(team_id, agent_id, role).await;
+    let _ = hub
+        .transition_recruit_lifecycle(
+            agent_id,
+            crate::team_hub::events::RecruitLifecycleState::Spawning,
+            None,
+        )
+        .await;
 }
 
 
