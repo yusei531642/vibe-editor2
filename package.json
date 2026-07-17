@@ -24,6 +24,8 @@
     "lint:v2-identity": "node build/check-v2-identity.mjs",
     "lint:team-event-types": "node build/check-team-event-types.mjs",
     "generate:team-event-types": "node build/check-team-event-types.mjs --write",
+    "lint:runtime-event-types": "node build/check-runtime-event-types.mjs",
+    "generate:runtime-event-types": "node build/check-runtime-event-types.mjs --write",
     "test:watch": "vitest",
     "icons": "node build/generate-icons.mjs"
   },

@@ -1,5 +1,6 @@
 // アプリ全体の共有 state
 
+use crate::agent_runtime::RuntimeManager;
 use crate::commands::project_authority::ProjectRootIdentity;
 use crate::pty::{InFlightTracker, SessionRegistry};
 use crate::task_supervisor::TaskSupervisor;
@@ -23,6 +24,9 @@ pub struct AppState {
     /// `project_root` と常に対で更新し、strict authzがdirectory置換をfail-closedに検出する。
     pub project_root_identity: ArcSwapOption<ProjectRootIdentity>,
     pub pty_registry: Arc<SessionRegistry>,
+    /// Issue #22: endpointId -> runtime adapter の API boundary。
+    /// TeamHub 等の上位層は PTY registry の内部構造を参照せず、この manager 経由で配送する。
+    pub runtime_manager: Arc<RuntimeManager>,
     pub team_hub: TeamHub,
     /// Issue #952: watcher / cleanup / poller / inject 系 background task の共通 supervisor。
     /// shutdown 時はここで cancel token を立て、bounded wait してから PTY process-tree kill に進む。
@@ -70,6 +74,7 @@ pub fn current_project_root_identity(
 impl AppState {
     pub fn new() -> Self {
         let pty_registry = Arc::new(SessionRegistry::new());
+        let runtime_manager = Arc::new(RuntimeManager::new());
         let task_supervisor = TaskSupervisor::new();
         let pty_inflight: Arc<InFlightTracker> = task_supervisor.clone();
         // Issue #630: TeamHub と AppState で同じ tracker Arc を共有することで、
@@ -80,6 +85,7 @@ impl AppState {
             project_root: ArcSwapOption::from(None),
             project_root_identity: ArcSwapOption::from(None),
             pty_registry,
+            runtime_manager,
             team_hub,
             task_supervisor,
             pty_inflight,

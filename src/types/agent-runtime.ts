@@ -26,3 +26,25 @@ export interface AgentRuntimeDiagnostics {
   reason: AgentRuntimeSelectionReason;
   capabilities: AgentRuntimeCapability[];
 }
+
+export type {
+  RuntimeEventEnvelope,
+  RuntimeEventKind,
+  RuntimeEventPayload,
+  RuntimeLifecycleState
+} from './generated/runtime-events';
+
+export interface RegisterPtyRuntimeEndpointRequest {
+  endpointId: string;
+  sessionId: string;
+}
+
+export interface RuntimeTurnRequest {
+  endpointId: string;
+  input: string;
+  submit: boolean;
+}
+
+export interface RuntimeEndpointResult {
+  endpointId: string;
+}

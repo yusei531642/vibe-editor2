@@ -1,0 +1,115 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+import type {
+  RuntimeEventEnvelope,
+  RuntimeEventPayload
+} from '../../../../types/agent-runtime';
+import {
+  RUNTIME_PROJECTION_HISTORY_LIMIT,
+  useRuntimeStore
+} from '../runtime';
+
+function event(
+  sequence: number,
+  payload: RuntimeEventPayload,
+  endpointId = 'endpoint-1'
+): RuntimeEventEnvelope {
+  const kind = payload.type;
+  return {
+    endpointId,
+    sequence,
+    kind,
+    payload,
+    timestamp: `2026-07-16T00:00:0${sequence}Z`
+  };
+}
+
+describe('runtime projection store', () => {
+  beforeEach(() => useRuntimeStore.getState().clear());
+
+  it('records missing sequences and ignores out-of-order payloads', () => {
+    const store = useRuntimeStore.getState();
+    store.projectEvent(
+      event(1, { type: 'lifecycle', state: 'spawning', detail: null })
+    );
+    store.projectEvent(event(3, { type: 'lifecycle', state: 'ready', detail: null }));
+    store.projectEvent(
+      event(2, { type: 'lifecycle', state: 'failed', detail: 'late event' })
+    );
+
+    const projection = useRuntimeStore.getState().byEndpoint['endpoint-1'];
+    expect(projection.lastSequence).toBe(3);
+    expect(projection.lifecycle).toBe('ready');
+    expect(projection.missingSequences).toEqual([{ from: 2, to: 2 }]);
+    expect(projection.outOfOrderCount).toBe(1);
+  });
+
+  it('coalesces consecutive message deltas and starts a new chunk after another kind', () => {
+    const store = useRuntimeStore.getState();
+    store.projectEvent(event(1, { type: 'messageDelta', delta: 'hel' }));
+    store.projectEvent(event(2, { type: 'messageDelta', delta: 'lo' }));
+    store.projectEvent(event(3, { type: 'diagnostic', message: 'boundary' }));
+    store.projectEvent(event(4, { type: 'messageDelta', delta: ' world' }));
+
+    const projection = useRuntimeStore.getState().byEndpoint['endpoint-1'];
+    expect(projection.currentMessage).toBe('hello world');
+    expect(projection.deltaChunks).toEqual(['hello', ' world']);
+    expect(projection.diagnostics).toEqual(['boundary']);
+  });
+
+  it('caps projection histories and records entries truncated from the front', () => {
+    const store = useRuntimeStore.getState();
+    let sequence = 1;
+    for (let index = 0; index <= RUNTIME_PROJECTION_HISTORY_LIMIT; index++) {
+      store.projectEvent(
+        event(sequence++, { type: 'messageDelta', delta: `delta-${index}` })
+      );
+      store.projectEvent(
+        event(sequence++, { type: 'lifecycle', state: 'ready', detail: null })
+      );
+      store.projectEvent(
+        event(sequence++, { type: 'messageComplete', message: `complete-${index}` })
+      );
+      store.projectEvent(
+        event(sequence++, {
+          type: 'error',
+          code: `error-${index}`,
+          message: `error message ${index}`,
+          recoverable: true
+        })
+      );
+      store.projectEvent(
+        event(sequence++, { type: 'diagnostic', message: `diagnostic-${index}` })
+      );
+    }
+
+    const projection = useRuntimeStore.getState().byEndpoint['endpoint-1'];
+    expect(projection.deltaChunks).toHaveLength(RUNTIME_PROJECTION_HISTORY_LIMIT);
+    expect(projection.completedMessages).toHaveLength(
+      RUNTIME_PROJECTION_HISTORY_LIMIT
+    );
+    expect(projection.errors).toHaveLength(RUNTIME_PROJECTION_HISTORY_LIMIT);
+    expect(projection.diagnostics).toHaveLength(RUNTIME_PROJECTION_HISTORY_LIMIT);
+    expect(projection.deltaChunks[0]).toBe('delta-1');
+    expect(projection.completedMessages[0]).toBe('complete-1');
+    expect(projection.errors[0].code).toBe('error-1');
+    expect(projection.diagnostics[0]).toBe('diagnostic-1');
+    expect(projection.truncatedCount).toBe(4);
+  });
+
+  it('resets the projection when a spawning lifecycle event starts a new epoch', () => {
+    const store = useRuntimeStore.getState();
+    store.projectEvent(event(1, { type: 'lifecycle', state: 'spawning', detail: null }));
+    store.projectEvent(event(2, { type: 'messageDelta', delta: 'old-epoch' }));
+    store.projectEvent(event(3, { type: 'messageComplete', message: 'old-message' }));
+
+    // detach 後の再登録: Rust 側 counter は 1 から振り直される。
+    store.projectEvent(event(1, { type: 'lifecycle', state: 'spawning', detail: null }));
+
+    const projection = useRuntimeStore.getState().byEndpoint['endpoint-1'];
+    expect(projection.lastSequence).toBe(1);
+    expect(projection.lifecycle).toBe('spawning');
+    expect(projection.completedMessages).toHaveLength(0);
+    expect(projection.deltaChunks).toHaveLength(0);
+    expect(projection.outOfOrderCount).toBe(0);
+  });
+});

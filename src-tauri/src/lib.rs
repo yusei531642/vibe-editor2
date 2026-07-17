@@ -180,8 +180,13 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             // ---- root ----
             commands::ping,
-            // ---- agent runtime (Issue #21) ----
+            // ---- agent runtime (Issue #21 / #22) ----
             commands::agent_runtime::agent_runtime_diagnostics,
+            commands::agent_runtime::agent_runtime_register_pty_endpoint,
+            commands::agent_runtime::agent_runtime_spawn_turn,
+            commands::agent_runtime::agent_runtime_write,
+            commands::agent_runtime::agent_runtime_stop,
+            commands::agent_runtime::agent_runtime_dispose,
             // ---- app ----
             commands::app::app_get_project_root,
             commands::project_authority::app_restore_authorized_project_root,
