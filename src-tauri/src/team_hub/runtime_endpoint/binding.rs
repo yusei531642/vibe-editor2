@@ -120,8 +120,8 @@ impl TeamHub {
         Ok(endpoint_id)
     }
 
-    /// (team_id, agent_id) が active team の実在メンバー (agents / PTY session / 非 terminal
-    /// recruit lifecycle) であることを検証する。renderer 由来 binding 入力の共通 fail-closed 認可。
+    /// (team_id, agent_id) が active team の既存 active member または非 terminal recruit
+    /// lifecycle であることを検証する。renderer が直前に作った PTY session は認可根拠にしない。
     async fn authorize_runtime_endpoint_binding(
         &self,
         team_id: &str,
@@ -142,14 +142,7 @@ impl TeamHub {
                             | crate::team_hub::events::RecruitLifecycleState::Cancelled
                     )
             });
-        let is_member = state
-            .agents
-            .contains_key(&(team_id.to_string(), agent_id.to_string()))
-            || self
-                .registry
-                .list_team_members(team_id)
-                .iter()
-                .any(|(member_agent_id, _)| member_agent_id == agent_id);
+        let is_member = state.bound_role(team_id, agent_id).is_some();
         if !recruited_here && !is_member {
             return Err(format!(
                 "agent '{agent_id}' is not a member of team '{team_id}'"

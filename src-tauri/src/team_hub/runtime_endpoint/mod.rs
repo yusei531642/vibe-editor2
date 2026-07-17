@@ -251,6 +251,19 @@ impl TeamHub {
     }
 
     pub async fn team_members(&self, team_id: &str) -> Vec<(String, String)> {
+        let mut members = {
+            let state = self.state.lock().await;
+            state.team_member_roles(team_id)
+        };
+        for member in self.registry.list_team_members(team_id) {
+            if !members.iter().any(|(agent_id, _)| agent_id == &member.0) {
+                members.push(member);
+            }
+        }
+        members
+    }
+
+    pub(crate) async fn live_team_members(&self, team_id: &str) -> Vec<(String, String)> {
         let mut members: Vec<(String, String)> = {
             let state = self.state.lock().await;
             state
@@ -298,9 +311,9 @@ impl TeamHub {
         crate::commands::validation::validate_id_segment("team_id", team_id)?;
         crate::commands::validation::validate_id_segment("agent_id", agent_id)?;
         crate::commands::authz::assert_active_team(self, team_id).await?;
-        let recruited_here = {
+        let (recruited_here, is_member) = {
             let state = self.state.lock().await;
-            state
+            let recruited_here = state
                 .recruit_lifecycles
                 .get(agent_id)
                 .is_some_and(|lifecycle| {
@@ -310,15 +323,10 @@ impl TeamHub {
                             crate::team_hub::events::RecruitLifecycleState::Failed
                                 | crate::team_hub::events::RecruitLifecycleState::Cancelled
                         )
-                })
+                });
+            (recruited_here, state.bound_role(team_id, agent_id).is_some())
         };
-        if recruited_here
-            || self
-                .team_members(team_id)
-                .await
-                .iter()
-                .any(|(id, _)| id == agent_id)
-        {
+        if recruited_here || is_member {
             Ok(())
         } else {
             Err(crate::commands::error::CommandError::authz(

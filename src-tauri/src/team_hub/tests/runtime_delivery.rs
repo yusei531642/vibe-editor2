@@ -136,6 +136,7 @@ async fn team_send_delivers_to_native_and_pty_members_through_agent_mapping() {
     .await
     .unwrap();
 
+    seed_member(&hub, team_id, pty_id, "reviewer").await;
     let kills = Arc::new(AtomicUsize::new(0));
     let (handle, pty_writes) = recording_handle(pty_id, team_id, kills);
     assert!(registry
@@ -147,7 +148,6 @@ async fn team_send_delivers_to_native_and_pty_members_through_agent_mapping() {
 
     seed_member(&hub, team_id, "leader-member", "leader").await;
     seed_member(&hub, team_id, native_id, "programmer").await;
-    seed_member(&hub, team_id, pty_id, "reviewer").await;
     let response = team_send(
         &hub,
         &CallContext {
@@ -177,7 +177,7 @@ async fn team_send_delivers_to_native_and_pty_members_through_agent_mapping() {
 }
 
 #[tokio::test]
-async fn team_members_excludes_disposed_native_endpoint_with_retained_state() {
+async fn live_team_members_excludes_disposed_native_endpoint_but_roster_keeps_it() {
     let (hub, _registry, manager) = hub();
     let team_id = "team-native-members";
     for (agent_id, endpoint_id) in [
@@ -197,8 +197,37 @@ async fn team_members_excludes_disposed_native_endpoint_with_retained_state() {
 
     assert!(manager.dispose("dead-native-endpoint").result.is_ok());
 
-    let members = hub.team_members(team_id).await;
+    let mut roster = hub.team_members(team_id).await;
+    roster.sort();
+    assert_eq!(
+        roster,
+        vec![
+            ("dead-native".into(), "worker".into()),
+            ("live-native".into(), "worker".into()),
+        ]
+    );
+    let members = hub.live_team_members(team_id).await;
     assert_eq!(members, vec![("live-native".into(), "worker".into())]);
+}
+
+#[tokio::test]
+async fn pty_binding_rejects_session_created_before_member_authorization() {
+    let (hub, registry, _manager) = hub();
+    let team_id = "team-pty-authz";
+    let agent_id = "untrusted-member";
+    hub.state.lock().await.active_teams.insert(team_id.into());
+    let (handle, _writes) =
+        recording_handle(agent_id, team_id, Arc::new(AtomicUsize::new(0)));
+    assert!(registry
+        .insert_if_absent("untrusted-session".into(), handle)
+        .is_ok());
+
+    let error = hub
+        .bind_pty_runtime_endpoint(team_id, agent_id, Some("untrusted-session".into()))
+        .await
+        .unwrap_err();
+
+    assert!(error.contains("not a member"), "{error}");
 }
 
 #[tokio::test]
@@ -424,7 +453,7 @@ async fn recruit_sequence_is_monotonic_and_rejected_terminal_has_no_state() {
 /// bind 側 authorize_runtime_endpoint_binding と同一。
 #[tokio::test]
 async fn authorize_team_agent_binding_allows_recruit_in_progress_member() {
-    let (hub, _registry, _manager) = hub();
+    let (hub, registry, _manager) = hub();
     {
         let mut state = hub.state.lock().await;
         state.active_teams.insert("team-precheck".into());
@@ -438,6 +467,18 @@ async fn authorize_team_agent_binding_allows_recruit_in_progress_member() {
     // 非メンバー・非 recruit は従来どおり拒否
     assert!(hub
         .authorize_team_agent_binding("team-precheck", "stranger")
+        .await
+        .is_err());
+    let (handle, _writes) = recording_handle(
+        "session-only",
+        "team-precheck",
+        Arc::new(AtomicUsize::new(0)),
+    );
+    assert!(registry
+        .insert_if_absent("session-only".into(), handle)
+        .is_ok());
+    assert!(hub
+        .authorize_team_agent_binding("team-precheck", "session-only")
         .await
         .is_err());
     // terminal 状態 (Cancelled) の recruit は許容しない
