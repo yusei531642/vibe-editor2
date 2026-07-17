@@ -7,7 +7,7 @@ mod test_support;
 
 use types::*;
 use crate::agent_runtime::{
-    BackendKind, PtyCompatAdapter, RuntimeDeliveryRequest, RuntimeEventEnvelope, RuntimeManager,
+    BackendKind, RuntimeDeliveryRequest, RuntimeEventEnvelope, RuntimeManager,
 };
 use crate::pty::SessionRegistry;
 use crate::team_hub::inject::InjectError;
