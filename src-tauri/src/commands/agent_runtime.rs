@@ -271,10 +271,10 @@ pub async fn agent_runtime_register_codex_endpoint(
     #[cfg(not(unix))]
     {
         let _ = (app, state, request);
-        return Err(CommandError::coded(
+        Err(CommandError::coded(
             "runtime_native_unsupported",
             "Codex app-server runtime is only available on Unix",
-        ));
+        ))
     }
     #[cfg(unix)]
     register_codex_endpoint(&app, &state, request).await
@@ -289,10 +289,10 @@ pub async fn agent_runtime_reconnect_codex(
     #[cfg(not(unix))]
     {
         let _ = (app, state, request);
-        return Err(CommandError::coded(
+        Err(CommandError::coded(
             "runtime_native_unsupported",
             "Codex app-server runtime is only available on Unix",
-        ));
+        ))
     }
     #[cfg(unix)]
     {
