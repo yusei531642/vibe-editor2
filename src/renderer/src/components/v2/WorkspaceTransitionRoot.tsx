@@ -136,18 +136,34 @@ function EnabledWorkspaceTransitionRoot({
   const measure = useCallback((scene: WorkspaceSceneName): DOMRect | null => {
     const root = scene === 'focus' ? focusRef.current : teamRef.current;
     if (!root) return null;
+    // 非 active scene には CSS transform (退避位置) が掛かっており、そのまま測ると
+    // FLIP の移動量が常にずれる。計測中だけ transform を無効化する (PR #35 レビュー)。
+    // 同期実行なので paint は挟まれず、ちらつきは発生しない。
+    root.setAttribute('data-measuring', 'true');
+    try {
+      return measureWithin(root, scene, team.id);
+    } finally {
+      root.removeAttribute('data-measuring');
+    }
+  }, [team.id]);
+
+  const measureWithin = (
+    root: HTMLDivElement,
+    scene: WorkspaceSceneName,
+    teamId: string
+  ): DOMRect | null => {
     const selector =
       scene === 'focus'
         ? '[data-workspace-focus-frame], .v2-composer'
         : '[data-workspace-leader]';
     if (scene === 'team') {
       const leader = Array.from(root.querySelectorAll<HTMLElement>(selector)).find(
-        (element) => element.dataset.workspaceTeamId === team.id
+        (element) => element.dataset.workspaceTeamId === teamId
       );
       return (leader ?? root).getBoundingClientRect();
     }
     return (root.querySelector(selector) ?? root).getBoundingClientRect();
-  }, [team.id]);
+  };
 
   const returnFocus = useCallback((scene: WorkspaceSceneName): void => {
     const root = scene === 'focus' ? focusRef.current : teamRef.current;
@@ -164,7 +180,9 @@ function EnabledWorkspaceTransitionRoot({
     setCommittedScene(desiredScene);
     setTransitioning(false);
     setFlipFrame(null);
-    returnFocus(desiredScene);
+    // inert の解除は state 反映後の再 render で DOM に届く。inert が付いたままの
+    // 要素に focus() しても無効なため、次 frame で回帰させる (PR #35 レビュー)。
+    requestAnimationFrame(() => returnFocus(desiredScene));
   }, [clearTransitionTimer, desiredScene, returnFocus]);
 
   const requestScene = useCallback(
@@ -196,7 +214,8 @@ function EnabledWorkspaceTransitionRoot({
         setCommittedScene(nextScene);
         setTransitioning(false);
         setFlipFrame(null);
-        returnFocus(nextScene);
+        // setCommittedScene の inert 解除が DOM に反映された後に focus を戻す。
+        requestAnimationFrame(() => returnFocus(nextScene));
       }, duration);
     }, [clearTransitionTimer, hasTeamSession, measure, reducedMotion, returnFocus, setPersistedScene]
   );
