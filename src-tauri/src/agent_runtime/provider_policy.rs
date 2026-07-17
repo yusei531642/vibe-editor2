@@ -2,7 +2,7 @@
 
 use super::{BackendKind, RuntimeCapability};
 use serde::Serialize;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -179,10 +179,20 @@ pub fn resolve_node_executable() -> Option<PathBuf> {
 pub fn resolve_sidecar_entrypoint() -> Option<PathBuf> {
     let dev =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../src-sidecars/claude-agent/index.mjs");
-    if dev.is_file() {
-        return Some(dev);
-    }
     let executable = std::env::current_exe().ok()?;
+    resolve_sidecar_entrypoint_from(&dev, &executable, cfg!(debug_assertions))
+}
+
+fn resolve_sidecar_entrypoint_from(
+    dev: &Path,
+    executable: &Path,
+    allow_dev_source: bool,
+) -> Option<PathBuf> {
+    // A release binary must never prefer the build machine's source checkout. The sidecar
+    // receives native credentials, so packaged builds resolve only Tauri-bundled resources.
+    if allow_dev_source && dev.is_file() {
+        return Some(dev.to_path_buf());
+    }
     let base = executable.parent()?;
     [
         base.join("sidecars/claude-agent/dist/index.mjs"),
@@ -197,6 +207,7 @@ pub fn resolve_sidecar_entrypoint() -> Option<PathBuf> {
 mod tests {
     use super::*;
     use std::collections::HashSet;
+    use std::fs;
 
     struct Available(HashSet<RuntimeProvider>);
 
@@ -252,5 +263,38 @@ mod tests {
         assert!(resolve_native_claude_command("my-claude-wrapper").is_none());
         assert!(resolve_native_claude_command("/tmp/claude").is_none());
         assert!(resolve_native_claude_command("claude --dangerous-flag").is_none());
+    }
+
+    #[test]
+    fn release_sidecar_resolution_never_prefers_the_source_checkout() {
+        let temp = tempfile::tempdir().unwrap();
+        let dev = temp.path().join("source/index.mjs");
+        let executable = temp.path().join("app/vibe-editor");
+        let bundled = temp
+            .path()
+            .join("app/resources/sidecars/claude-agent/dist/index.mjs");
+        fs::create_dir_all(dev.parent().unwrap()).unwrap();
+        fs::create_dir_all(bundled.parent().unwrap()).unwrap();
+        fs::write(&dev, "source").unwrap();
+        fs::write(&bundled, "bundle").unwrap();
+
+        assert_eq!(
+            resolve_sidecar_entrypoint_from(&dev, &executable, false),
+            Some(bundled)
+        );
+    }
+
+    #[test]
+    fn debug_sidecar_resolution_can_use_the_source_checkout() {
+        let temp = tempfile::tempdir().unwrap();
+        let dev = temp.path().join("source/index.mjs");
+        let executable = temp.path().join("app/vibe-editor");
+        fs::create_dir_all(dev.parent().unwrap()).unwrap();
+        fs::write(&dev, "source").unwrap();
+
+        assert_eq!(
+            resolve_sidecar_entrypoint_from(&dev, &executable, true),
+            Some(dev)
+        );
     }
 }
