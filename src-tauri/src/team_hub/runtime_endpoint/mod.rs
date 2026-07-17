@@ -167,9 +167,8 @@ impl TeamHub {
         Ok(endpoint_id)
     }
 
-    /// (team_id, agent_id) が「active team の実在メンバー (handshake 済み agents /
-    /// PTY session / 非 terminal recruit lifecycle のいずれか)」であることを検証する。
-    /// renderer 由来の binding 系入力に共通の fail-closed 認可 (PR #34 レビュー)。
+    /// (team_id, agent_id) が active team の実在メンバー (agents / PTY session / 非 terminal
+    /// recruit lifecycle) であることを検証する。renderer 由来 binding 入力の共通 fail-closed 認可。
     async fn authorize_team_agent_binding(
         &self,
         team_id: &str,
