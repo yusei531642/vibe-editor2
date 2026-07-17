@@ -40,6 +40,8 @@ pub(crate) struct TeamRuntimeEndpointSnapshot {
     pub session_id: Option<String>,
     pub task_ids: Vec<u32>,
     pub live: bool,
+    pub provider: String,
+    pub restore_state: String,
 }
 #[cfg(test)]
 pub(crate) type LegacyAppServerDelivery = (String, String, String, String);

@@ -11,6 +11,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Team } from '../../../../types/shared';
 import type { AddTerminalTabOptions, TerminalTab } from './use-terminal-tabs';
+import { useRuntimeStore } from '../../stores/runtime';
+import { useSessionRestoreStore } from '../../stores/session-restore';
 
 type ToastFn = (
   msg: string,
@@ -52,6 +54,37 @@ export function useTeamState(opts: UseTeamStateOptions): UseTeamStateResult {
   optsRef.current = opts;
 
   const [teams, setTeams] = useState<Team[]>([]);
+  const restoredSnapshot = useSessionRestoreStore((state) => state.snapshot);
+  const setRestoredSnapshot = useSessionRestoreStore((state) => state.setSnapshot);
+  const restoreRequestedRef = useRef(false);
+
+  useEffect(() => {
+    if (restoreRequestedRef.current || !window.api.team?.restoreSnapshot) return;
+    restoreRequestedRef.current = true;
+    void window.api.team.restoreSnapshot().then((snapshot) => {
+      if (!snapshot) return;
+      useRuntimeStore.getState().clear();
+      useRuntimeStore.getState().projectEvents(snapshot.runtimeEvents);
+      setRestoredSnapshot(snapshot);
+      setTeams((current) => current.some((team) => team.id === snapshot.teamId)
+        ? current
+        : [...current, { id: snapshot.teamId, name: snapshot.teamId }]);
+    }).catch((error) => {
+      console.warn('[session-restore] snapshot failed:', error);
+    });
+  }, [setRestoredSnapshot]);
+
+  useEffect(() => {
+    if (!opts.projectRoot || !restoredSnapshot) return;
+    const members = restoredSnapshot.endpoints.map((endpoint) => ({
+      agentId: endpoint.agentId,
+      role: 'agent',
+      agent: endpoint.provider === 'codex-native' ? 'codex' : 'claude'
+    }));
+    void window.api.app
+      .setupTeamMcp(opts.projectRoot, restoredSnapshot.teamId, restoredSnapshot.teamId, members)
+      .catch((error) => console.warn('[session-restore] TeamHub setup failed:', error));
+  }, [opts.projectRoot, restoredSnapshot]);
 
   /** チーム作成時のメンバースポーン遅延タイマー。破棄時にクリアできるよう保持 */
   const spawnStaggerTimers = useRef<ReturnType<typeof setTimeout>[]>([]);

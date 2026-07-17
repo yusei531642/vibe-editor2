@@ -15,7 +15,7 @@ import type {
   RuntimeUsage
 } from '../stores/runtime';
 
-export type TeamAgentStatus = 'spawning' | 'ready' | 'running' | 'failed';
+export type TeamAgentStatus = 'spawning' | 'ready' | 'running' | 'failed' | 'terminated';
 
 export interface TeamProjectionMember {
   cardId: string;
@@ -34,7 +34,7 @@ export interface TeamApprovalProjection extends RuntimeApprovalRequest {
 export interface TeamActivityItem {
   id: string;
   agentId: string | null;
-  kind: 'recruit' | 'task' | 'report' | 'approval' | 'error';
+  kind: 'recruit' | 'task' | 'report' | 'approval' | 'message' | 'error';
   message: string;
   timestamp: string;
 }
@@ -126,15 +126,19 @@ function chooseEndpoint(
     backend: recruit.endpointId.startsWith('team-pty-') ? 'pty' : 'native',
     sessionId: recruit.sessionId,
     taskIds: recruit.taskIds,
-    live: recruit.state === 'ready'
+    live: recruit.state === 'ready',
+    provider: recruit.endpointId.startsWith('team-pty-') ? 'pty' : 'native',
+    restoreState: 'live'
   };
 }
 
 function deriveStatus(
   recruit: RecruitProjection | null,
   runtime: RuntimeEndpointProjection | null,
-  task: TeamTaskSnapshot | null
+  task: TeamTaskSnapshot | null,
+  endpoint: TeamRuntimeEndpointSnapshot | null
 ): TeamAgentStatus {
+  if (endpoint?.restoreState === 'terminated') return 'terminated';
   if (
     recruit?.state === 'failed' ||
     recruit?.state === 'cancelled' ||
@@ -239,7 +243,7 @@ export function buildTeamProjection(input: BuildTeamProjectionInput): TeamProjec
       cardId: member.cardId || null,
       title: member.title,
       roleProfileId: member.roleProfileId,
-      status: deriveStatus(recruit, runtime, task),
+      status: deriveStatus(recruit, runtime, task, endpoint),
       recruit,
       task,
       endpoint,
@@ -296,14 +300,23 @@ export function buildTeamProjection(input: BuildTeamProjectionInput): TeamProjec
   }
   for (const agent of agents) {
     for (const event of agent.runtime?.eventHistory ?? []) {
-      if (event.payload.type !== 'error') continue;
-      activity.push({
-        id: `error:${event.endpointId}:${event.sequence}`,
-        agentId: agent.agentId,
-        kind: 'error',
-        message: event.payload.message,
-        timestamp: event.timestamp
-      });
+      if (event.payload.type === 'messageComplete') {
+        activity.push({
+          id: `message:${event.endpointId}:${event.epoch}:${event.sequence}`,
+          agentId: agent.agentId,
+          kind: 'message',
+          message: event.payload.message,
+          timestamp: event.timestamp
+        });
+      } else if (event.payload.type === 'error') {
+        activity.push({
+          id: `error:${event.endpointId}:${event.epoch}:${event.sequence}`,
+          agentId: agent.agentId,
+          kind: 'error',
+          message: event.payload.message,
+          timestamp: event.timestamp
+        });
+      }
     }
   }
   activity.sort((left, right) => right.timestamp.localeCompare(left.timestamp));

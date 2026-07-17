@@ -17,6 +17,7 @@ pub(super) async fn register_codex_endpoint(
         crate::commands::validation::validate_id_segment("agent_id", agent_id)?;
     }
     let runtime_team_agent = request.team_id.clone().zip(request.agent_id.clone());
+    let restoring = matches!(&request.thread, CodexThreadAction::Resume { .. });
     // cwd は active project root / native picker 由来 grant への authority 照合を必須とする
     // (renderer 指定の任意パスで thread を開かせない)。省略時は authority 照合済みの
     // active project root を使う。
@@ -111,6 +112,13 @@ pub(super) async fn register_codex_endpoint(
         }
     };
     if let Some((team_id, agent_id)) = runtime_team_agent {
+        if restoring {
+            state
+                .team_hub
+                .authorize_restored_native_reconnect(&team_id, &agent_id, &endpoint_id)
+                .await
+                .map_err(CommandError::authz)?;
+        }
         if let Err(error) = state
             .team_hub
             .bind_native_runtime_endpoint(
@@ -132,6 +140,14 @@ pub(super) async fn register_codex_endpoint(
                 ),
             ));
         }
+        state.runtime_manager.persist_team_binding(
+            &team_id,
+            &agent_id,
+            &endpoint_id,
+            "codex-native",
+            Some(thread_id.clone()),
+            true,
+        );
     }
     // start/resume/fork いずれも成功した thread を「観測済み」として記録し、
     // 以後の resume / fork を認可できるようにする。
@@ -177,6 +193,7 @@ pub(super) async fn register_claude_endpoint(
         }
         ClaudeSessionAction::Start => None,
     };
+    let restoring = matches!(&session, ClaudeSessionAction::Resume { .. });
     let cwd = crate::state::current_project_root(&state.project_root);
     let settings = crate::commands::settings::settings_load().await?;
     let launch = SidecarLaunchConfig::production(settings.claude_command)
@@ -221,6 +238,13 @@ pub(super) async fn register_claude_endpoint(
         .map_err(|error| CommandError::coded(error.code, error.message))?;
     let session_id = adapter.session_id().or(resume_session);
     if let Some((team_id, agent_id)) = team_id.zip(agent_id) {
+        if restoring {
+            state
+                .team_hub
+                .authorize_restored_native_reconnect(&team_id, &agent_id, &endpoint_id)
+                .await
+                .map_err(CommandError::authz)?;
+        }
         state
             .team_hub
             .bind_native_runtime_endpoint(
@@ -242,6 +266,14 @@ pub(super) async fn register_claude_endpoint(
                     ),
                 )
             })?;
+        state.runtime_manager.persist_team_binding(
+            &team_id,
+            &agent_id,
+            &endpoint_id,
+            "claude-native",
+            session_id.clone(),
+            session_id.is_some(),
+        );
     }
     record_known_thread(&state.known_claude_sessions, session_id.clone());
     Ok(ClaudeRuntimeEndpointResult {

@@ -48,7 +48,7 @@ impl RuntimeEventBuffer {
         let Some(last) = self.events.back_mut() else {
             return false;
         };
-        if last.endpoint_id != incoming.endpoint_id {
+        if last.endpoint_id != incoming.endpoint_id || last.epoch != incoming.epoch {
             return false;
         }
         match (&mut last.payload, &incoming.payload) {

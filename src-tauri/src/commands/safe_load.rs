@@ -25,6 +25,14 @@
 use serde::de::DeserializeOwned;
 use std::path::Path;
 
+/// JSON を内包する別の検証済み永続コンテナ (SQLite 等) 向けの同期 parse 境界。
+/// 呼び出し側は `Err` を握り潰さず、コンテナ全体の quarantine を開始しなければならない。
+pub(crate) fn parse_persisted_container_json<T: DeserializeOwned>(
+    bytes: &[u8],
+) -> serde_json::Result<T> {
+    serde_json::from_slice(bytes)
+}
+
 /// 永続化ファイル読み込みの結果。
 #[derive(Debug)]
 pub enum LoadOutcome<T> {

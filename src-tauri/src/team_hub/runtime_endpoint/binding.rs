@@ -8,6 +8,26 @@ use crate::team_hub::TeamHub;
 use std::sync::Arc;
 
 impl TeamHub {
+    /// Durable resume tokens are admitted only after normal active-team/member authorization.
+    /// Marking the prior endpoint lets the existing reconnect gate distinguish this path from a
+    /// renderer attempt to attach a new native runtime to an already-ready member.
+    pub async fn authorize_restored_native_reconnect(
+        &self,
+        team_id: &str,
+        agent_id: &str,
+        endpoint_id: &str,
+    ) -> Result<(), String> {
+        self.authorize_runtime_endpoint_binding(team_id, agent_id)
+            .await?;
+        let mut state = self.state.lock().await;
+        state
+            .runtime_endpoints
+            .entry(key(team_id, agent_id))
+            .or_default()
+            .prior_native_endpoint = Some(endpoint_id.to_string());
+        Ok(())
+    }
+
     /// renderer 起点 (terminal_create) の PTY binding。live native member への上書きは
     /// 乗っ取り防止のため拒否する (PR #34 レビュー)。Rust 内部の配送 fallback は
     /// `bind_pty_runtime_endpoint_for_delivery` を使う。
@@ -117,6 +137,15 @@ impl TeamHub {
             .or_default();
         binding.pty = Some(endpoint.clone());
         state.attach_runtime_to_recruit(team_id, agent_id, &endpoint);
+        drop(state);
+        self.runtime.manager.persist_team_binding(
+            team_id,
+            agent_id,
+            &endpoint_id,
+            "pty",
+            endpoint.session_id.clone(),
+            false,
+        );
         Ok(endpoint_id)
     }
 

@@ -42,6 +42,14 @@ experiments/
 # Tauri のビルド中間生成物
 src-tauri/target/
 src-tauri/gen/schemas/
+# 並行ビルド用の代替 CARGO_TARGET_DIR
+src-tauri/target-*/
+# Playwright の実行時出力 (baseline は tests/e2e/__screenshots__/ に追跡する)
+test-results/
+playwright-report/
+# エージェント作業用ローカルディレクトリ
+.agents/
+.codex/
 # リポジトリ直下のスクリーンショット — experiments/screenshots/ に退避するか破棄する
 /*.png
 /*.gif

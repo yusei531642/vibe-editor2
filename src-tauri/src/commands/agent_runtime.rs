@@ -221,6 +221,13 @@ fn record_known_thread(
     }
 }
 
+pub(crate) fn record_known_thread_for_restore(
+    known: &std::sync::Mutex<std::collections::HashSet<String>>,
+    thread_id: String,
+) {
+    record_known_thread(known, Some(thread_id));
+}
+
 fn emit_events(app: &AppHandle, events: &[RuntimeEventEnvelope]) {
     for event in events {
         let event_name = format!("runtime:event:{}", event.endpoint_id);

@@ -34,6 +34,12 @@ impl TeamHub {
                         .registry()
                         .resolve(&endpoint.endpoint_id)
                         .is_some(),
+                    provider: match endpoint.backend {
+                        RuntimeEndpointBackend::Native => "native",
+                        RuntimeEndpointBackend::Pty => "pty",
+                    }
+                    .to_string(),
+                    restore_state: "live".to_string(),
                 });
             }
         }

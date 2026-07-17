@@ -18,6 +18,7 @@ const MAX_CURSOR_TIMESTAMP_BYTES: usize = 128;
 #[serde(rename_all = "camelCase")]
 pub struct TeamRuntimeEventCursor {
     endpoint_id: String,
+    epoch: u64,
     sequence: u64,
     timestamp: String,
 }
@@ -143,6 +144,7 @@ fn validate_approval(request_id: &str, decision: &str) -> CommandResult<()> {
 fn event_cursor(event: &RuntimeEventEnvelope) -> TeamRuntimeEventCursor {
     TeamRuntimeEventCursor {
         endpoint_id: event.endpoint_id.clone(),
+        epoch: event.epoch,
         sequence: event.sequence,
         timestamp: event.timestamp.clone(),
     }
@@ -164,6 +166,7 @@ fn incremental_events(
                 .rposition(|event| {
                     event.endpoint_id == **endpoint_id
                         && event.sequence == cursor.sequence
+                        && event.epoch == cursor.epoch
                         && event.timestamp == cursor.timestamp
                 })
                 .map(|position| (*endpoint_id, position))
@@ -204,7 +207,8 @@ pub async fn team_projection_snapshot(
     )?;
     for cursor in &request.since_sequence {
         validate_id("endpoint_id", &cursor.endpoint_id)?;
-        if cursor.sequence == 0
+        if cursor.epoch == 0
+            || cursor.sequence == 0
             || cursor.timestamp.is_empty()
             || cursor.timestamp.chars().any(char::is_control)
         {
@@ -241,6 +245,72 @@ pub async fn team_projection_snapshot(
         retained_event_cursors,
         runtime_dropped_count: state.runtime_manager.dropped_event_count(),
     })
+}
+
+/// Phase 8 startup sync. The five fields intentionally match `team_projection_snapshot` so the
+/// renderer can switch from durable replay to live polling without an intermediate shape.
+#[tauri::command]
+pub async fn session_restore_snapshot(
+    state: State<'_, AppState>,
+) -> CommandResult<Option<TeamProjectionSnapshot>> {
+    let manager = state.runtime_manager.clone();
+    let restored = tauri::async_runtime::spawn_blocking(move || manager.restore_latest())
+        .await
+        .map_err(|error| CommandError::coded("runtime_restore_task_failed", error.to_string()))?
+        .map_err(|error| CommandError::coded("runtime_restore_failed", error))?;
+    let Some(team_id) = restored.team_id else {
+        return Ok(None);
+    };
+    for binding in &restored.bindings {
+        let Some(resume_id) = binding.resume_id.clone() else {
+            continue;
+        };
+        if binding.provider == "codex-native" {
+            super::agent_runtime::record_known_thread_for_restore(
+                &state.known_codex_threads,
+                resume_id,
+            );
+        } else if binding.provider == "claude-native" {
+            super::agent_runtime::record_known_thread_for_restore(
+                &state.known_claude_sessions,
+                resume_id,
+            );
+        }
+    }
+    let endpoints = restored
+        .bindings
+        .into_iter()
+        .map(
+            |binding| crate::team_hub::runtime_endpoint::types::TeamRuntimeEndpointSnapshot {
+                team_id: binding.team_id,
+                agent_id: binding.agent_id,
+                endpoint_id: binding.endpoint_id,
+                backend: if binding.provider == "pty" {
+                    "pty"
+                } else {
+                    "native"
+                }
+                .to_string(),
+                session_id: binding.resume_id,
+                task_ids: Vec::new(),
+                live: false,
+                provider: binding.provider,
+                restore_state: if binding.resumable {
+                    "reconnectable".to_string()
+                } else {
+                    "terminated".to_string()
+                },
+            },
+        )
+        .collect();
+    let retained_event_cursors = restored.events.iter().map(event_cursor).collect();
+    Ok(Some(TeamProjectionSnapshot {
+        team_id,
+        endpoints,
+        runtime_events: restored.events,
+        retained_event_cursors,
+        runtime_dropped_count: 0,
+    }))
 }
 
 #[tauri::command]
@@ -372,6 +442,7 @@ mod tests {
     fn event(endpoint_id: &str, sequence: u64, timestamp: &str) -> RuntimeEventEnvelope {
         let mut event = RuntimeEventEnvelope::new(
             endpoint_id.to_string(),
+            if timestamp.starts_with("new") { 2 } else { 1 },
             sequence,
             RuntimeEventPayload::Diagnostic {
                 message: format!("event-{sequence}"),
@@ -391,6 +462,7 @@ mod tests {
         ];
         let cursors = vec![TeamRuntimeEventCursor {
             endpoint_id: "endpoint-a".to_string(),
+            epoch: 1,
             sequence: 2,
             timestamp: "old-2".to_string(),
         }];
@@ -405,6 +477,7 @@ mod tests {
         let events = vec![event("endpoint-a", 3, "current-3")];
         let cursors = vec![TeamRuntimeEventCursor {
             endpoint_id: "endpoint-a".to_string(),
+            epoch: 1,
             sequence: 2,
             timestamp: "evicted-2".to_string(),
         }];

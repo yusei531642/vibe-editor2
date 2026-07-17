@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { FileCode2, GitBranch, GitCommit, TerminalSquare, TestTube2, X } from 'lucide-react';
+import { FileCode2, GitBranch, GitCommit, RotateCcw, TerminalSquare, TestTube2, X } from 'lucide-react';
 import { useT } from '../../lib/i18n';
 import { useTeamProjection } from './TeamProjectionProvider';
 import { MergeQueuePanel } from './MergeQueuePanel';
@@ -14,11 +14,13 @@ export function TeamInspector({ embedded = false }: { embedded?: boolean }): JSX
     setInspectorOpen,
     selectedAgent,
     projection,
+    reconnect,
     openTerminal,
     runWorktreeCommand
   } = useTeamProjection();
   const tabIdPrefix = useId();
   const [tab, setTab] = useState<InspectorTab>('diff');
+  const [reconnecting, setReconnecting] = useState(false);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   useEffect(() => {
@@ -172,14 +174,35 @@ export function TeamInspector({ embedded = false }: { embedded?: boolean }): JSX
         )}
       </section>
       {selectedAgent ? (
-        <button
-          type="button"
-          className="v2-compat-terminal"
-          onClick={() => openTerminal(selectedAgent.agentId)}
-        >
-          <TerminalSquare size={18} strokeWidth={1.75} aria-hidden="true" />
-          {t('v2.inspector.openTerminal')}
-        </button>
+        selectedAgent.endpoint?.restoreState === 'reconnectable' ? (
+          <button
+            type="button"
+            className="v2-compat-terminal"
+            disabled={reconnecting}
+            onClick={() => {
+              setReconnecting(true);
+              void reconnect(selectedAgent.agentId)
+                .catch((error) => console.warn('[session-restore] reconnect failed:', error))
+                .finally(() => setReconnecting(false));
+            }}
+          >
+            <RotateCcw size={18} strokeWidth={1.75} aria-hidden="true" />
+            {t('v2.team.card.reconnect')}
+          </button>
+        ) : selectedAgent.endpoint?.restoreState === 'terminated' ? (
+          <p className="team-inspector__terminated" role="status">
+            {t('v2.team.card.terminated')}
+          </p>
+        ) : (
+          <button
+            type="button"
+            className="v2-compat-terminal"
+            onClick={() => openTerminal(selectedAgent.agentId)}
+          >
+            <TerminalSquare size={18} strokeWidth={1.75} aria-hidden="true" />
+            {t('v2.inspector.openTerminal')}
+          </button>
+        )
       ) : null}
       {projection.runtimeDroppedCount > 0 ? (
         <small>{t('v2.inspector.runtimeDropped', { count: projection.runtimeDroppedCount })}</small>
