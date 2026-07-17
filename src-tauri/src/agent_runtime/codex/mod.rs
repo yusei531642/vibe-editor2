@@ -1,5 +1,6 @@
 //! Phase 2 Codex app-server native runtime adapter (Unix only).
 
+mod handshake;
 mod adapter;
 mod client;
 mod convert;
