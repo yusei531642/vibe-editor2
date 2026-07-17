@@ -8,8 +8,36 @@
 // 本物のフロントは `beforeBuildCommand` (= npm run build:vite) / `beforeDevCommand` が上書きする。
 fn main() {
     ensure_frontend_placeholder();
+    ensure_sidecar_placeholder();
     let tauri_attributes = tauri_attributes();
     tauri_build::try_build(tauri_attributes).expect("failed to run tauri build");
+}
+
+fn ensure_sidecar_placeholder() {
+    use std::fs;
+    use std::path::PathBuf;
+
+    // tauri.conf.json bundles this generated file. Clean-checkout cargo checks run before npm.
+    let entrypoint = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../src-sidecars/claude-agent/dist/index.mjs");
+    if entrypoint.exists() {
+        return;
+    }
+    let Some(parent) = entrypoint.parent() else {
+        return;
+    };
+    if let Err(error) = fs::create_dir_all(parent) {
+        println!("cargo:warning=failed to create Claude sidecar dist/: {error}");
+        return;
+    }
+    if let Err(error) = fs::write(
+        &entrypoint,
+        "// placeholder for cargo check; npm run build:claude-sidecar writes the real bundle\n",
+    ) {
+        println!("cargo:warning=failed to write Claude sidecar placeholder: {error}");
+    } else {
+        println!("cargo:warning=created Claude sidecar placeholder for clean-checkout cargo check");
+    }
 }
 
 #[cfg(target_os = "windows")]
