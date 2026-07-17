@@ -28,7 +28,10 @@ requireMatch(release, /group:\s*release-pipeline/, 'release runs must be seriali
 requireMatch(release, /^\s{2}publish-release-and-update-channel:\s*$/m, 'release.yml must publish the release and fixed updater channel');
 requireMatch(release, /publish-release-and-update-channel:\s*\r?\n\s{4}needs:\s*\r?\n\s{6}- validate-release-ref\s*\r?\n\s{6}- quality-gate\s*\r?\n\s{6}- build/m, 'release and updater publication must depend on every release gate');
 requireMatch(release, /gh release download "\$\{GITHUB_REF_NAME\}"/, 'updater channel must use the manifest from the current release');
+requireMatch(release, /releases\?per_page=100/, 'draft release lookup must use the authenticated release list');
+requireMatch(release, /select\(\.tag_name == \$tag and \.draft\)/, 'draft release lookup must match the current tag exactly');
 requireMatch(release, /-F draft=false/, 'the completed draft release must be published before the updater channel');
+requireMatch(release, /git\/ref\/heads\/update-channel/, 'the fixed channel branch must be initialized when absent');
 requireMatch(release, /-f branch=update-channel/, 'updater manifest must be published to the fixed channel branch');
 requireMatch(release, /raw\.githubusercontent\.com\/\$\{GITHUB_REPOSITORY\}\/update-channel\/latest\.json/, 'the public updater channel must be verified');
 requireMatch(

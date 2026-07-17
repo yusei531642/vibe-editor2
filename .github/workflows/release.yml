@@ -211,8 +211,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           release_id="$(gh api \
-            "repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}" \
-            --jq .id)"
+            "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            | jq --raw-output --arg tag "${GITHUB_REF_NAME}" \
+              '.[] | select(.tag_name == $tag and .draft) | .id')"
+          if [[ -z "${release_id}" || "${release_id}" == *$'\n'* ]]; then
+            echo "Expected exactly one draft release for ${GITHUB_REF_NAME}" >&2
+            exit 1
+          fi
           prerelease=false
           if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
             prerelease=true
@@ -229,15 +234,29 @@ jobs:
           MANIFEST_PATH: ${{ runner.temp }}/update-channel/latest.json
         run: |
           content="$(base64 -w0 "${MANIFEST_PATH}")"
+          if ! gh api \
+            "repos/${GITHUB_REPOSITORY}/git/ref/heads/update-channel" \
+            --silent 2>/dev/null; then
+            gh api --method POST \
+              "repos/${GITHUB_REPOSITORY}/git/refs" \
+              -f ref=refs/heads/update-channel \
+              -f sha="${GITHUB_SHA}" \
+              --silent
+          fi
           current_sha="$(gh api \
             "repos/${GITHUB_REPOSITORY}/contents/latest.json?ref=update-channel" \
-            --jq .sha)"
+            --jq .sha 2>/dev/null || true)"
+          request=(
+            -f message="chore(release): publish ${GITHUB_REF_NAME} updater channel"
+            -f content="${content}"
+            -f branch=update-channel
+          )
+          if [[ -n "${current_sha}" ]]; then
+            request+=(-f sha="${current_sha}")
+          fi
           gh api --method PUT \
             "repos/${GITHUB_REPOSITORY}/contents/latest.json" \
-            -f message="chore(release): publish ${GITHUB_REF_NAME} updater channel" \
-            -f content="${content}" \
-            -f sha="${current_sha}" \
-            -f branch=update-channel \
+            "${request[@]}" \
             --silent
 
       - name: Verify public updater channel
