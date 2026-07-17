@@ -1,4 +1,4 @@
-//! RuntimeEndpoint の blocking cleanup と配送error復元。
+//! RuntimeEndpoint の blocking cleanup と配送 error 復元。
 
 use crate::pty::session::TerminationReason;
 use crate::team_hub::inject::InjectError;

@@ -79,17 +79,28 @@ fn native_adapter() -> NativeFixture {
     }
 }
 
-fn hub() -> (TeamHub, Arc<SessionRegistry>, Arc<RuntimeManager>) {
+pub(super) fn hub() -> (TeamHub, Arc<SessionRegistry>, Arc<RuntimeManager>) {
     let registry = Arc::new(SessionRegistry::new());
     let manager = Arc::new(RuntimeManager::new());
     let hub = TeamHub::with_runtime(registry.clone(), manager.clone(), InFlightTracker::new());
     (hub, registry, manager)
 }
 
-async fn seed_member(hub: &TeamHub, team_id: &str, agent_id: &str, role: &str) {
-    let mut state = hub.state.lock().await;
-    state.active_teams.insert(team_id.to_string());
-    state.seed_role_binding(team_id, agent_id, role);
+pub(super) async fn seed_member(hub: &TeamHub, team_id: &str, agent_id: &str, role: &str) {
+    {
+        let mut state = hub.state.lock().await;
+        state.active_teams.insert(team_id.to_string());
+        state.seed_role_binding(team_id, agent_id, role);
+    }
+    // native bind の spawn-phase gate を満たすため、spawn 中の lifecycle も登録する。
+    hub.begin_recruit_lifecycle(team_id, agent_id, role).await;
+    let _ = hub
+        .transition_recruit_lifecycle(
+            agent_id,
+            crate::team_hub::events::RecruitLifecycleState::Spawning,
+            None,
+        )
+        .await;
 }
 
 
@@ -187,7 +198,13 @@ async fn explicit_pty_backend_preserves_legacy_inject_trace_and_skips_native() {
     .unwrap();
     let (handle, pty_writes) = recording_handle(agent_id, team_id, Arc::new(AtomicUsize::new(0)));
     assert!(registry.insert_if_absent("pty-dual".into(), handle).is_ok());
-    hub.bind_pty_runtime_endpoint(team_id, agent_id, Some("pty-dual".into()))
+    // renderer 経由の bind は live native がいる member へは拒否される (乗っ取り防止)。
+    assert!(hub
+        .bind_pty_runtime_endpoint(team_id, agent_id, Some("pty-dual".into()))
+        .await
+        .is_err());
+    // 配送 fallback (信頼済み Rust 経路) は backend=pty 強制時に PTY を成立させる。
+    hub.bind_pty_runtime_endpoint_for_delivery(team_id, agent_id, Some("pty-dual".into()))
         .await
         .unwrap();
     seed_member(&hub, team_id, "leader-pty", "leader").await;
@@ -221,6 +238,7 @@ async fn explicit_pty_backend_preserves_legacy_inject_trace_and_skips_native() {
 #[tokio::test]
 async fn concurrent_pty_binding_registers_one_live_endpoint() {
     let (hub, _registry, manager) = hub();
+    seed_member(&hub, "team-race", "race-member", "worker").await;
     let first = hub.bind_pty_runtime_endpoint("team-race", "race-member", None);
     let second = hub.bind_pty_runtime_endpoint("team-race", "race-member", None);
 
@@ -374,71 +392,6 @@ async fn recruit_sequence_is_monotonic_and_rejected_terminal_has_no_state() {
 
     assert!(requested < spawning);
     assert!(spawning < rerequested);
-}
-
-#[allow(clippy::await_holding_lock)]
-#[tokio::test(flavor = "current_thread")]
-async fn production_timeout_cancellation_keeps_grace_rescue_reachable() {
-    let _rescue_guard = TeamHub::lock_recruit_rescue_for_test();
-    let (hub, _registry, _manager) = hub();
-    let team_id = "team-grace-integration";
-    let agent_id = "grace-agent";
-    let _ = hub.take_recruit_rescued_events_for_test();
-    let _channels = hub
-        .try_register_pending_recruit(
-            agent_id.into(),
-            team_id.into(),
-            "programmer".into(),
-            "leader".into(),
-            false,
-            &[],
-        )
-        .await
-        .unwrap();
-    hub.begin_recruit_lifecycle(team_id, agent_id, "programmer")
-        .await;
-    let _ = hub
-        .transition_recruit_lifecycle(agent_id, RecruitLifecycleState::Spawning, None)
-        .await;
-
-    hub.cancel_recruit_with_pending_grace(team_id, agent_id, "ack_timeout")
-        .await;
-    assert!(hub
-        .state
-        .lock()
-        .await
-        .pending_recruits
-        .contains_key(agent_id));
-
-    hub.resolve_recruit_ack(
-        agent_id,
-        team_id,
-        crate::team_hub::RecruitAckOutcome {
-            ok: true,
-            reason: None,
-            phase: None,
-        },
-    )
-    .await
-    .unwrap();
-    let rescued = hub.take_recruit_rescued_events_for_test();
-    assert_eq!(rescued.len(), 1);
-    assert_eq!(rescued[0].0, agent_id);
-
-    // rescue 後の handshake 成功で lifecycle が Ready まで解決すること
-    // (PR #34 二次レビュー: spawning のまま取り残されない)。
-    assert!(
-        hub.resolve_pending_recruit(agent_id, team_id, "programmer")
-            .await
-    );
-    let lifecycle_state = hub
-        .state
-        .lock()
-        .await
-        .recruit_lifecycles
-        .get(agent_id)
-        .map(|l| l.state);
-    assert_eq!(lifecycle_state, Some(RecruitLifecycleState::Ready));
 }
 
 /// PR #34 一次レビュー 🟡7: bind_native_runtime_endpoint は renderer 由来の

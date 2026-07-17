@@ -37,6 +37,7 @@ function candidate(
 function snapshot(item: MergeCandidateSnapshot): WorktreeManagerSnapshot {
   return {
     teamId: 'team-1',
+    supported: true,
     assignments: [],
     candidates: [item],
     reviewRequired: true,

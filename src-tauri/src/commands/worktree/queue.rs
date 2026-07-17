@@ -14,6 +14,21 @@ impl WorktreeManager {
         project_root: &crate::commands::authz::ProjectRoot,
         team_id: &str,
     ) -> CommandResult<WorktreeManagerSnapshot> {
+        // 非 git / detached HEAD / git 不在では毎 poll をエラーにせず「未対応」snapshot を返す
+        // (PR #37 レビュー: terminal 側 fallback と同じ環境判定)。
+        match super::git_ops::supports_worktree_project(project_root.as_path()).await {
+            Ok(true) => {}
+            Ok(false) | Err(_) => {
+                return Ok(WorktreeManagerSnapshot {
+                    team_id: team_id.to_string(),
+                    supported: false,
+                    assignments: Vec::new(),
+                    candidates: Vec::new(),
+                    review_required: true,
+                    integration_in_progress: false,
+                });
+            }
+        }
         self.prepare_project(project_root).await?;
         let project_key = Self::project_key(project_root.as_path());
         let (assignments, mut candidates) = {
@@ -37,28 +52,52 @@ impl WorktreeManager {
             (assignments, candidates)
         };
         let mut views = Vec::with_capacity(assignments.len());
+        // cache 切れの詳細取得 (git 2 プロセス/件) は直列だと N 件で N×~100ms 掛かるため
+        // 並行実行する (PR #37 レビュー)。git 呼び出しは self 非依存なので tokio::spawn で束ねる。
+        let mut detail_by_key = std::collections::HashMap::<_, CachedAssignmentDetails>::new();
+        let mut pending_fetches = Vec::new();
+        {
+            let cache = self.detail_cache.lock().await;
+            for record in &assignments {
+                if let Some(details) = cache
+                    .get(&record.key)
+                    .filter(|item| item.captured_at.elapsed() < DETAIL_CACHE_TTL)
+                {
+                    detail_by_key.insert(record.key.clone(), details.clone());
+                } else {
+                    let key = record.key.clone();
+                    let path = record.path.clone();
+                    pending_fetches.push(tokio::spawn(async move {
+                        let details = CachedAssignmentDetails {
+                            captured_at: Instant::now(),
+                            clean: super::git_ops::is_clean(&path).await.unwrap_or(false),
+                            head_commit: super::git_ops::rev_parse(&path, "HEAD")
+                                .await
+                                .unwrap_or_default(),
+                        };
+                        (key, details)
+                    }));
+                }
+            }
+        }
+        if !pending_fetches.is_empty() {
+            let mut cache = self.detail_cache.lock().await;
+            for handle in pending_fetches {
+                if let Ok((key, details)) = handle.await {
+                    cache.insert(key.clone(), details.clone());
+                    detail_by_key.insert(key, details);
+                }
+            }
+        }
         for record in assignments {
-            let cached = self.detail_cache.lock().await.get(&record.key).cloned();
-            let details = if let Some(details) =
-                cached.filter(|item| item.captured_at.elapsed() < DETAIL_CACHE_TTL)
-            {
-                details
-            } else {
-                let details = CachedAssignmentDetails {
+            let details = detail_by_key
+                .get(&record.key)
+                .cloned()
+                .unwrap_or_else(|| CachedAssignmentDetails {
                     captured_at: Instant::now(),
-                    clean: super::git_ops::is_clean(&record.path)
-                        .await
-                        .unwrap_or(false),
-                    head_commit: super::git_ops::rev_parse(&record.path, "HEAD")
-                        .await
-                        .unwrap_or_default(),
-                };
-                self.detail_cache
-                    .lock()
-                    .await
-                    .insert(record.key.clone(), details.clone());
-                details
-            };
+                    clean: false,
+                    head_commit: String::new(),
+                });
             let cleanup_eligible = details.clean
                 && record.integrated_candidate_id.as_ref().is_some_and(|id| {
                     candidates.iter().any(|candidate| {
@@ -82,6 +121,7 @@ impl WorktreeManager {
         candidates.sort_by_key(|candidate| candidate.queue_position);
         Ok(WorktreeManagerSnapshot {
             team_id: team_id.to_string(),
+            supported: true,
             assignments: views,
             candidates,
             review_required: true,
@@ -155,10 +195,16 @@ impl WorktreeManager {
         state.candidates[index].status = MergeCandidateStatus::Integrating;
         let candidate = state.candidates[index].clone();
         let key = Self::key(project_root, &candidate.team_id, &candidate.agent_id);
-        let assignment = state.assignments.get(&key).cloned().ok_or_else(|| {
+        let Some(assignment) = state.assignments.get(&key).cloned() else {
             state.candidates[index].status = MergeCandidateStatus::Failed;
-            CommandError::not_found("candidate worktree assignment was not found")
-        })?;
+            drop(state);
+            // Failed への遷移を永続化してから返す (PR #37 レビュー: closure 内の
+            // 副作用だけでは persist されず、再起動で Integrating 前の状態に戻る)。
+            let _ = self.persist().await;
+            return Err(CommandError::not_found(
+                "candidate worktree assignment was not found",
+            ));
+        };
         Ok((candidate, assignment))
     }
 

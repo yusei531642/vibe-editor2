@@ -312,8 +312,18 @@ impl WorktreeManager {
             crate::commands::project_authority::ProjectRootIdentity,
         )>,
     > {
-        if !super::git_ops::supports_worktree_project(project_root.as_path()).await? {
-            return Ok(None);
+        // git 実行不能 (未インストール / PATH 不在 等) は「worktree 未対応環境」として
+        // 従来 cwd へ fallback する (PR #37 レビュー: 環境系エラーで terminal_create を
+        // 落とさない)。割当系のエラー (占有・path 検証) は従来どおり伝播する。
+        match super::git_ops::supports_worktree_project(project_root.as_path()).await {
+            Ok(true) => {}
+            Ok(false) => return Ok(None),
+            Err(error) => {
+                tracing::warn!(
+                    "[worktree] git availability check failed ({error:?}); using plain cwd"
+                );
+                return Ok(None);
+            }
         }
         self.ensure_assigned(project_root, team_id, agent_id)
             .await?;

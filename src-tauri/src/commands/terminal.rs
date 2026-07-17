@@ -26,7 +26,7 @@ fn resolve_command(command: Option<String>, args: Option<Vec<String>>) -> (Strin
 
 /// Issue #27 isolates write-enabled team workers. Coordinating leader/planner terminals must stay
 /// on the base project so they can inspect and integrate the whole team without owning a branch.
-fn uses_managed_worker_worktree(role: Option<&str>) -> bool {
+pub(super) fn uses_managed_worker_worktree(role: Option<&str>) -> bool {
     role.is_some_and(|role| {
         !matches!(
             role.trim().to_ascii_lowercase().as_str(),
@@ -164,16 +164,26 @@ pub async fn terminal_create(
     let runtime_team_agent = opts.team_id.clone().zip(opts.agent_id.clone());
     match (&opts.team_id, &opts.agent_id) {
         (Some(team_id), Some(agent_id)) => {
-            state
+            // 失敗は既存契約どおり Ok(ok:false) で返す。
+            if let Err(error) = state
                 .team_hub
                 .authorize_team_agent_binding(team_id, agent_id)
-                .await?;
+                .await
+            {
+                return Ok(TerminalCreateResult {
+                    ok: false,
+                    error: Some(format!("team binding authorization failed: {error}")),
+                    ..Default::default()
+                });
+            }
         }
         (None, None) => {}
         _ => {
-            return Err(crate::commands::error::CommandError::validation(
-                "team_id and agent_id must be supplied together",
-            ));
+            return Ok(TerminalCreateResult {
+                ok: false,
+                error: Some("team_id and agent_id must be provided together".to_string()),
+                ..Default::default()
+            });
         }
     }
 
@@ -284,32 +294,21 @@ pub async fn terminal_create(
         crate::pty::session::resolve_valid_cwd(&opts.cwd, opts.fallback_cwd.as_deref());
     let mut managed_cwd_identity = None;
     if let Some((team_id, agent_id)) = &runtime_team_agent {
-        if uses_managed_worker_worktree(opts.role.as_deref()) {
-            let active_root =
-                crate::state::current_project_root(&state.project_root).ok_or_else(|| {
-                    crate::commands::error::CommandError::authz("no active project root")
-                })?;
-            let project_root = crate::commands::authz::assert_active_project_root(
-                &state.project_root,
-                &state.project_root_identity,
-                &active_root,
-            )
-            .await?;
-            if let Some((managed_cwd, identity)) = state
-                .worktree_manager
-                .optional_spawn_target(&project_root, team_id, agent_id)
-                .await?
-            {
+        match super::terminal_worktree::resolve_worker_worktree(
+            &state,
+            opts.role.as_deref(),
+            team_id,
+            agent_id,
+        )
+        .await
+        {
+            super::terminal_worktree::WorktreeResolution::Managed(managed_cwd, identity) => {
                 cwd = managed_cwd;
                 warning = None;
                 managed_cwd_identity = Some(identity);
-            } else {
-                tracing::warn!(
-                    team_id,
-                    agent_id,
-                    "[terminal] project is not a git repository or is on detached HEAD; using plain cwd"
-                );
             }
+            super::terminal_worktree::WorktreeResolution::PlainCwd => {}
+            super::terminal_worktree::WorktreeResolution::Fail(result) => return Ok(result),
         }
     }
     if is_codex_command {
@@ -465,8 +464,18 @@ pub async fn terminal_create(
     // Issue #1200: resume が返した cwd と spawn の check-to-use gap を塞ぐ。cwd が
     // active / workspace root と同一 directory を指す場合のみ、TTL キャッシュを使わず
     // platform identity を再照合し、置換されていれば起動しない (fail-closed)。
-    let spawn_cwd_identity = if managed_cwd_identity.is_some() {
-        managed_cwd_identity
+    let spawn_cwd_identity = if let Some(identity) = managed_cwd_identity {
+        // Issue #1200 と同じく managed worktree も例外にせず spawn 直前に identity を
+        // 再照合する。canonicalize 後にディレクトリが symlink 等へ差し替えられていたら
+        // fail-closed で起動しない (PR #37 レビュー: TOCTOU 対称性)。
+        if let Err(error) = crate::commands::project_identity::verify_identity(&identity).await {
+            return Ok(TerminalCreateResult {
+                ok: false,
+                error: Some(format!("managed worktree identity changed: {error}")),
+                ..Default::default()
+            });
+        }
+        Some(identity)
     } else {
         match crate::commands::authz::assert_spawn_cwd_identity(
             &state.project_root,
