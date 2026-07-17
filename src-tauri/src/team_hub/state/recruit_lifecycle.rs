@@ -169,6 +169,18 @@ impl TeamHub {
         }
     }
 
+    /// pending grant を即破棄してから Failed を確定する。terminal cleanup 中の遅着
+    /// handshake が member を復活させないよう、`cancel_recruit_immediately` と同じ順序を
+    /// 全 failure 経路で共有する (PR #34 レビュー)。
+    pub async fn fail_recruit_immediately(
+        &self,
+        agent_id: &str,
+        reason: impl Into<String>,
+    ) -> bool {
+        self.discard_pending_recruit(agent_id).await;
+        self.fail_recruit(agent_id, reason).await
+    }
+
     pub async fn fail_recruit(&self, agent_id: &str, reason: impl Into<String>) -> bool {
         self.finish_recruit_terminal(agent_id, RecruitLifecycleState::Failed, reason.into())
             .await
