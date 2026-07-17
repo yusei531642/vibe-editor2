@@ -9,5 +9,6 @@
 
 mod legacy_codex_delivery;
 mod permissions;
+mod recruit_grace_paths;
 mod runtime_delivery;
 mod runtime_delivery_errors;
