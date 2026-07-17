@@ -214,6 +214,38 @@ pub(super) async fn remove_worktree(cwd: &Path, path: &Path) -> CommandResult<()
     .map(|_| ())
 }
 
+pub(super) async fn prune_worktrees(cwd: &Path) -> CommandResult<()> {
+    require(
+        run(cwd, ["worktree", "prune"]).await?,
+        "worktree_prune_failed",
+        "git could not prune missing worktree registrations",
+    )
+    .map(|_| ())
+}
+
+pub(super) async fn add_existing_worktree(
+    cwd: &Path,
+    path: &Path,
+    branch: &str,
+) -> CommandResult<()> {
+    let output = run(
+        cwd,
+        [
+            OsStr::new("worktree"),
+            OsStr::new("add"),
+            path.as_os_str(),
+            OsStr::new(branch),
+        ],
+    )
+    .await?;
+    require(
+        output,
+        "worktree_restore_failed",
+        "git could not restore the missing managed worktree",
+    )
+    .map(|_| ())
+}
+
 pub(super) async fn delete_branch(cwd: &Path, branch: &str) -> CommandResult<()> {
     let output = run(cwd, ["branch", "-D", branch]).await?;
     require(
