@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { RuntimeProvider } from '../../../../../../types/agent-runtime';
+import { useV2RuntimeCatalog } from '../../../../lib/hooks/use-v2-runtime-catalog';
 import { useT } from '../../../../lib/i18n';
 import { useRuntimeStore } from '../../../../stores/runtime';
 import type { TerminalRuntimeStatus } from '../../../../lib/terminal-status';
@@ -16,18 +17,28 @@ export function NativeRuntimeConnector({
   payload,
   systemPrompt,
   initialMessage,
-  onStatus
+  onStatus,
+  setCardPayload
 }: {
   cardId: string;
   payload: AgentPayload;
   systemPrompt?: string;
   initialMessage?: string;
   onStatus: (status: TerminalRuntimeStatus | null) => void;
+  setCardPayload?: (patch: Partial<AgentPayload>) => void;
 }): JSX.Element | null {
   const t = useT();
   const [failure, setFailure] = useState<string | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
   const provider = payload.runtimeProvider;
+  const engine = provider === 'codex-native' ? 'codex' : 'claude';
+  const catalog = useV2RuntimeCatalog(engine, isNativeRuntimeProvider(provider));
+  const resolvedModel = payload.runtimeModel ?? catalog.models[0]?.id ?? null;
+  const resolvedModelOption = catalog.models.find((option) => option.id === resolvedModel);
+  const resolvedEffort = payload.runtimeEffort
+    ?? resolvedModelOption?.defaultEffort
+    ?? resolvedModelOption?.supportedEfforts[0]
+    ?? null;
   const endpointId = useMemo(
     () => (payload.agentId ? `native-${payload.agentId}` : null),
     [payload.agentId]
@@ -41,20 +52,29 @@ export function NativeRuntimeConnector({
   const onStatusRef = useRef(onStatus);
   onStatusRef.current = onStatus;
   const runtimeOptionsRef = useRef({
-    model: payload.runtimeModel ?? null,
-    effort: payload.runtimeEffort ?? null,
+    model: resolvedModel,
+    effort: resolvedEffort,
     permission: payload.runtimePermission ?? 'workspace'
   });
   runtimeOptionsRef.current = {
-    model: payload.runtimeModel ?? null,
-    effort: payload.runtimeEffort ?? null,
+    model: resolvedModel,
+    effort: resolvedEffort,
     permission: payload.runtimePermission ?? 'workspace'
   };
   const bootstrappedIdentityRef = useRef<string | null>(null);
 
   useEffect(() => {
+    if (!resolvedModel) return;
+    const patch: Partial<AgentPayload> = {};
+    if (!payload.runtimeModel) patch.runtimeModel = resolvedModel;
+    if (!payload.runtimeEffort && resolvedEffort) patch.runtimeEffort = resolvedEffort;
+    if (Object.keys(patch).length > 0) setCardPayload?.(patch);
+  }, [payload.runtimeEffort, payload.runtimeModel, resolvedEffort, resolvedModel, setCardPayload]);
+
+  useEffect(() => {
     if (!endpointId || !payload.agentId || !payload.teamId) return;
     if (!isNativeRuntimeProvider(provider)) return;
+    if (!payload.runtimeModel && catalog.loading) return;
     let disposed = false;
     let registered = false;
     let unsubscribe: (() => void) | null = null;
@@ -127,6 +147,7 @@ export function NativeRuntimeConnector({
     };
   }, [
     cardId,
+    catalog.loading,
     endpointId,
     payload.agentId,
     payload.teamId,
