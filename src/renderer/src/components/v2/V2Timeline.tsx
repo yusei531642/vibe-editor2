@@ -61,6 +61,8 @@ export function V2Timeline({
           <aside className="v2-approval-request" role="alert">
             <strong>{t('v2.approval.title')}</strong>
             <p>{pendingApproval.reason || pendingApproval.method}</p>
+            <code>{pendingApproval.command || pendingApproval.method}</code>
+            {pendingApproval.cwd ? <small>{pendingApproval.cwd}</small> : null}
             <div>
               <button type="button" onClick={() => onApproval('accept')}>
                 {t('v2.approval.accept')}

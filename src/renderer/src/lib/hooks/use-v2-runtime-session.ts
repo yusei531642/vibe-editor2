@@ -11,6 +11,8 @@ export interface V2PendingApproval {
   requestId: string;
   method: string;
   reason: string | null;
+  command: string | null;
+  cwd: string | null;
 }
 
 interface RuntimeCallbacks {
@@ -62,7 +64,9 @@ export function useV2RuntimeSession(callbacks: RuntimeCallbacks): {
           endpointId: event.endpointId,
           requestId: event.payload.requestId,
           method: event.payload.method,
-          reason: event.payload.reason
+          reason: event.payload.reason,
+          command: event.payload.command,
+          cwd: event.payload.cwd
         });
         break;
       case 'turnComplete':
