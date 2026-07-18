@@ -22,6 +22,7 @@ interface RuntimeCallbacks {
 interface EndpointBinding {
   endpointId: string;
   engine: RuntimeEngine;
+  permission: RuntimePermission;
   unsubscribe: () => void;
 }
 
@@ -103,11 +104,14 @@ export function useV2RuntimeSession(callbacks: RuntimeCallbacks): {
     effort: string,
     permission: RuntimePermission
   ): Promise<EndpointBinding> => {
-    if (bindingRef.current?.engine === engine) return bindingRef.current;
+    if (
+      bindingRef.current?.engine === engine
+      && bindingRef.current.permission === permission
+    ) return bindingRef.current;
     await disposeBinding();
     const endpointId = `v2-${engine}-${crypto.randomUUID()}`;
     const unsubscribe = await window.api.agentRuntime.onEventReady(endpointId, handleEvent);
-    const binding = { endpointId, engine, unsubscribe };
+    const binding = { endpointId, engine, permission, unsubscribe };
     bindingRef.current = binding;
     try {
       if (engine === 'claude') {

@@ -53,7 +53,7 @@ describe('NativeRuntimeConnector', () => {
     window.api = originalApi;
   });
 
-  it('model・effort・permission の変更では endpoint と初期指示を再起動しない', async () => {
+  it('model・effort の変更では endpoint と初期指示を再起動しない', async () => {
     const onStatus = vi.fn();
     const view = render(
       <NativeRuntimeConnector
@@ -72,7 +72,7 @@ describe('NativeRuntimeConnector', () => {
         payload={payload({
           runtimeModel: 'claude-opus-4-6',
           runtimeEffort: 'max',
-          runtimePermission: 'full'
+          runtimePermission: 'workspace'
         })}
         initialMessage="最初の指示"
         onStatus={onStatus}
@@ -83,6 +83,32 @@ describe('NativeRuntimeConnector', () => {
     expect(runtime.reconnectClaude).toHaveBeenCalledTimes(1);
     expect(runtime.spawnTurn).toHaveBeenCalledTimes(1);
     expect(runtime.dispose).not.toHaveBeenCalled();
+  });
+
+  it('permission 変更時は endpoint だけ再登録して初期指示を再送しない', async () => {
+    const onStatus = vi.fn();
+    const view = render(
+      <NativeRuntimeConnector
+        cardId="card-1"
+        payload={payload()}
+        initialMessage="最初の指示"
+        onStatus={onStatus}
+      />
+    );
+    await waitFor(() => expect(runtime.spawnTurn).toHaveBeenCalledTimes(1));
+
+    view.rerender(
+      <NativeRuntimeConnector
+        cardId="card-1"
+        payload={payload({ runtimePermission: 'full' })}
+        initialMessage="最初の指示"
+        onStatus={onStatus}
+      />
+    );
+
+    await waitFor(() => expect(runtime.reconnectClaude).toHaveBeenCalledTimes(2));
+    expect(runtime.reconnectClaude).toHaveBeenLastCalledWith(expect.objectContaining({ permission: 'full' }));
+    expect(runtime.spawnTurn).toHaveBeenCalledTimes(1);
   });
 
   it('native 登録失敗後も GUI から再接続できる', async () => {

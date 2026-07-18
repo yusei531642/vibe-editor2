@@ -118,9 +118,11 @@ export function NativeRuntimeConnector({
         await window.api.agentRuntime.dispose(endpointId);
         return;
       }
-      const bootstrap = (bootstrappedIdentityRef.current === runtimeIdentity
-        ? ''
-        : initialMessageRef.current?.trim()) ||
+      if (bootstrappedIdentityRef.current === runtimeIdentity) {
+        onStatusRef.current({ kind: 'running', command: provider });
+        return;
+      }
+      const bootstrap = initialMessageRef.current?.trim() ||
         (provider === 'codex-native' ? systemPromptRef.current?.trim() : '') ||
         'Start your assigned team role and read pending TeamHub messages.';
       await window.api.agentRuntime.spawnTurn({
@@ -150,6 +152,7 @@ export function NativeRuntimeConnector({
     cardId,
     endpointId,
     payload.agentId,
+    payload.runtimePermission,
     payload.teamId,
     provider,
     retryNonce,
