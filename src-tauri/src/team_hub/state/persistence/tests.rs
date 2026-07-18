@@ -99,7 +99,10 @@ mod register_team_binding_seed_tests {
 
         {
             let state = hub.state.lock().await;
-            let team = state.teams.get(team_id).expect("owner team remains registered");
+            let team = state
+                .teams
+                .get(team_id)
+                .expect("owner team remains registered");
             assert_eq!(team.project_root.as_deref(), Some(owner_root.as_str()));
             assert_eq!(team.name, "Owner");
             assert!(team.active_leader_agent_id.is_none());

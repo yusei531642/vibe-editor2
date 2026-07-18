@@ -127,13 +127,10 @@ async fn recruit_sequence_is_monotonic_and_rejected_terminal_has_no_state() {
         .await
         .unwrap()
         .sequence;
-    assert!(hub
-        .transition_recruit_lifecycle(
-            "sequence-agent",
-            RecruitLifecycleState::Spawning,
-            None,
-        )
-        .await);
+    assert!(
+        hub.transition_recruit_lifecycle("sequence-agent", RecruitLifecycleState::Spawning, None,)
+            .await
+    );
     let spawning = hub
         .recruit_lifecycle_for_test("sequence-agent")
         .await
@@ -237,4 +234,48 @@ async fn bind_native_endpoint_rejects_unauthorized_team_or_agent() {
         .await
         .unwrap_err();
     assert!(err.contains("already has a live native endpoint"), "{err}");
+}
+
+#[tokio::test]
+async fn initial_canvas_member_consumes_one_time_native_admission() {
+    let (hub, _registry, manager) = hub();
+    let team_id = "team-native-initial";
+    let agent_id = "leader-0-team-native-initial";
+    hub.register_team(
+        team_id,
+        "Native GUI Team",
+        None,
+        &[(agent_id.to_string(), "leader".to_string())],
+    )
+    .await
+    .unwrap();
+    let native = native_adapter();
+    assert!(manager
+        .register_endpoint("initial-native-endpoint".into(), native.adapter)
+        .result
+        .is_ok());
+
+    hub.bind_native_runtime_endpoint(team_id, agent_id, "initial-native-endpoint".into(), None)
+        .await
+        .expect("initial Canvas member should bind without a PTY or recruit lifecycle");
+    assert!(!hub
+        .state
+        .lock()
+        .await
+        .initial_native_admissions
+        .contains(&(team_id.to_string(), agent_id.to_string())));
+    hub.register_team(
+        team_id,
+        "Native GUI Team",
+        None,
+        &[(agent_id.to_string(), "leader".to_string())],
+    )
+    .await
+    .unwrap();
+    assert!(!hub
+        .state
+        .lock()
+        .await
+        .initial_native_admissions
+        .contains(&(team_id.to_string(), agent_id.to_string())));
 }

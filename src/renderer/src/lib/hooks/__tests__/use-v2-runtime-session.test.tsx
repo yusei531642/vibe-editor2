@@ -1,0 +1,89 @@
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { RuntimeEventEnvelope } from '../../../../../types/agent-runtime';
+import { useV2RuntimeSession } from '../use-v2-runtime-session';
+
+const ENDPOINT_ID = 'v2-claude-00000000-0000-4000-8000-000000000000';
+
+function envelope(payload: RuntimeEventEnvelope['payload'], sequence: number): RuntimeEventEnvelope {
+  return {
+    endpointId: ENDPOINT_ID,
+    epoch: 1,
+    sequence,
+    kind: payload.type,
+    payload,
+    timestamp: '2026-07-18T00:00:00Z'
+  };
+}
+
+describe('useV2RuntimeSession', () => {
+  let onEvent: ((event: RuntimeEventEnvelope) => void) | null;
+  const registerClaudeEndpoint = vi.fn(async () => ({ endpointId: ENDPOINT_ID }));
+  const spawnTurn = vi.fn(async () => ({ endpointId: ENDPOINT_ID }));
+  const dispose = vi.fn(async () => ({ endpointId: ENDPOINT_ID }));
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    onEvent = null;
+    vi.spyOn(crypto, 'randomUUID').mockReturnValue('00000000-0000-4000-8000-000000000000');
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        agentRuntime: {
+          onEventReady: vi.fn(async (_endpointId, callback) => {
+            onEvent = callback;
+            return vi.fn();
+          }),
+          registerClaudeEndpoint,
+          registerCodexEndpoint: vi.fn(),
+          spawnTurn,
+          interrupt: vi.fn(async () => ({ endpointId: ENDPOINT_ID })),
+          respondApproval: vi.fn(),
+          dispose
+        }
+      }
+    });
+  });
+
+  it('選択した model/effort/permission で実 endpoint を起動し stream 完了を投影する', async () => {
+    const onDelta = vi.fn();
+    const onComplete = vi.fn();
+    const onError = vi.fn();
+    const { result, unmount } = renderHook(() => useV2RuntimeSession({
+      onDelta,
+      onComplete,
+      onError
+    }));
+
+    await act(async () => {
+      await result.current.send({
+        input: '実装して',
+        engine: 'claude',
+        model: 'fable',
+        effort: 'max',
+        permission: 'full'
+      });
+    });
+
+    expect(registerClaudeEndpoint).toHaveBeenCalledWith(expect.objectContaining({
+      model: 'fable', effort: 'max', permission: 'full'
+    }));
+    expect(spawnTurn).toHaveBeenCalledWith(expect.objectContaining({
+      input: '実装して', model: 'fable', effort: 'max', permission: 'full'
+    }));
+    expect(result.current.running).toBe(true);
+
+    act(() => {
+      onEvent?.(envelope({ type: 'messageDelta', delta: '途中' }, 1));
+      onEvent?.(envelope({ type: 'messageComplete', message: '完了' }, 2));
+      onEvent?.(envelope({ type: 'turnComplete', interrupted: false }, 3));
+    });
+    expect(onDelta).toHaveBeenCalledWith('途中', 'claude');
+    expect(onComplete).toHaveBeenCalledWith('完了', 'claude');
+    await waitFor(() => expect(result.current.running).toBe(false));
+    expect(onError).not.toHaveBeenCalled();
+
+    unmount();
+    await waitFor(() => expect(dispose).toHaveBeenCalled());
+  });
+});

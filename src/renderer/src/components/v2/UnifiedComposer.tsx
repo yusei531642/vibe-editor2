@@ -10,6 +10,7 @@ import {
   Square,
 } from "lucide-react";
 import { useT } from "../../lib/i18n";
+import type { RuntimeModelOption } from "../../../../types/agent-runtime";
 
 export type V2Engine = "claude" | "codex";
 export type V2Permission = "workspace" | "full";
@@ -18,11 +19,16 @@ interface UnifiedComposerProps {
   branch: string;
   engine: V2Engine;
   model: string;
+  models: RuntimeModelOption[];
+  effort: string;
+  efforts: string[];
   permission: V2Permission;
   projectName: string;
   prompt: string;
   running: boolean;
   onEngineChange: (engine: V2Engine) => void;
+  onModelChange: (model: string) => void;
+  onEffortChange: (effort: string) => void;
   onPermissionChange: (permission: V2Permission) => void;
   onProjectClick: () => void;
   onPromptChange: (prompt: string) => void;
@@ -34,11 +40,16 @@ export function UnifiedComposer({
   branch,
   engine,
   model,
+  models,
+  effort,
+  efforts,
   permission,
   projectName,
   prompt,
   running,
   onEngineChange,
+  onModelChange,
+  onEffortChange,
   onPermissionChange,
   onProjectClick,
   onPromptChange,
@@ -120,6 +131,7 @@ export function UnifiedComposer({
             <ShieldCheck size={18} strokeWidth={1.75} />
             <select
               value={permission}
+              disabled={running}
               onChange={(event) =>
                 onPermissionChange(event.target.value as V2Permission)
               }
@@ -135,6 +147,7 @@ export function UnifiedComposer({
           <label className="v2-engine-control">
             <select
               value={engine}
+              disabled={running}
               onChange={(event) =>
                 onEngineChange(event.target.value as V2Engine)
               }
@@ -143,7 +156,36 @@ export function UnifiedComposer({
               <option value="claude">Claude</option>
               <option value="codex">Codex</option>
             </select>
-            <span>{model}</span>
+          </label>
+          <label className="v2-model-control">
+            <span className="sr-only">{t("v2.composer.model")}</span>
+            <select
+              value={model}
+              disabled={running || models.length === 0}
+              onChange={(event) => onModelChange(event.target.value)}
+              aria-label={t("v2.composer.model")}
+            >
+              {models.length === 0 ? (
+                <option value="">{t("v2.composer.modelLoading")}</option>
+              ) : models.map((option) => (
+                <option key={option.id} value={option.id} title={option.description}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="v2-effort-control">
+            <span className="sr-only">{t("v2.composer.effort")}</span>
+            <select
+              value={effort}
+              disabled={running || efforts.length === 0}
+              onChange={(event) => onEffortChange(event.target.value)}
+              aria-label={t("v2.composer.effort")}
+            >
+              {efforts.map((value) => (
+                <option key={value} value={value}>{value}</option>
+              ))}
+            </select>
           </label>
           <button
             type="button"

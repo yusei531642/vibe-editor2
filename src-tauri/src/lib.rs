@@ -181,7 +181,7 @@ pub fn run() {
             // ---- root ----
             commands::ping,
             // ---- agent runtime (Issue #21 / #22) ----
-            commands::agent_runtime::agent_runtime_diagnostics,
+            commands::agent_runtime::agent_runtime_diagnostics, commands::agent_runtime::agent_runtime_model_catalog,
             commands::agent_runtime::agent_runtime_register_pty_endpoint,
             commands::agent_runtime::agent_runtime_register_codex_endpoint, commands::agent_runtime::agent_runtime_reconnect_codex,
             commands::agent_runtime::agent_runtime_register_claude_endpoint, commands::agent_runtime::agent_runtime_reconnect_claude,

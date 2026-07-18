@@ -259,7 +259,7 @@ impl Default for Settings {
             terminal_font_size: default_terminal_font_size(),
             density: default_density(),
             agent_runtime_backend: default_agent_runtime_backend(),
-            team_scene_v2: false,
+            team_scene_v2: true,
             status_mascot_variant: Some("vibe".to_string()),
             status_mascot_custom_path: None,
             claude_command: default_claude_command(),
@@ -428,7 +428,10 @@ pub async fn settings_load() -> CommandResult<Settings> {
             }
         };
     // Issue #1068: team_hub は永続 Settings を直接読まないため、起動時 load でミラーを同期する。
-    sync_settings(&settings.codex_team_send_delivery, &settings.agent_runtime_backend);
+    sync_settings(
+        &settings.codex_team_send_delivery,
+        &settings.agent_runtime_backend,
+    );
     Ok(settings)
 }
 
@@ -552,7 +555,10 @@ pub async fn settings_save(_app: tauri::AppHandle, settings: Settings) -> Comman
         .await
         .map_err(|e| CommandError::Internal(e.to_string()))?;
     // Issue #1068: 設定変更を team_hub の配送方式ミラーへ即時反映する (settings.json が SSOT)。
-    sync_settings(&settings.codex_team_send_delivery, &settings.agent_runtime_backend);
+    sync_settings(
+        &settings.codex_team_send_delivery,
+        &settings.agent_runtime_backend,
+    );
     // Issue #1193: rendererが更新できるsettingsのpathをglobal asset:// scopeへ追加しては
     // ならない。custom mascotのnative選択・data URL読み出しはproject authority側の専用経路で
     // 扱うため、settings_saveは表示用pathを保存するだけに留める。
@@ -574,7 +580,7 @@ mod tests {
         assert_eq!(v["theme"], json!("claude-light"));
         assert_eq!(v["density"], json!("normal"));
         assert_eq!(v["agentRuntimeBackend"], json!("pty"));
-        assert_eq!(v["teamSceneV2"], json!(false));
+        assert_eq!(v["teamSceneV2"], json!(true));
         assert_eq!(v["uiFontSize"], json!(14.0));
         assert_eq!(v["editorFontSize"], json!(13.0));
         assert_eq!(v["terminalFontSize"], json!(13.0));

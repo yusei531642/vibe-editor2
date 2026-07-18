@@ -422,8 +422,6 @@ export const jaShell: Dict = {
     '過去の会話履歴が見つからず {count} 件のタブを新規会話で再起動しました',
   'terminalTabs.saveFailed':
     'ターミナルタブの保存に失敗しました: {error}',
-
-
   // ---------- Status ----------
   'status.noProject': 'プロジェクトが選択されていません',
 
@@ -453,6 +451,8 @@ export const jaShell: Dict = {
   'v2.permission.workspace': 'ワークスペース',
   'v2.permission.full': 'フルアクセス',
   'v2.composer.engine': 'エンジン',
+  'v2.composer.model': 'モデル', 'v2.composer.modelLoading': 'モデル読込中',
+  'v2.composer.effort': '思考の深さ',
   'v2.composer.voice': '音声で入力',
   'v2.composer.stop': '実行を停止',
   'v2.composer.send': '送信',
@@ -467,8 +467,6 @@ export const jaShell: Dict = {
   'v2.quick.fix.label': '問題やエラーを修正',
   'v2.quick.fix.prompt': '次の問題を再現し、根本原因を特定して修正してください：',
   'v2.project.select': 'プロジェクトを選択',
-  'v2.runtime.fakeReady':
-    '{engine} Runtimeを接続する準備ができました。非PTYアダプターは次の実装WaveでこのTimelineへ接続されます。',
   'v2.shell.views': 'ワークスペース表示',
   'v2.shell.navigation': 'タスクナビゲーション',
   'v2.shell.back': '前の画面へ戻る',
@@ -479,10 +477,13 @@ export const jaShell: Dict = {
   'v2.runtime.setupTitle': 'Claude Codeをセットアップ',
   'v2.runtime.missing': 'Claude CLIが見つかりません。',
   'v2.runtime.redetect': '再検出',
+  'v2.runtime.projectRequired': '先にプロジェクトを選択してください。',
   'v2.home.question': ' で何を作りましょうか？',
   'v2.timeline.you': 'あなた',
   'v2.timeline.running': '実行中',
   'v2.timeline.exploring': '探索中',
+  'v2.approval.title': 'ツール実行の承認が必要です', 'v2.approval.accept': '許可',
+  'v2.approval.decline': '拒否',
   'v2.drawer.workspace': 'ワークスペース',
   'v2.drawer.projects': 'プロジェクト',
   'v2.drawer.sessions': 'セッション',

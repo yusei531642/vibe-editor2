@@ -64,7 +64,7 @@ describe('TerminalOverlay visibility gate', () => {
     originalApi = window.api;
     installApi();
     terminalViewProps.length = 0;
-    useUiStore.setState({ viewMode: 'ide' });
+    useUiStore.setState({ viewMode: 'ide', workspaceScene: 'focus' });
   });
 
   afterEach(() => {
@@ -96,4 +96,5 @@ describe('TerminalOverlay visibility gate', () => {
     );
     expect(terminalViewProps.at(-1)?.visible).toBe(true);
   });
+
 });

@@ -7,6 +7,22 @@
 
 export type AgentRuntimeBackend = 'auto' | 'native' | 'pty';
 export type RuntimeProvider = 'codex-native' | 'claude-native' | 'pty' | 'api';
+export type RuntimeEngine = 'claude' | 'codex';
+export type RuntimePermission = 'workspace' | 'full';
+
+export interface RuntimeModelOption {
+  id: string;
+  label: string;
+  description: string;
+  isDefault: boolean;
+  defaultEffort: string;
+  supportedEfforts: string[];
+}
+
+export interface RuntimeModelCatalog {
+  engine: RuntimeEngine;
+  models: RuntimeModelOption[];
+}
 
 export type AgentRuntimeCapability =
   | 'ptyExecution'
@@ -53,6 +69,9 @@ export interface RuntimeTurnRequest {
   endpointId: string;
   input: string;
   submit: boolean;
+  model?: string | null;
+  effort?: string | null;
+  permission?: RuntimePermission | null;
 }
 
 export type CodexThreadAction =
@@ -70,6 +89,8 @@ export interface RegisterCodexRuntimeEndpointRequest {
   teamId?: string | null;
   agentId?: string | null;
   cwd?: string | null;
+  model?: string | null;
+  permission?: RuntimePermission | null;
   thread: CodexThreadAction;
 }
 
@@ -83,6 +104,9 @@ export interface RegisterClaudeRuntimeEndpointRequest {
   teamId?: string | null;
   agentId?: string | null;
   systemPrompt?: string | null;
+  model?: string | null;
+  effort?: string | null;
+  permission?: RuntimePermission | null;
   session: ClaudeSessionAction;
 }
 

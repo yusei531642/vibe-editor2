@@ -24,7 +24,8 @@ use crate::commands::error::{CommandError, CommandResult};
 /// skillInjection) を追加し v13。additive-optional だが #641 save-guard が旧 build による
 /// 新フィールド silent drop を防ぐよう版数を上げる。
 /// Issue #21 で runtime backend / teamSceneV2 を追加し v14。
-pub const SETTINGS_SCHEMA_VERSION: u32 = 14;
+/// Issue #49 で V2 runtime / Team scene を既定有効化し v15。
+pub const SETTINGS_SCHEMA_VERSION: u32 = 15;
 
 /// `~/.vibe-editor2/team-state/*.json` (TeamHub orchestration state) の現行 schema version。
 /// Issue #470 で導入。

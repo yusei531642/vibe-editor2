@@ -15,14 +15,12 @@ export function NativeRuntimeConnector({
   payload,
   systemPrompt,
   initialMessage,
-  setCardPayload,
   onStatus
 }: {
   cardId: string;
   payload: AgentPayload;
   systemPrompt?: string;
   initialMessage?: string;
-  setCardPayload: (id: string, patch: Record<string, unknown>) => void;
   onStatus: (status: TerminalRuntimeStatus | null) => void;
 }): JSX.Element | null {
   const provider = payload.runtimeProvider;
@@ -56,6 +54,9 @@ export function NativeRuntimeConnector({
           teamId: payload.teamId,
           agentId: payload.agentId,
           systemPrompt: systemPromptRef.current ?? null,
+          model: payload.runtimeModel ?? null,
+          effort: payload.runtimeEffort ?? null,
+          permission: payload.runtimePermission ?? 'workspace',
           session: { mode: 'start' }
         });
       } else {
@@ -64,6 +65,8 @@ export function NativeRuntimeConnector({
           teamId: payload.teamId,
           agentId: payload.agentId,
           cwd: null,
+          model: payload.runtimeModel ?? null,
+          permission: payload.runtimePermission ?? 'workspace',
           thread: { mode: 'start' }
         });
       }
@@ -78,7 +81,10 @@ export function NativeRuntimeConnector({
       await window.api.agentRuntime.spawnTurn({
         endpointId,
         input: bootstrap,
-        submit: true
+        submit: true,
+        model: payload.runtimeModel ?? null,
+        effort: payload.runtimeEffort ?? null,
+        permission: payload.runtimePermission ?? 'workspace'
       });
       onStatus({ kind: 'running', command: provider });
     };
@@ -86,13 +92,6 @@ export function NativeRuntimeConnector({
       if (disposed) return;
       const message = error instanceof Error ? error.message : String(error);
       onStatus({ kind: 'spawn_failed', command: provider, error: message });
-      const fallbackFrom = provider as Extract<
-        RuntimeProvider,
-        'codex-native' | 'claude-native'
-      >;
-      // Runtime availability can change after Rust policy selection. Preserve the failure
-      // explicitly on the card while activating the compatibility PTY path.
-      setCardPayload(cardId, { runtimeProvider: 'pty', fallbackFrom });
       if (registered) void window.api.agentRuntime.dispose(endpointId).catch(() => undefined);
     });
     return () => {
@@ -106,15 +105,12 @@ export function NativeRuntimeConnector({
     initialMessage,
     onStatus,
     payload.agentId,
+    payload.runtimeEffort,
+    payload.runtimeModel,
+    payload.runtimePermission,
     payload.teamId,
-    provider,
-    setCardPayload
+    provider
   ]);
 
-  if (!isNativeRuntimeProvider(provider)) return null;
-  return (
-    <div className="canvas-agent-native-runtime" data-provider={provider} role="status">
-      {provider === 'claude-native' ? 'Claude native runtime' : 'Codex native runtime'}
-    </div>
-  );
+  return null;
 }

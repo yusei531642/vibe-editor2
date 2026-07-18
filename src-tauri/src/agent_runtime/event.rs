@@ -16,6 +16,7 @@ pub enum RuntimeEventKind {
     Lifecycle,
     Error,
     Diagnostic,
+    TurnComplete,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, TS)]
@@ -82,6 +83,9 @@ pub enum RuntimeEventPayload {
     Diagnostic {
         message: String,
     },
+    TurnComplete {
+        interrupted: bool,
+    },
 }
 
 impl RuntimeEventPayload {
@@ -96,6 +100,7 @@ impl RuntimeEventPayload {
             Self::Lifecycle { .. } => RuntimeEventKind::Lifecycle,
             Self::Error { .. } => RuntimeEventKind::Error,
             Self::Diagnostic { .. } => RuntimeEventKind::Diagnostic,
+            Self::TurnComplete { .. } => RuntimeEventKind::TurnComplete,
         }
     }
 }

@@ -311,6 +311,13 @@ export function migrateSettings(raw: unknown): AppSettings {
     data.teamSceneV2 = DEFAULT_SETTINGS.teamSceneV2;
   }
 
+  // --- Version 14 → 15: V2 conversation/runtime/Team scene の正式有効化 (Issue #49) ---
+  // v14 の false は実験 rollout の既定値で、完成版では一度だけ true へ移行する。
+  // v15 以降にユーザーが明示的に false へ戻した場合は次回 load でも尊重される。
+  if (version < 15) {
+    data.teamSceneV2 = true;
+  }
+
   data.schemaVersion = APP_SETTINGS_SCHEMA_VERSION;
   // 最終マージで欠損フィールドを DEFAULT_SETTINGS で埋める
   return { ...DEFAULT_SETTINGS, ...data } as AppSettings;

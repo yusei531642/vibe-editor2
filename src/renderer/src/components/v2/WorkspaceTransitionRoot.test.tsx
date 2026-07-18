@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useUiStore } from '../../stores/ui';
+import { useCanvasStore } from '../../stores/canvas';
+import { V2_REQUEST_TEAM_SCENE_EVENT } from '../../lib/v2-runtime-controls';
 import { WorkspaceTransitionRoot } from './WorkspaceTransitionRoot';
 
 const shellLifecycle = vi.hoisted(() => ({ mounts: 0, unmounts: 0 }));
@@ -59,7 +61,8 @@ vi.mock('./TeamWorkspaceScene', () => ({
 describe('WorkspaceTransitionRoot', () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    useUiStore.setState({ workspaceScene: 'focus' });
+    useUiStore.setState({ workspaceScene: 'focus', workspaceTeamId: null });
+    useCanvasStore.setState({ nodes: [], edges: [] });
     shellLifecycle.mounts = 0;
     shellLifecycle.unmounts = 0;
     teamContext.teams = [{ id: 'team-1', name: 'Issue 25 Team' }];
@@ -111,6 +114,16 @@ describe('WorkspaceTransitionRoot', () => {
     expect(container.querySelector('.workspace-transition-root')).toHaveAttribute('data-scene', 'team');
     expect(container.querySelector('.workspace-scene--focus')).toHaveAttribute('inert');
     expect(container.querySelector('.workspace-scene--team')).not.toHaveAttribute('inert');
+  });
+
+  it('自然言語Team起動eventでCanvasへFLIP遷移する', () => {
+    const { container } = render(<WorkspaceTransitionRoot forceTeamSession />);
+    act(() => window.dispatchEvent(new Event(V2_REQUEST_TEAM_SCENE_EVENT)));
+
+    expect(container.querySelector('.workspace-transition-root')).toHaveAttribute('data-scene', 'team');
+    expect(container.querySelector('.workspace-flip-frame')).not.toBeNull();
+    act(() => vi.advanceTimersByTime(500));
+    expect(container.querySelector('.workspace-scene--focus')).toHaveAttribute('inert');
   });
 
   it('完了後だけ非active sceneをinertかつaria-hiddenにする', () => {

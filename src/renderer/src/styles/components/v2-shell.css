@@ -255,7 +255,9 @@ button.v2-context-item:hover span { text-decoration: underline; text-underline-o
 .v2-composer__group--end { justify-content: flex-end; }
 
 .v2-select-control,
-.v2-engine-control {
+.v2-engine-control,
+.v2-model-control,
+.v2-effort-control {
   min-height: 44px;
   display: inline-flex;
   align-items: center;
@@ -266,7 +268,9 @@ button.v2-context-item:hover span { text-decoration: underline; text-underline-o
 }
 
 .v2-select-control select,
-.v2-engine-control select {
+.v2-engine-control select,
+.v2-model-control select,
+.v2-effort-control select {
   max-width: 130px;
   border: 0;
   outline: 0;
@@ -275,11 +279,30 @@ button.v2-context-item:hover span { text-decoration: underline; text-underline-o
   font: inherit;
 }
 
-.v2-engine-control span { color: #7b7974; white-space: nowrap; }
+.v2-model-control select { max-width: 156px; }
+.v2-effort-control select { max-width: 86px; text-transform: capitalize; }
 
 .v2-send-button { border-radius: 50%; background: #8f8f8c; color: #fff; }
 .v2-send-button:hover:not(:disabled) { background: #d97757; }
 .v2-send-button:disabled { opacity: 0.38; cursor: default; }
+
+.v2-approval-request {
+  margin: 18px 0;
+  padding: 16px;
+  border: 1px solid rgba(217, 119, 87, 0.3);
+  border-radius: 8px;
+  background: rgba(255, 248, 244, 0.92);
+}
+
+.v2-approval-request p { margin: 8px 0 12px; color: #575753; }
+.v2-approval-request div { display: flex; gap: 8px; }
+.v2-approval-request button {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgba(31, 30, 29, 0.14);
+  border-radius: 6px;
+  background: #fff;
+}
 
 .v2-timeline {
   position: absolute;

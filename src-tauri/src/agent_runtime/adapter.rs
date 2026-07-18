@@ -13,6 +13,9 @@ pub struct RuntimeSessionSpawnRequest {
 pub struct RuntimeTurnSpawnRequest {
     pub input: String,
     pub submit: bool,
+    pub model: Option<String>,
+    pub effort: Option<String>,
+    pub permission: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -278,8 +278,8 @@ describe('migrateSettings', () => {
     });
   });
 
-  describe('v13 → v14 runtime guardrails (Issue #21)', () => {
-    it('旧設定に PTY backend と無効な Team Scene v2 を補完する', () => {
+  describe('v13 → v15 runtime guardrails (Issue #21 / #49)', () => {
+    it('旧設定に PTY backend と正式有効化した Team Scene v2 を補完する', () => {
       const migrated = migrateSettings({
         schemaVersion: 13,
         language: 'ja',
@@ -287,7 +287,7 @@ describe('migrateSettings', () => {
       });
 
       expect(migrated.agentRuntimeBackend).toBe('pty');
-      expect(migrated.teamSceneV2).toBe(false);
+      expect(migrated.teamSceneV2).toBe(true);
       expect(migrated.schemaVersion).toBe(APP_SETTINGS_SCHEMA_VERSION);
     });
 
@@ -314,6 +314,17 @@ describe('migrateSettings', () => {
       });
 
       expect(migrated.agentRuntimeBackend).toBe('pty');
+      expect(migrated.teamSceneV2).toBe(true);
+    });
+
+    it('v15 で明示的に無効化した値は維持する', () => {
+      const migrated = migrateSettings({
+        schemaVersion: APP_SETTINGS_SCHEMA_VERSION,
+        language: 'ja',
+        theme: 'claude-light',
+        teamSceneV2: false
+      });
+
       expect(migrated.teamSceneV2).toBe(false);
     });
   });

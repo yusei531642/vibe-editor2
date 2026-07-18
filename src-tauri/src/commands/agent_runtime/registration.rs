@@ -1,7 +1,9 @@
 use super::*;
+use crate::agent_runtime::claude_agent::{
+    ClaudeAgentRuntimeAdapter, ClaudeAgentRuntimeConfig, SidecarLaunchConfig,
+};
 #[cfg(unix)]
 use crate::agent_runtime::codex::CodexRuntimeAdapter;
-use crate::agent_runtime::claude_agent::{ClaudeAgentRuntimeAdapter, SidecarLaunchConfig};
 
 #[cfg(unix)]
 pub(super) async fn register_codex_endpoint(
@@ -10,6 +12,8 @@ pub(super) async fn register_codex_endpoint(
     request: RegisterCodexEndpointRequest,
 ) -> CommandResult<CodexRuntimeEndpointResult> {
     validate_endpoint_id(&request.endpoint_id)?;
+    validate_runtime_option("model", request.model.as_deref())?;
+    validate_runtime_permission(request.permission.as_deref())?;
     if let Some(team_id) = request.team_id.as_deref() {
         crate::commands::validation::validate_id_segment("team_id", team_id)?;
     }
@@ -44,6 +48,8 @@ pub(super) async fn register_codex_endpoint(
         CodexThreadAction::Start => {}
     }
     let endpoint_id = request.endpoint_id.clone();
+    let model = request.model.clone();
+    let permission = request.permission.clone();
     // codex 実行コマンドは settings.json (Rust 正本) から解決し、renderer 入力を使わない。
     let codex_command = crate::commands::settings::settings_load()
         .await
@@ -70,13 +76,13 @@ pub(super) async fn register_codex_endpoint(
         state.runtime_manager.clone(),
         endpoint_id.clone(),
     );
-    let adapter_result =
-        run_blocking(move || CodexRuntimeAdapter::connect(socket_path, cwd, sink)).await?;
-    let adapter = Arc::new(
-        adapter_result.map_err(|error| {
-            finish_native_failure(app, &state.runtime_manager, &endpoint_id, error)
-        })?,
-    );
+    let adapter_result = run_blocking(move || {
+        CodexRuntimeAdapter::connect(socket_path, cwd, model, permission, sink)
+    })
+    .await?;
+    let adapter = Arc::new(adapter_result.map_err(|error| {
+        finish_native_failure(app, &state.runtime_manager, &endpoint_id, error)
+    })?);
     let manager = state.runtime_manager.clone();
     let operation_endpoint = endpoint_id.clone();
     let operation_adapter = adapter.clone();
@@ -141,8 +147,9 @@ pub(super) async fn register_codex_endpoint(
             ));
         }
         let project_root = state.team_hub.team_project_root(&team_id).await;
-        state.runtime_manager.persist_team_binding(
-            crate::agent_runtime::RuntimeTeamBinding {
+        state
+            .runtime_manager
+            .persist_team_binding(crate::agent_runtime::RuntimeTeamBinding {
                 project_root: project_root.as_deref(),
                 team_id: &team_id,
                 agent_id: &agent_id,
@@ -150,8 +157,7 @@ pub(super) async fn register_codex_endpoint(
                 provider: "codex-native",
                 resume_id: Some(thread_id.clone()),
                 resumable: true,
-            },
-        );
+            });
     }
     // start/resume/fork いずれも成功した thread を「観測済み」として記録し、
     // 以後の resume / fork を認可できるようにする。
@@ -172,6 +178,9 @@ pub(super) async fn register_claude_endpoint(
         team_id,
         agent_id,
         system_prompt,
+        model,
+        effort,
+        permission,
         session,
     } = request;
     validate_endpoint_id(&endpoint_id)?;
@@ -180,15 +189,22 @@ pub(super) async fn register_claude_endpoint(
             "teamId and agentId must be provided together",
         ));
     }
-    if let Some((team_id, agent_id)) = team_id.as_deref().zip(agent_id.as_deref()) {
-        state
-            .team_hub
-            .authorize_team_agent_binding(team_id, agent_id)
-            .await?;
-    }
+    let authorized_team_identity =
+        if let Some((team_id, agent_id)) = team_id.as_deref().zip(agent_id.as_deref()) {
+            let role = state
+                .team_hub
+                .authorized_team_agent_role(team_id, agent_id)
+                .await?;
+            Some((team_id.to_string(), agent_id.to_string(), role))
+        } else {
+            None
+        };
     if let Some(prompt) = system_prompt.as_deref() {
         validate_bounded_no_nul("systemPrompt", prompt, 256 * 1024)?;
     }
+    validate_runtime_option("model", model.as_deref())?;
+    validate_runtime_option("effort", effort.as_deref())?;
+    validate_runtime_permission(permission.as_deref())?;
     let resume_session = match &session {
         ClaudeSessionAction::Resume { session_id } | ClaudeSessionAction::Fork { session_id } => {
             crate::commands::validation::validate_id_segment("session_id", session_id)?;
@@ -200,8 +216,27 @@ pub(super) async fn register_claude_endpoint(
     let restoring = matches!(&session, ClaudeSessionAction::Resume { .. });
     let cwd = crate::state::current_project_root(&state.project_root);
     let settings = crate::commands::settings::settings_load().await?;
-    let launch = SidecarLaunchConfig::production(settings.claude_command)
+    let mut launch = SidecarLaunchConfig::production(settings.claude_command)
         .map_err(|error| CommandError::coded(error.code, error.message))?;
+    // Claude Agent SDK は ~/.claude.json の mcpServers を自動では取り込まない。
+    // team identity が認可済みの場合だけ Hub の接続情報を Rust 内で組み立て、renderer を
+    // 経由せず sidecar へ渡す。token は sidecar error の redaction 対象にも追加する。
+    let mcp_servers = if let Some((team_id, agent_id, role)) = &authorized_team_identity {
+        let (socket, token, bridge_path) = state.team_hub.info().await;
+        launch.secret_values.push(token.clone());
+        Some(serde_json::json!({
+            "vibe-team2": crate::mcp_config::team_bridge_desired(
+                &socket,
+                &token,
+                &bridge_path,
+                team_id,
+                agent_id,
+                role,
+            )
+        }))
+    } else {
+        None
+    };
     let sink = claude_event_sink(
         app.clone(),
         state.runtime_manager.clone(),
@@ -209,11 +244,24 @@ pub(super) async fn register_claude_endpoint(
         state.known_claude_sessions.clone(),
     );
     let adapter_result = run_blocking(move || {
-        ClaudeAgentRuntimeAdapter::connect(launch, cwd, system_prompt, sink)
+        ClaudeAgentRuntimeAdapter::connect(
+            launch,
+            ClaudeAgentRuntimeConfig {
+                cwd,
+                system_prompt,
+                model,
+                effort,
+                permission,
+                mcp_servers,
+            },
+            sink,
+        )
     })
     .await?;
     let adapter = Arc::new(adapter_result.map_err(|error| {
-        let operation = state.runtime_manager.fail_endpoint(&endpoint_id, error.clone());
+        let operation = state
+            .runtime_manager
+            .fail_endpoint(&endpoint_id, error.clone());
         emit_events(app, &operation.events);
         CommandError::coded(error.code, error.message)
     })?);
@@ -224,16 +272,12 @@ pub(super) async fn register_claude_endpoint(
         ClaudeSessionAction::Start => {
             manager.register_endpoint(operation_endpoint, operation_adapter)
         }
-        ClaudeSessionAction::Resume { session_id } => manager.register_resumed_endpoint(
-            operation_endpoint,
-            operation_adapter,
-            session_id,
-        ),
-        ClaudeSessionAction::Fork { session_id } => manager.register_forked_endpoint(
-            operation_endpoint,
-            operation_adapter,
-            session_id,
-        ),
+        ClaudeSessionAction::Resume { session_id } => {
+            manager.register_resumed_endpoint(operation_endpoint, operation_adapter, session_id)
+        }
+        ClaudeSessionAction::Fork { session_id } => {
+            manager.register_forked_endpoint(operation_endpoint, operation_adapter, session_id)
+        }
     })
     .await?;
     emit_events(app, &operation.events);
@@ -271,8 +315,9 @@ pub(super) async fn register_claude_endpoint(
                 )
             })?;
         let project_root = state.team_hub.team_project_root(&team_id).await;
-        state.runtime_manager.persist_team_binding(
-            crate::agent_runtime::RuntimeTeamBinding {
+        state
+            .runtime_manager
+            .persist_team_binding(crate::agent_runtime::RuntimeTeamBinding {
                 project_root: project_root.as_deref(),
                 team_id: &team_id,
                 agent_id: &agent_id,
@@ -280,8 +325,7 @@ pub(super) async fn register_claude_endpoint(
                 provider: "claude-native",
                 resume_id: session_id.clone(),
                 resumable: session_id.is_some(),
-            },
-        );
+            });
     }
     record_known_thread(&state.known_claude_sessions, session_id.clone());
     Ok(ClaudeRuntimeEndpointResult {

@@ -419,8 +419,6 @@ export const enShell: Dict = {
   'toast.tone.success': 'Success',
   'toast.tone.warning': 'Warning',
   'toast.tone.error': 'Error',
-
-
   // ---------- Terminal tab restore (Issue #857) ----------
   'terminalTabs.restore.transcriptMissing':
     "Couldn't find past transcripts; restarted {count} tab(s) as new conversations.",
@@ -454,6 +452,8 @@ export const enShell: Dict = {
   'v2.permission.workspace': 'Workspace',
   'v2.permission.full': 'Full access',
   'v2.composer.engine': 'Engine',
+  'v2.composer.model': 'Model', 'v2.composer.modelLoading': 'Loading models',
+  'v2.composer.effort': 'Reasoning effort',
   'v2.composer.voice': 'Voice input',
   'v2.composer.stop': 'Stop run',
   'v2.composer.send': 'Send',
@@ -468,8 +468,6 @@ export const enShell: Dict = {
   'v2.quick.fix.label': 'Fix a problem or error',
   'v2.quick.fix.prompt': 'Reproduce this problem, identify its root cause, and fix it:',
   'v2.project.select': 'Select a project',
-  'v2.runtime.fakeReady':
-    '{engine} Runtime is ready to connect. The non-PTY adapter will connect to this timeline in the next implementation wave.',
   'v2.shell.views': 'Workspace views',
   'v2.shell.navigation': 'Task navigation',
   'v2.shell.back': 'Go back',
@@ -480,10 +478,13 @@ export const enShell: Dict = {
   'v2.runtime.setupTitle': 'Set up Claude Code',
   'v2.runtime.missing': 'Claude CLI was not found.',
   'v2.runtime.redetect': 'Detect again',
+  'v2.runtime.projectRequired': 'Select a project first.',
   'v2.home.question': ' — what would you like to build?',
   'v2.timeline.you': 'You',
   'v2.timeline.running': 'Running',
   'v2.timeline.exploring': 'Exploring',
+  'v2.approval.title': 'Tool approval required', 'v2.approval.accept': 'Allow',
+  'v2.approval.decline': 'Decline',
   'v2.drawer.workspace': 'Workspace',
   'v2.drawer.projects': 'Projects',
   'v2.drawer.sessions': 'Sessions',

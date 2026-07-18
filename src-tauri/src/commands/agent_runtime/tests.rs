@@ -66,3 +66,39 @@ fn resume_requires_previously_observed_thread_id() {
     assert!(super::authorize_known_thread(&known, "thread-1").is_ok());
     assert!(super::authorize_known_thread(&known, "thread-2").is_err());
 }
+
+#[test]
+fn runtime_options_are_bounded_and_permissions_are_closed() {
+    assert!(validate_runtime_option("model", Some("gpt-5")).is_ok());
+    assert!(validate_runtime_option("model", Some("bad\nmodel")).is_err());
+    assert!(validate_runtime_option("effort", Some(&"x".repeat(257))).is_err());
+    assert!(validate_runtime_permission(Some("workspace")).is_ok());
+    assert!(validate_runtime_permission(Some("full")).is_ok());
+    assert!(validate_runtime_permission(Some("bypass")).is_err());
+}
+
+#[test]
+#[cfg(unix)]
+fn codex_catalog_keeps_advertised_model_and_efforts() {
+    let models = parse_codex_model_catalog(&json!({
+        "data": [
+            {
+                "model": "gpt-fixture",
+                "displayName": "GPT Fixture",
+                "description": "fixture model",
+                "isDefault": true,
+                "hidden": false,
+                "defaultReasoningEffort": "medium",
+                "supportedReasoningEfforts": [
+                    { "reasoningEffort": "low" },
+                    { "reasoningEffort": "high" }
+                ]
+            },
+            { "model": "hidden", "hidden": true }
+        ]
+    }));
+    assert_eq!(models.len(), 1);
+    assert_eq!(models[0].id, "gpt-fixture");
+    assert_eq!(models[0].default_effort, "medium");
+    assert_eq!(models[0].supported_efforts, ["low", "high"]);
+}

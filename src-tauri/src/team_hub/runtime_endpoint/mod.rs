@@ -92,6 +92,7 @@ impl TeamHub {
                 pending_recruits: HashMap::new(),
                 recruit_lifecycles: HashMap::new(),
                 agents: HashMap::new(),
+                initial_native_admissions: HashSet::new(),
                 runtime_endpoints: HashMap::new(),
                 role_profile_summary: Vec::new(),
                 dynamic_roles: HashMap::new(),

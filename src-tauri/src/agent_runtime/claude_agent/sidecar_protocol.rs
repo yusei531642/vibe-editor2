@@ -102,6 +102,9 @@ pub enum SidecarEvent {
     Diagnostic {
         message: String,
     },
+    TurnComplete {
+        interrupted: bool,
+    },
     Error {
         code: String,
         message: String,
@@ -175,6 +178,7 @@ impl SidecarEvent {
             Self::Diagnostic { message } => RuntimeEventPayload::Diagnostic {
                 message: redactor.redact(&message),
             },
+            Self::TurnComplete { interrupted } => RuntimeEventPayload::TurnComplete { interrupted },
             Self::Error {
                 code,
                 message,
@@ -279,9 +283,8 @@ mod tests {
 
     #[test]
     fn redactor_recomputes_assignment_indexes_after_shrinking() {
-        let result = Redactor::default().redact(
-            "token=abcdefghijklmnopqrstuvwxyz token=still-secret next",
-        );
+        let result =
+            Redactor::default().redact("token=abcdefghijklmnopqrstuvwxyz token=still-secret next");
         assert_eq!(result, "token=<redacted> token=<redacted> next");
     }
 

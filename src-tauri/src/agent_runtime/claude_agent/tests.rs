@@ -1,8 +1,10 @@
-use super::{ClaudeAdapterEvent, ClaudeAgentRuntimeAdapter, SidecarLaunchConfig};
+use super::{
+    ClaudeAdapterEvent, ClaudeAgentRuntimeAdapter, ClaudeAgentRuntimeConfig, SidecarLaunchConfig,
+};
 use crate::agent_runtime::{
     AgentRuntimeAdapter, BackendKind, RuntimeAdapterError, RuntimeApprovalResponseRequest,
-    RuntimeCapability, RuntimeEventPayload, RuntimeLifecycleState, RuntimeManager,
-    RuntimeSessionSpawnRequest, RuntimeTurnSpawnRequest,
+    RuntimeCapability, RuntimeDeliveryRequest, RuntimeEventPayload, RuntimeLifecycleState,
+    RuntimeManager, RuntimeSessionSpawnRequest, RuntimeTurnSpawnRequest,
 };
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -65,8 +67,12 @@ fn managed_adapter(
         }
     });
     Arc::new(
-        ClaudeAgentRuntimeAdapter::connect(fixture_config(scenario, secret), None, None, sink)
-            .expect("fixture sidecar connects"),
+        ClaudeAgentRuntimeAdapter::connect(
+            fixture_config(scenario, secret),
+            ClaudeAgentRuntimeConfig::default(),
+            sink,
+        )
+        .expect("fixture sidecar connects"),
     )
 }
 
@@ -82,6 +88,9 @@ fn fixture_projects_message_tool_approval_diff_usage_and_lifecycle() {
             RuntimeTurnSpawnRequest {
                 input: "review".into(),
                 submit: true,
+                model: None,
+                effort: None,
+                permission: None,
             },
         )
         .result
@@ -185,8 +194,7 @@ fn protocol_mismatch_is_rejected_before_registration() {
     let captured = events.clone();
     let result = ClaudeAgentRuntimeAdapter::connect(
         fixture_config("protocol-mismatch", None),
-        None,
-        None,
+        ClaudeAgentRuntimeConfig::default(),
         Arc::new(move |event| captured.lock().unwrap().push(event)),
     );
     let error = match result {
@@ -210,6 +218,9 @@ fn crash_emits_error_then_failed_and_detaches_endpoint() {
         RuntimeTurnSpawnRequest {
             input: "crash".into(),
             submit: true,
+            model: None,
+            effort: None,
+            permission: None,
         },
     );
     wait_until(|| manager.registry().resolve("crashing").is_none());
@@ -238,8 +249,7 @@ fn dispose_after_reader_failure_skips_response_timeout() {
     let captured = failed.clone();
     let adapter = ClaudeAgentRuntimeAdapter::connect(
         fixture_config("invalid-json", None),
-        None,
-        None,
+        ClaudeAgentRuntimeConfig::default(),
         Arc::new(move |event| {
             if matches!(event, ClaudeAdapterEvent::Failure(_)) {
                 captured.store(true, Ordering::Release);
@@ -256,6 +266,9 @@ fn dispose_after_reader_failure_skips_response_timeout() {
         .spawn_turn(&RuntimeTurnSpawnRequest {
             input: "trigger protocol failure".into(),
             submit: true,
+            model: None,
+            effort: None,
+            permission: None,
         })
         .expect("turn response arrives before invalid JSON");
     wait_until(|| failed.load(Ordering::Acquire));
@@ -264,6 +277,94 @@ fn dispose_after_reader_failure_skips_response_timeout() {
     adapter.dispose().expect("dispose succeeds");
 
     assert!(started.elapsed() < Duration::from_millis(500));
+}
+
+#[test]
+fn team_mcp_config_reaches_claude_sidecar_without_renderer_round_trip() {
+    let manager = Arc::new(RuntimeManager::new());
+    let sink_manager = manager.clone();
+    let adapter = Arc::new(
+        ClaudeAgentRuntimeAdapter::connect(
+            fixture_config("mcp-options", None),
+            ClaudeAgentRuntimeConfig {
+                mcp_servers: Some(serde_json::json!({
+                    "vibe-team2": {
+                        "type": "stdio",
+                        "command": "node",
+                        "args": ["/tmp/team-bridge.js"],
+                        "env": {
+                            "VIBE_TEAM_SOCKET": "/tmp/team.sock",
+                            "VIBE_TEAM_TOKEN": "secret",
+                            "VIBE_TEAM_ID": "team-1",
+                            "VIBE_AGENT_ID": "leader-team-1",
+                            "VIBE_TEAM_ROLE": "leader"
+                        }
+                    }
+                })),
+                ..Default::default()
+            },
+            Arc::new(move |event| {
+                if let ClaudeAdapterEvent::Payload(payload) = event {
+                    sink_manager.record_event("mcp-options", payload);
+                }
+            }),
+        )
+        .expect("fixture sidecar connects"),
+    );
+    assert!(manager
+        .register_endpoint("mcp-options".into(), adapter)
+        .result
+        .is_ok());
+    wait_until(|| {
+        manager.event_snapshot().iter().any(|event| {
+            matches!(
+                &event.payload,
+                RuntimeEventPayload::Diagnostic { message }
+                    if message == "mcp:stdio:node:true:true:team-1:leader-team-1:leader"
+            )
+        })
+    });
+}
+
+#[test]
+fn team_delivery_steers_an_active_claude_turn() {
+    let manager = Arc::new(RuntimeManager::new());
+    let sink_manager = manager.clone();
+    let adapter = Arc::new(
+        ClaudeAgentRuntimeAdapter::connect(
+            fixture_config("team-delivery", None),
+            ClaudeAgentRuntimeConfig::default(),
+            Arc::new(move |event| {
+                if let ClaudeAdapterEvent::Payload(payload) = event {
+                    sink_manager.record_event("team-delivery", payload);
+                }
+            }),
+        )
+        .expect("fixture sidecar connects"),
+    );
+    assert!(manager
+        .register_endpoint("team-delivery".into(), adapter)
+        .result
+        .is_ok());
+    assert!(manager
+        .deliver_team_message_blocking(
+            "team-delivery",
+            RuntimeDeliveryRequest {
+                from_role: "leader".into(),
+                data: "calculate 1+1".into(),
+            },
+        )
+        .result
+        .is_ok());
+    wait_until(|| {
+        manager.event_snapshot().iter().any(|event| {
+            matches!(
+                &event.payload,
+                RuntimeEventPayload::Diagnostic { message }
+                    if message == "delivery:steer:[Team ← leader] calculate 1+1"
+            )
+        })
+    });
 }
 
 #[test]
@@ -281,6 +382,9 @@ fn credentials_are_redacted_from_renderer_and_buffer_payloads() {
             RuntimeTurnSpawnRequest {
                 input: "echo".into(),
                 submit: true,
+                model: None,
+                effort: None,
+                permission: None,
             },
         )
         .result
@@ -294,6 +398,42 @@ fn credentials_are_redacted_from_renderer_and_buffer_payloads() {
     let serialized = serde_json::to_string(&manager.event_snapshot()).unwrap();
     assert!(!serialized.contains(SECRET));
     assert!(serialized.contains("<redacted>"));
+}
+
+#[test]
+fn selected_model_effort_and_permission_reach_claude_sidecar() {
+    let manager = Arc::new(RuntimeManager::new());
+    let adapter = managed_adapter(manager.clone(), "options", "options", None);
+    assert!(manager
+        .register_endpoint("options".into(), adapter)
+        .result
+        .is_ok());
+    assert!(manager
+        .spawn_turn(
+            "options",
+            RuntimeTurnSpawnRequest {
+                input: "verify options".into(),
+                submit: true,
+                model: Some("fable".into()),
+                effort: Some("max".into()),
+                permission: Some("full".into()),
+            },
+        )
+        .result
+        .is_ok());
+    wait_until(|| {
+        manager.event_snapshot().iter().any(|event| {
+            matches!(
+                &event.payload,
+                RuntimeEventPayload::Diagnostic { message }
+                    if message == "options:fable:max:full"
+            )
+        })
+    });
+    assert!(manager.event_snapshot().iter().any(|event| matches!(
+        event.payload,
+        RuntimeEventPayload::TurnComplete { interrupted: false }
+    )));
 }
 
 #[test]

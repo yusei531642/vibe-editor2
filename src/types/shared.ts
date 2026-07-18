@@ -38,9 +38,9 @@ export interface DialogFileFilter {
  * skillInjection) を追加し v13。すべて additive-optional なので migration block は不要だが、
  * 旧 build (#641 save-guard) が新フィールドを silent drop しないよう版数を上げる。
  * Issue #21 で `agentRuntimeBackend` / `teamSceneV2` を追加し v14。同じく additive だが
- * 旧 build の silent drop を防ぐため bump する。
+ * 旧 build の silent drop を防ぐため bump する。Issue #49 で V2 runtime/Team 経路を完成扱いにして `teamSceneV2` を既定有効化し v15。
  */
-export const APP_SETTINGS_SCHEMA_VERSION = 14;
+export const APP_SETTINGS_SCHEMA_VERSION = 15;
 
 // Issue #21: agent runtime backend / capability 診断の型は agent-runtime.ts に集約。
 export type * from './agent-runtime';
@@ -709,7 +709,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   terminalFontSize: 13,
   density: 'normal',
   agentRuntimeBackend: 'pty',
-  teamSceneV2: false,
+  teamSceneV2: true,
   statusMascotVariant: 'vibe',
   claudeCommand: 'claude',
   claudeArgs: '',

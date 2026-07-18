@@ -20,12 +20,24 @@ function renderComposer(prompt = "実装してください") {
     <UnifiedComposer
       branch="main"
       engine="claude"
-      model="Fable 5"
+      model="fable"
+      models={[{
+        id: "fable",
+        label: "Fable",
+        description: "Claude Fable",
+        isDefault: true,
+        defaultEffort: "high",
+        supportedEfforts: ["low", "high"]
+      }]}
+      effort="high"
+      efforts={["low", "high"]}
       permission="workspace"
       projectName="vibe-editor2"
       prompt={prompt}
       running={false}
       onEngineChange={vi.fn()}
+      onModelChange={vi.fn()}
+      onEffortChange={vi.fn()}
       onPermissionChange={vi.fn()}
       onProjectClick={vi.fn()}
       onPromptChange={onPromptChange}

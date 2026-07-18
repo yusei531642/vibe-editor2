@@ -46,6 +46,7 @@ impl TeamHub {
                 return Err("team_id is already owned by another project".to_string());
             }
         }
+        let is_new_team = !s.teams.contains_key(team_id);
         s.active_teams.insert(team_id.to_string());
         // Issue #800: Canvas spawn 由来の初代 member (leader / worker) は
         // `team_recruit` / `team_create_leader` の recruit grant 経路を通らないため、
@@ -73,6 +74,10 @@ impl TeamHub {
             }
             // Issue #934: seed は AgentEntry の遷移メソッド経由 (Active 済みは上書きしない)。
             s.seed_role_binding(team_id, agent_id, role);
+            if is_new_team {
+                s.initial_native_admissions
+                    .insert((team_id.to_string(), agent_id.to_string()));
+            }
         }
         let team = s
             .teams
@@ -201,6 +206,8 @@ impl TeamHub {
 
         // (2) agent ライフサイクル state (role binding / diagnostics / status rate limit) を一括除去。
         s.remove_team_agents(team_id);
+        s.initial_native_admissions
+            .retain(|(tid, _)| tid != team_id);
         s.recruit_lifecycles
             .retain(|_, lifecycle| lifecycle.team_id != team_id);
 
@@ -222,6 +229,8 @@ impl TeamHub {
         s.dynamic_roles.remove(team_id);
         s.recruit_semaphores.remove(team_id);
         s.remove_team_agents(team_id);
+        s.initial_native_admissions
+            .retain(|(tid, _)| tid != team_id);
         s.recruit_lifecycles
             .retain(|_, lifecycle| lifecycle.team_id != team_id);
         s.file_locks.retain(|(tid, _), _| tid != team_id);

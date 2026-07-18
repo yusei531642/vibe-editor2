@@ -18,6 +18,7 @@ import { useSemanticEdgeStore } from '../../stores/semantic-edges';
 import '../../styles/components/canvas.css';
 import '../../styles/components/canvas-agent-card.css';
 import '../../styles/components/team-control.css';
+import '../../styles/components/team-chat-card.css';
 
 function RecruitLifecycleLayer({ teamId }: { teamId?: string }): JSX.Element {
   const { projection } = useTeamProjection();
@@ -70,6 +71,7 @@ export function TeamWorkspaceScene({ team }: { team: Team }): JSX.Element {
       const payload = agentPayloadOf(node.data);
       return (
         payload?.teamId === team.id &&
+        payload.runtimeProvider !== 'pty' &&
         (payload.roleProfileId === 'leader' || payload.role === 'leader')
       );
     })
@@ -122,14 +124,22 @@ export function TeamWorkspaceScene({ team }: { team: Team }): JSX.Element {
           }
         }),
       addFileTree: () =>
-        addCard({ type: 'fileTree', title: t('v2.team.fileTree'), payload: { projectRoot } }),
+        addCard({
+          type: 'fileTree',
+          title: t('v2.team.fileTree'),
+          payload: { projectRoot, teamId: team.id, teamName: team.name }
+        }),
       addChanges: () =>
-        addCard({ type: 'changes', title: t('v2.team.changes'), payload: { projectRoot } }),
+        addCard({
+          type: 'changes',
+          title: t('v2.team.changes'),
+          payload: { projectRoot, teamId: team.id, teamName: team.name }
+        }),
       addEditor: () =>
         addCard({
           type: 'editor',
           title: t('canvas.card.editor'),
-          payload: { projectRoot, relPath: '' }
+          payload: { projectRoot, relPath: '', teamId: team.id, teamName: team.name }
         }),
       spawnDefaultTeam: () =>
         addCard({
@@ -211,7 +221,7 @@ export function TeamWorkspaceScene({ team }: { team: Team }): JSX.Element {
       </header>
       <TeamCommandBar />
       <div className="workspace-team-scene__canvas">
-        <Canvas actions={actions} />
+        <Canvas actions={actions} teamId={team.id} />
       </div>
       {!hasLeader ? (
         <div

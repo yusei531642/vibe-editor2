@@ -17,10 +17,29 @@ readline.createInterface({ input: process.stdin, crlfDelay: Infinity }).on('line
   if (scenario === 'crash' && request.method === 'turn') process.exit(23);
   if (request.method === 'spawn') {
     ok(request.id, { sessionId: null });
+    if (scenario === 'mcp-options') {
+      const server = request.params.mcpServers?.['vibe-team2'];
+      event({
+        type: 'diagnostic',
+        message: `mcp:${server?.type}:${server?.command}:${Array.isArray(server?.args)}:${Boolean(server?.env?.VIBE_TEAM_TOKEN)}:${server?.env?.VIBE_TEAM_ID}:${server?.env?.VIBE_AGENT_ID}:${server?.env?.VIBE_TEAM_ROLE}`
+      });
+    }
   } else if (['resume', 'fork'].includes(request.method)) {
     ok(request.id, { sessionId: request.params.sessionId });
   } else if (['turn', 'write', 'inject', 'steer'].includes(request.method)) {
     ok(request.id, { accepted: true });
+    if (scenario === 'team-delivery') {
+      event({ type: 'diagnostic', message: `delivery:${request.method}:${request.params.input}` });
+      return;
+    }
+    if (scenario === 'options') {
+      event({
+        type: 'diagnostic',
+        message: `options:${request.params.model}:${request.params.effort}:${request.params.permission}`
+      });
+      event({ type: 'turnComplete', interrupted: false });
+      return;
+    }
     if (scenario === 'invalid-json') {
       process.stdout.write('invalid-json\n');
       return;

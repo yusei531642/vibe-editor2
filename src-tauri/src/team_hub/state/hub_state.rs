@@ -43,9 +43,9 @@ pub(crate) struct HubState {
     /// 旧 4 並行 map (`agent_role_bindings` #183/#637 / `member_diagnostics` #342 /
     /// `last_status_call_at` #634 / `team_agent_roster` #829) を統合した。
     /// roster は entry の存在そのもの、teardown は entry 単位、clear_team は
-    /// team prefix retain 一発。遷移は `state::agent_entry` の accessor 経由のみ。
-    /// in-memory only (Hub 再起動で全 clear)。
+    /// team prefix retain 一発。in-memory only (Hub 再起動で全 clear)。
     pub(crate) agents: super::agent_entry::AgentMap,
+    pub(crate) initial_native_admissions: HashSet<(String, String)>, // bind 成功時に消費
     /// agentId -> native / PTY RuntimeEndpoint。TeamHub が配送 backend の差異を所有する。
     pub(crate) runtime_endpoints: crate::team_hub::runtime_endpoint::types::RuntimeEndpointMap,
     /// renderer から同期された role profile 一覧 (team_list_role_profiles で返す)
@@ -244,9 +244,14 @@ impl EnginePolicy {
     /// 違反が無ければ `Ok(())`。
     pub fn validate(&self, engine: &str) -> Result<(), String> {
         match (self.kind, engine) {
-            (EnginePolicyKind::ClaudeOnly, "codex") => Err("team engine policy is ClaudeOnly, cannot recruit with engine='codex'".to_string()),
-            (EnginePolicyKind::CodexOnly, "claude") => Err("team engine policy is CodexOnly, cannot recruit with engine='claude' \
-                 (this prevents accidental Claude recruitment into a Codex-only team)".to_string()),
+            (EnginePolicyKind::ClaudeOnly, "codex") => Err(
+                "team engine policy is ClaudeOnly, cannot recruit with engine='codex'".to_string(),
+            ),
+            (EnginePolicyKind::CodexOnly, "claude") => Err(
+                "team engine policy is CodexOnly, cannot recruit with engine='claude' \
+                 (this prevents accidental Claude recruitment into a Codex-only team)"
+                    .to_string(),
+            ),
             _ => Ok(()),
         }
     }
@@ -616,8 +621,7 @@ impl TeamHub {
                     let token = token.clone();
                     tokio::spawn(async move {
                         let _permit = permit;
-                        if let Err(e) =
-                            crate::team_hub::handle_client(hub2, connected, token).await
+                        if let Err(e) = crate::team_hub::handle_client(hub2, connected, token).await
                         {
                             tracing::debug!("teamhub client error: {e:#}");
                         }

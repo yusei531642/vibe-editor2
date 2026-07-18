@@ -118,7 +118,10 @@ impl TeamHub {
                 self.registry.clone(),
                 agent_id,
             ));
-            let operation = self.runtime.manager.register_endpoint(endpoint_id.clone(), adapter);
+            let operation = self
+                .runtime
+                .manager
+                .register_endpoint(endpoint_id.clone(), adapter);
             self.emit_runtime_events(&operation.events).await;
             operation
                 .result
@@ -139,8 +142,9 @@ impl TeamHub {
         state.attach_runtime_to_recruit(team_id, agent_id, &endpoint);
         drop(state);
         let project_root = self.team_project_root(team_id).await;
-        self.runtime.manager.persist_team_binding(
-            crate::agent_runtime::RuntimeTeamBinding {
+        self.runtime
+            .manager
+            .persist_team_binding(crate::agent_runtime::RuntimeTeamBinding {
                 project_root: project_root.as_deref(),
                 team_id,
                 agent_id,
@@ -148,8 +152,7 @@ impl TeamHub {
                 provider: "pty",
                 resume_id: endpoint.session_id.clone(),
                 resumable: false,
-            },
-        );
+            });
         Ok(endpoint_id)
     }
 
@@ -226,6 +229,8 @@ impl TeamHub {
             .is_some_and(|binding| {
                 binding.native.is_some() || binding.prior_native_endpoint.is_some()
             });
+        let admission_key = key(team_id, agent_id);
+        let has_initial_admission = state.initial_native_admissions.contains(&admission_key);
         if !has_prior_native {
             let spawning = state.recruit_lifecycles.get(agent_id).is_some_and(|l| {
                 l.team_id == team_id
@@ -236,7 +241,7 @@ impl TeamHub {
                             | crate::team_hub::events::RecruitLifecycleState::Handshaking
                     )
             });
-            if !spawning {
+            if !spawning && !has_initial_admission {
                 return Err(format!(
                     "agent '{agent_id}' has no active recruit; native binding is only \
                      established during spawn or by reconnecting an existing binding"
@@ -280,6 +285,9 @@ impl TeamHub {
             }
         }
         binding.native = Some(endpoint.clone());
+        if has_initial_admission {
+            state.initial_native_admissions.remove(&admission_key);
+        }
         state.attach_runtime_to_recruit(team_id, agent_id, &endpoint);
         Ok(())
     }
@@ -291,8 +299,6 @@ impl TeamHub {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .unwrap_or_else(crate::agent_runtime::requested_backend)
     }
-
-
     pub(crate) fn prefers_legacy_codex_pty(&self) -> bool {
         #[cfg(test)]
         if let Some(delivery) = *self

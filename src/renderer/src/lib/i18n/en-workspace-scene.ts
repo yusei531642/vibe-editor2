@@ -24,6 +24,7 @@ export const enWorkspaceScene: Dict = {
   'v2.team.status.failed': 'Failed',
   'v2.team.status.terminated': 'Terminated',
   'v2.team.card.runtime': 'Agent controls',
+  'v2.team.card.you': 'You',
   'v2.team.card.noTask': 'No assigned task',
   'v2.team.card.noRuntime': 'Waiting for runtime events',
   'v2.team.card.diffReady': 'Diff updated',

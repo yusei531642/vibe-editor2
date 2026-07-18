@@ -45,7 +45,6 @@ import {
 } from '../../stores/canvas';
 import {
   useCanvasNodes,
-  useCanvasEdges,
   useCanvasStageView
 } from '../../stores/canvas-selectors';
 import { computeRecruitFocus } from '../../lib/canvas-recruit-focus';
@@ -57,6 +56,11 @@ import { useConfirmRemoveCard } from '../../lib/use-confirm-remove-card';
 import { useRoleProfiles } from '../../lib/role-profiles-context';
 import { useSettings } from '../../lib/settings-context';
 import { resolveAgentVisual, type AgentVisualPayload } from '../../lib/agent-visual';
+import {
+  filterCanvasAgents,
+  findTeamAgentNode,
+  useTeamCanvasGraph
+} from '../../lib/canvas-team-scope';
 
 const nodeTypes = {
   terminal: TerminalCard,
@@ -101,12 +105,12 @@ export interface CanvasActions {
 
 interface FlowAppProps {
   actions: CanvasActions;
+  teamId?: string;
 }
 
-function FlowApp({ actions }: FlowAppProps): JSX.Element {
+function FlowApp({ actions, teamId }: FlowAppProps): JSX.Element {
   const t = useT();
-  const nodes = useCanvasNodes();
-  const edges = useCanvasEdges();
+  const { nodes, edges } = useTeamCanvasGraph(teamId);
   // setNodes / setEdges / setViewport / addCard / pulseEdge / setTeamLock は zustand
   // 内部で stable identity を保つため selector で取り出してキャッシュしておく。
   const setNodes = useCanvasStore((s) => s.setNodes);
@@ -358,12 +362,8 @@ function FlowApp({ actions }: FlowAppProps): JSX.Element {
     const currentNodes = useCanvasStore.getState().nodes;
     // Issue #732: agentPayloadOf が agent カードのみ payload を返すので
     // 旧 `cardType === 'agent' && (payload as { agentId? }).agentId` の二段判定が 1 本化される。
-    const fromNode = currentNodes.find(
-      (n) => agentPayloadOf(n.data)?.agentId === p.fromAgentId
-    );
-    const toNode = currentNodes.find(
-      (n) => agentPayloadOf(n.data)?.agentId === p.toAgentId
-    );
+    const fromNode = findTeamAgentNode(currentNodes, p.fromAgentId, teamId);
+    const toNode = findTeamAgentNode(currentNodes, p.toAgentId, teamId);
     if (!fromNode || !toNode) return;
     pulseEdge({
       id: `handoff-${p.messageId}-${Date.now()}`,
@@ -516,7 +516,7 @@ function FlowApp({ actions }: FlowAppProps): JSX.Element {
         />
       </ReactFlow>
 
-      {stageView === 'list' ? <StageListOverlay /> : null}
+      {stageView === 'list' ? <StageListOverlay teamId={teamId} /> : null}
       <StageHud />
       <QuickNav open={quickNavOpen} onClose={() => setQuickNavOpen(false)} />
       {contextMenu && (
@@ -533,12 +533,12 @@ function FlowApp({ actions }: FlowAppProps): JSX.Element {
 
 /** stageView === 'list' のときに ReactFlow の代わりに表示する簡易ロスター。
  *  Canvas 上の agent ノードを一覧化する。 */
-function StageListOverlay(): JSX.Element {
+function StageListOverlay({ teamId }: { teamId?: string }): JSX.Element {
   const t = useT();
   const nodes = useCanvasNodes();
   const { settings } = useSettings();
   const { byId: profilesById } = useRoleProfiles();
-  const agentNodes = nodes.filter((n) => (n.data as CardData | undefined)?.cardType === 'agent');
+  const agentNodes = filterCanvasAgents(nodes, teamId);
   return (
     <div className="tc-list-overlay">
       <div className="tc-list-overlay__inner">
@@ -582,10 +582,10 @@ function StageListOverlay(): JSX.Element {
   );
 }
 
-export function Canvas({ actions }: { actions: CanvasActions }): JSX.Element {
+export function Canvas({ actions, teamId }: FlowAppProps): JSX.Element {
   return (
     <ReactFlowProvider>
-      <FlowApp actions={actions} />
+      <FlowApp actions={actions} teamId={teamId} />
     </ReactFlowProvider>
   );
 }
