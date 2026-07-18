@@ -22,6 +22,7 @@ describe('useV2RuntimeSession', () => {
   const spawnTurn = vi.fn(async () => ({ endpointId: ENDPOINT_ID }));
   const dispose = vi.fn(async () => ({ endpointId: ENDPOINT_ID }));
   const respondApproval = vi.fn();
+  const interrupt = vi.fn(async () => ({ endpointId: ENDPOINT_ID }));
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -38,7 +39,7 @@ describe('useV2RuntimeSession', () => {
           registerClaudeEndpoint,
           registerCodexEndpoint: vi.fn(),
           spawnTurn,
-          interrupt: vi.fn(async () => ({ endpointId: ENDPOINT_ID })),
+          interrupt,
           respondApproval,
           dispose
         }
@@ -177,5 +178,29 @@ describe('useV2RuntimeSession', () => {
     });
     expect(registerClaudeEndpoint).toHaveBeenCalledTimes(2);
     expect(spawnTurn).toHaveBeenLastCalledWith(expect.objectContaining({ input: 'retry' }));
+  });
+
+  it('interrupt 失敗時も実行中と承認状態を復旧する', async () => {
+    interrupt.mockRejectedValueOnce(new Error('runtime_endpoint_not_found'));
+    const { result } = renderHook(() => useV2RuntimeSession({
+      onDelta: vi.fn(), onComplete: vi.fn(), onError: vi.fn()
+    }));
+    await act(async () => {
+      await result.current.send({
+        input: 'first', engine: 'claude', model: 'fable', effort: 'high', permission: 'workspace'
+      });
+    });
+    act(() => {
+      onEvent?.(envelope({
+        type: 'approvalRequest', requestId: 'approval-a', method: 'Bash', reason: 'confirm',
+        command: 'npm test', cwd: null
+      }, 1));
+    });
+
+    await act(async () => {
+      await expect(result.current.stop()).rejects.toThrow('runtime_endpoint_not_found');
+    });
+    expect(result.current.running).toBe(false);
+    expect(result.current.pendingApproval).toBeNull();
   });
 });
