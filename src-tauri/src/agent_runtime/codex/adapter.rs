@@ -3,9 +3,10 @@
 use super::client::{ClientEvent, ClientEventSink, ClientHandle};
 use super::convert;
 use crate::agent_runtime::{
-    AgentRuntimeAdapter, BackendKind, RuntimeAdapterError, RuntimeApprovalResponseRequest,
-    RuntimeCapability, RuntimeEventPayload, RuntimeSessionForkRequest, RuntimeSessionResumeRequest,
-    RuntimeSessionSpawnRequest, RuntimeSteerRequest, RuntimeTurnSpawnRequest,
+    ensure_runtime_permission_not_escalated, AgentRuntimeAdapter, BackendKind, RuntimeAdapterError,
+    RuntimeApprovalResponseRequest, RuntimeCapability, RuntimeEventPayload,
+    RuntimeSessionForkRequest, RuntimeSessionResumeRequest, RuntimeSessionSpawnRequest,
+    RuntimeSteerRequest, RuntimeTurnSpawnRequest,
 };
 use serde_json::{json, Value};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -226,6 +227,10 @@ impl AgentRuntimeAdapter for CodexRuntimeAdapter {
                 true,
             ));
         }
+        ensure_runtime_permission_not_escalated(
+            self.permission.as_deref(),
+            request.permission.as_deref(),
+        )?;
         self.start_turn(
             &request.input,
             request.model.as_deref(),

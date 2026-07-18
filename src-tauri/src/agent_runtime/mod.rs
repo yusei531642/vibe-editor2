@@ -19,10 +19,11 @@ mod event_buffer;
 mod manager;
 mod persistence;
 mod provider_policy;
-mod registry;
 #[cfg_attr(not(unix), allow(dead_code))] // unix-gated codex 経路からのみ使用
 mod pty_compat;
+mod registry;
 
+pub(crate) use adapter::ensure_runtime_permission_not_escalated;
 pub use adapter::{
     AgentRuntimeAdapter, RuntimeAdapterError, RuntimeApprovalResponseRequest,
     RuntimeDeliveryFuture, RuntimeDeliveryRequest, RuntimeSessionForkRequest,
@@ -39,14 +40,13 @@ pub use manager::{RuntimeManager, RuntimeOperation};
 pub use persistence::{
     PersistedRuntimeBinding, RuntimeEventPersistence, RuntimeRestoreSnapshot, RuntimeTeamBinding,
 };
-pub use registry::RuntimeEndpointRegistry;
 pub use provider_policy::{
     capabilities_for, provider_declarations, resolve_native_claude_command,
     resolve_node_executable, resolve_sidecar_entrypoint, select_provider, ProviderAvailability,
-    ProviderSelection, RuntimeProvider,
-    RuntimeProviderDeclaration, SystemProviderAvailability,
+    ProviderSelection, RuntimeProvider, RuntimeProviderDeclaration, SystemProviderAvailability,
 };
 pub use pty_compat::PtyCompatAdapter;
+pub use registry::RuntimeEndpointRegistry;
 
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU8, Ordering};
