@@ -38,7 +38,7 @@ describe('Team Canvas scope', () => {
     expect(scoped.edges.map((item) => item.id)).toEqual(['inside']);
   });
 
-  it('同じ team の旧 terminal / PTY Agentカードも Team scene には表示しない', () => {
+  it('同じ team の旧 terminal / PTY Agent カードも Team scene には表示しない', () => {
     const scoped = filterCanvasGraphForTeam(
       [
         node('leader', 'team-a'),
