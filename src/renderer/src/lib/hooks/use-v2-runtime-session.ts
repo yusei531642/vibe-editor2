@@ -191,7 +191,11 @@ export function useV2RuntimeSession(callbacks: RuntimeCallbacks): {
       requestId: approval.requestId,
       decision
     });
-    setPendingApproval(null);
+    setPendingApproval((current) => (
+      current?.endpointId === approval.endpointId && current.requestId === approval.requestId
+        ? null
+        : current
+    ));
   }, [pendingApproval]);
 
   useEffect(() => () => {

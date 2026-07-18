@@ -21,6 +21,7 @@ describe('useV2RuntimeSession', () => {
   const registerClaudeEndpoint = vi.fn(async () => ({ endpointId: ENDPOINT_ID }));
   const spawnTurn = vi.fn(async () => ({ endpointId: ENDPOINT_ID }));
   const dispose = vi.fn(async () => ({ endpointId: ENDPOINT_ID }));
+  const respondApproval = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -38,7 +39,7 @@ describe('useV2RuntimeSession', () => {
           registerCodexEndpoint: vi.fn(),
           spawnTurn,
           interrupt: vi.fn(async () => ({ endpointId: ENDPOINT_ID })),
-          respondApproval: vi.fn(),
+          respondApproval,
           dispose
         }
       }
@@ -85,5 +86,43 @@ describe('useV2RuntimeSession', () => {
 
     unmount();
     await waitFor(() => expect(dispose).toHaveBeenCalled());
+  });
+
+  it('先の承認応答中に届いた新しい承認要求を消さない', async () => {
+    let finishResponse!: () => void;
+    respondApproval.mockImplementationOnce(() => new Promise<void>((resolve) => {
+      finishResponse = resolve;
+    }));
+    const { result } = renderHook(() => useV2RuntimeSession({
+      onDelta: vi.fn(), onComplete: vi.fn(), onError: vi.fn()
+    }));
+    await act(async () => {
+      await result.current.send({
+        input: '実装して', engine: 'claude', model: 'fable', effort: 'high', permission: 'workspace'
+      });
+    });
+    act(() => {
+      onEvent?.(envelope({
+        type: 'approvalRequest', requestId: 'approval-a', method: 'Bash', reason: 'first',
+        command: 'npm test', cwd: null
+      }, 1));
+    });
+    expect(result.current.pendingApproval?.requestId).toBe('approval-a');
+
+    let response: Promise<void>;
+    act(() => {
+      response = result.current.respondApproval('accept');
+    });
+    act(() => {
+      onEvent?.(envelope({
+        type: 'approvalRequest', requestId: 'approval-b', method: 'Bash', reason: 'second',
+        command: 'npm run build:vite', cwd: null
+      }, 2));
+    });
+    expect(result.current.pendingApproval?.requestId).toBe('approval-b');
+
+    finishResponse();
+    await act(async () => { await response; });
+    expect(result.current.pendingApproval?.requestId).toBe('approval-b');
   });
 });
