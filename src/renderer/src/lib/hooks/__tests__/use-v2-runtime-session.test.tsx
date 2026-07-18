@@ -203,4 +203,27 @@ describe('useV2RuntimeSession', () => {
     expect(result.current.running).toBe(false);
     expect(result.current.pendingApproval).toBeNull();
   });
+
+  it('承認応答失敗時に対象の古い承認要求を破棄する', async () => {
+    respondApproval.mockRejectedValueOnce(new Error('runtime_approval_not_pending'));
+    const { result } = renderHook(() => useV2RuntimeSession({
+      onDelta: vi.fn(), onComplete: vi.fn(), onError: vi.fn()
+    }));
+    await act(async () => {
+      await result.current.send({
+        input: 'first', engine: 'claude', model: 'fable', effort: 'high', permission: 'workspace'
+      });
+    });
+    act(() => {
+      onEvent?.(envelope({
+        type: 'approvalRequest', requestId: 'approval-a', method: 'Bash', reason: 'confirm',
+        command: 'npm test', cwd: null
+      }, 1));
+    });
+
+    await act(async () => {
+      await expect(result.current.respondApproval('accept')).rejects.toThrow('runtime_approval_not_pending');
+    });
+    expect(result.current.pendingApproval).toBeNull();
+  });
 });
