@@ -81,11 +81,13 @@ export function AgentChatSurface(props: AgentChatSurfaceProps): JSX.Element {
   const permission = payload?.runtimePermission ?? 'workspace';
   const running = agent.status === 'running' || agent.status === 'spawning';
   const unavailable = Boolean(agent.endpoint && !agent.endpoint.live);
+  const canSubmit = Boolean(instruction.trim()) && busyAction === null && !unavailable;
+  const canInterrupt = running && !instruction.trim() && busyAction === null && !unavailable;
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
     if (event.nativeEvent.isComposing || event.keyCode === 229) return;
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
-      props.onSubmit();
+      if (canSubmit) props.onSubmit();
     }
   };
 
@@ -173,11 +175,11 @@ export function AgentChatSurface(props: AgentChatSurfaceProps): JSX.Element {
             <button
               type="button"
               className="team-chat-send"
-              disabled={(!running && !instruction.trim()) || busyAction !== null || unavailable}
-              onClick={running && !instruction.trim() ? () => props.onAction('interrupt') : props.onSubmit}
-              aria-label={running && !instruction.trim() ? t('v2.team.card.pause') : t('v2.team.card.steer')}
+              disabled={!canSubmit && !canInterrupt}
+              onClick={canInterrupt ? () => props.onAction('interrupt') : props.onSubmit}
+              aria-label={canInterrupt ? t('v2.team.card.pause') : t('v2.team.card.steer')}
             >
-              {running && !instruction.trim()
+              {canInterrupt
                 ? <Square size={13} fill="currentColor" />
                 : <ArrowUp size={19} strokeWidth={1.75} />}
             </button>
