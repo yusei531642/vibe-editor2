@@ -77,6 +77,8 @@ export function useV2RuntimeSession(callbacks: RuntimeCallbacks): {
         if (event.payload.state === 'failed' || event.payload.state === 'exited') {
           setRunning(false);
           setPendingApproval(null);
+          binding.unsubscribe();
+          bindingRef.current = null;
         }
         break;
       default:
