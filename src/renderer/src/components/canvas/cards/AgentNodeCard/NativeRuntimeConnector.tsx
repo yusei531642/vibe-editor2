@@ -28,9 +28,25 @@ export function NativeRuntimeConnector({
     () => (payload.agentId ? `native-${payload.agentId}` : null),
     [payload.agentId]
   );
+  const runtimeIdentity = `${cardId}:${provider ?? ''}:${payload.teamId ?? ''}:${payload.agentId ?? ''}`;
   // Team membership updates regenerate the prompt. They must not dispose an active session.
   const systemPromptRef = useRef(systemPrompt);
   systemPromptRef.current = systemPrompt;
+  const initialMessageRef = useRef(initialMessage);
+  initialMessageRef.current = initialMessage;
+  const onStatusRef = useRef(onStatus);
+  onStatusRef.current = onStatus;
+  const runtimeOptionsRef = useRef({
+    model: payload.runtimeModel ?? null,
+    effort: payload.runtimeEffort ?? null,
+    permission: payload.runtimePermission ?? 'workspace'
+  });
+  runtimeOptionsRef.current = {
+    model: payload.runtimeModel ?? null,
+    effort: payload.runtimeEffort ?? null,
+    permission: payload.runtimePermission ?? 'workspace'
+  };
+  const bootstrappedIdentityRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!endpointId || !payload.agentId || !payload.teamId) return;
@@ -39,7 +55,7 @@ export function NativeRuntimeConnector({
     let registered = false;
     let unsubscribe: (() => void) | null = null;
     const start = async (): Promise<void> => {
-      onStatus({ kind: 'starting', command: provider });
+      onStatusRef.current({ kind: 'starting', command: provider });
       unsubscribe = await window.api.agentRuntime.onEventReady(
         endpointId,
         useRuntimeStore.getState().projectEvent
@@ -48,15 +64,16 @@ export function NativeRuntimeConnector({
         unsubscribe();
         return;
       }
+      const runtimeOptions = runtimeOptionsRef.current;
       if (provider === 'claude-native') {
         await window.api.agentRuntime.reconnectClaude({
           endpointId,
           teamId: payload.teamId,
           agentId: payload.agentId,
           systemPrompt: systemPromptRef.current ?? null,
-          model: payload.runtimeModel ?? null,
-          effort: payload.runtimeEffort ?? null,
-          permission: payload.runtimePermission ?? 'workspace',
+          model: runtimeOptions.model,
+          effort: runtimeOptions.effort,
+          permission: runtimeOptions.permission,
           session: { mode: 'start' }
         });
       } else {
@@ -65,8 +82,8 @@ export function NativeRuntimeConnector({
           teamId: payload.teamId,
           agentId: payload.agentId,
           cwd: null,
-          model: payload.runtimeModel ?? null,
-          permission: payload.runtimePermission ?? 'workspace',
+          model: runtimeOptions.model,
+          permission: runtimeOptions.permission,
           thread: { mode: 'start' }
         });
       }
@@ -75,23 +92,26 @@ export function NativeRuntimeConnector({
         await window.api.agentRuntime.dispose(endpointId);
         return;
       }
-      const bootstrap = initialMessage?.trim() ||
+      const bootstrap = (bootstrappedIdentityRef.current === runtimeIdentity
+        ? ''
+        : initialMessageRef.current?.trim()) ||
         (provider === 'codex-native' ? systemPromptRef.current?.trim() : '') ||
         'Start your assigned team role and read pending TeamHub messages.';
       await window.api.agentRuntime.spawnTurn({
         endpointId,
         input: bootstrap,
         submit: true,
-        model: payload.runtimeModel ?? null,
-        effort: payload.runtimeEffort ?? null,
-        permission: payload.runtimePermission ?? 'workspace'
+        model: runtimeOptions.model,
+        effort: runtimeOptions.effort,
+        permission: runtimeOptions.permission
       });
-      onStatus({ kind: 'running', command: provider });
+      bootstrappedIdentityRef.current = runtimeIdentity;
+      onStatusRef.current({ kind: 'running', command: provider });
     };
     void start().catch((error) => {
       if (disposed) return;
       const message = error instanceof Error ? error.message : String(error);
-      onStatus({ kind: 'spawn_failed', command: provider, error: message });
+      onStatusRef.current({ kind: 'spawn_failed', command: provider, error: message });
       if (registered) void window.api.agentRuntime.dispose(endpointId).catch(() => undefined);
     });
     return () => {
@@ -102,14 +122,10 @@ export function NativeRuntimeConnector({
   }, [
     cardId,
     endpointId,
-    initialMessage,
-    onStatus,
     payload.agentId,
-    payload.runtimeEffort,
-    payload.runtimeModel,
-    payload.runtimePermission,
     payload.teamId,
-    provider
+    provider,
+    runtimeIdentity
   ]);
 
   return null;
