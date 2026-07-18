@@ -5,10 +5,7 @@ const WORKSPACE_AUTO_ALLOWED_TEAM_TOOLS = new Set([
   'team_get_tasks',
   'team_info',
   'team_list_role_profiles',
-  'team_read',
-  'team_report',
-  'team_status',
-  'team_update_task'
+  'team_read'
 ]);
 
 export function shouldAutoAllowTool(toolName, permission) {
