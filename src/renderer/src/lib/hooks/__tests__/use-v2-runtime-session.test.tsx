@@ -125,4 +125,33 @@ describe('useV2RuntimeSession', () => {
     await act(async () => { await response; });
     expect(result.current.pendingApproval?.requestId).toBe('approval-b');
   });
+
+  it('runtime error 後に応答不能な承認要求を残さない', async () => {
+    const onError = vi.fn();
+    const { result } = renderHook(() => useV2RuntimeSession({
+      onDelta: vi.fn(), onComplete: vi.fn(), onError
+    }));
+    await act(async () => {
+      await result.current.send({
+        input: '実装して', engine: 'claude', model: 'fable', effort: 'high', permission: 'workspace'
+      });
+    });
+    act(() => {
+      onEvent?.(envelope({
+        type: 'approvalRequest', requestId: 'approval-a', method: 'Bash', reason: 'confirm',
+        command: 'npm test', cwd: null
+      }, 1));
+    });
+    expect(result.current.pendingApproval?.requestId).toBe('approval-a');
+
+    act(() => {
+      onEvent?.(envelope({
+        type: 'error', code: 'runtime_failed', message: 'runtime failed', recoverable: true
+      }, 2));
+    });
+
+    expect(onError).toHaveBeenCalledWith('runtime failed', 'claude');
+    expect(result.current.running).toBe(false);
+    expect(result.current.pendingApproval).toBeNull();
+  });
 });
