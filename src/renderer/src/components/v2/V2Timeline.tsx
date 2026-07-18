@@ -3,12 +3,15 @@ import type { V2PendingApproval } from '../../lib/hooks/use-v2-runtime-session';
 import { useT } from '../../lib/i18n';
 import { engineLabel } from '../../lib/v2-runtime-controls';
 import type { V2Engine } from './UnifiedComposer';
+import type { V2ComposerAttachment, V2ComposerIntent } from '../../lib/v2-composer-actions';
 
 export interface V2TimelineEntry {
   id: string;
   role: 'user' | 'agent';
   text: string;
   engine: V2Engine;
+  attachments?: V2ComposerAttachment[];
+  intent?: V2ComposerIntent;
 }
 
 export function V2Timeline({
@@ -49,6 +52,13 @@ export function V2Timeline({
                 : engineLabel(entry.engine)}
             </span>
             <p>{entry.text}</p>
+            {entry.attachments?.length ? (
+              <div className="v2-message__attachments">
+                {entry.attachments.map((attachment) => (
+                  <span key={attachment.path} title={attachment.path}>{attachment.name}</span>
+                ))}
+              </div>
+            ) : null}
           </article>
         ))}
         {running ? (

@@ -5,8 +5,6 @@ import {
   ArrowRight,
   Bug,
   CodeXml,
-  FileCode2,
-  Files,
   Hammer,
   PanelLeft,
   PanelRight,
@@ -24,13 +22,11 @@ import { reportV2RuntimeActionError } from "../../lib/v2-runtime-action";
 import { useCanvasStore } from "../../stores/canvas";
 import { useUiStore } from "../../stores/ui";
 import { launchV2Team } from "../../lib/v2-team-launch";
+import { attachmentName, buildV2RuntimeInput, type V2ComposerAttachment, type V2ComposerIntent } from "../../lib/v2-composer-actions";
 import { V2Timeline, type V2TimelineEntry } from "./V2Timeline";
-import {
-  UnifiedComposer,
-  type V2Engine,
-  type V2Permission,
-} from "./UnifiedComposer";
+import { UnifiedComposer, type V2Engine, type V2Permission } from "./UnifiedComposer";
 import { TeamInspector } from "./TeamInspector";
+import { V2WorkspaceDrawer } from "./V2WorkspaceDrawer";
 import { useTeamProjection } from "./TeamProjectionProvider";
 
 const QUICK_ACTIONS = [
@@ -77,6 +73,9 @@ export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Ele
   const [effort, setEffort] = useState("");
   const [permission, setPermission] = useState<V2Permission>("workspace");
   const [prompt, setPrompt] = useState("");
+  const [composerIntent, setComposerIntent] = useState<V2ComposerIntent>("message");
+  const [attachments, setAttachments] = useState<V2ComposerAttachment[]>([]);
+  const [activeGoal, setActiveGoal] = useState<string | null>(null);
   const [teamStarting, setTeamStarting] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
   const [leftOpen, setLeftOpen] = useState(false);
@@ -214,28 +213,53 @@ export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Ele
     });
   }, [addCard, effort, engine, model, permission, projectRoot, runtime, setWorkspaceTeamId, t]);
 
+  const attachFile = useCallback(async (): Promise<void> => {
+    try {
+      const path = await window.api.dialog.openFile(t("v2.composer.attachDialogTitle"));
+      if (!path) return;
+      setAttachments((current) => current.some((attachment) => attachment.path === path)
+        ? current
+        : [...current, { path, name: attachmentName(path) }]);
+    } catch (error) {
+      setHasStarted(true);
+      onRuntimeError(error instanceof Error ? error.message : String(error), engine);
+    }
+  }, [engine, onRuntimeError, t]);
+
   const submit = useCallback(() => {
     const text = prompt.trim();
-    if (!text || running) return;
+    if ((!text && attachments.length === 0) || running) return;
+    if ((composerIntent === "goal" || composerIntent === "team") && !text) return;
+    const runtimeInput = buildV2RuntimeInput({
+      text,
+      intent: composerIntent,
+      attachments,
+      activeGoal,
+    });
     const entry: V2TimelineEntry = {
       id: crypto.randomUUID(),
       role: "user",
-      text,
+      text: text || t("v2.composer.attachmentsOnlyMessage"),
       engine,
+      attachments,
+      intent: composerIntent,
     };
     setEntries((current) => [...current, entry]);
+    if (composerIntent === "goal") setActiveGoal(text);
     setPrompt("");
+    setAttachments([]);
+    setComposerIntent("message");
     setHasStarted(true);
     activeAgentEntryIdRef.current = null;
-    if (requestsVisibleTeam(text)) {
+    if (composerIntent === "team" || requestsVisibleTeam(text)) {
       setTeamStarting(true);
-      void launchTeam(text).catch((error) => {
+      void launchTeam(runtimeInput).catch((error) => {
         onRuntimeError(error instanceof Error ? error.message : String(error), engine);
       }).finally(() => setTeamStarting(false));
       return;
     }
-    void runtime.send({ input: text, engine, model, effort, permission }).catch(() => undefined);
-  }, [effort, engine, launchTeam, model, onRuntimeError, permission, prompt, running, runtime]);
+    void runtime.send({ input: runtimeInput, engine, model, effort, permission }).catch(() => undefined);
+  }, [activeGoal, attachments, composerIntent, effort, engine, launchTeam, model, onRuntimeError, permission, prompt, running, runtime, t]);
 
   const stopRun = useCallback(() => {
     if (teamStarting) return;
@@ -247,6 +271,10 @@ export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Ele
     void runtime.reset();
     setEntries([]);
     setPrompt("");
+    setAttachments([]);
+    setComposerIntent("message");
+    setActiveGoal(null);
+    setTeamStarting(false);
     setHasStarted(false);
     activeAgentEntryIdRef.current = null;
     window.dispatchEvent(new Event("vibe-editor2:focus-composer"));
@@ -398,6 +426,9 @@ export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Ele
           projectName={projectName}
           prompt={prompt}
           running={running}
+          activeGoal={activeGoal}
+          attachments={attachments}
+          intent={composerIntent}
           onEngineChange={(nextEngine) => {
             setEngine(nextEngine);
             setModel("");
@@ -408,55 +439,25 @@ export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Ele
           onPermissionChange={setPermission}
           onProjectClick={() => void handleOpenFolder()}
           onPromptChange={setPrompt}
+          onAttachFile={attachFile}
+          onClearGoal={() => setActiveGoal(null)}
+          onIntentChange={setComposerIntent}
+          onRemoveAttachment={(path) => setAttachments((current) =>
+            current.filter((attachment) => attachment.path !== path)
+          )}
           onSubmit={submit}
           onStop={stopRun}
         />
       </div>
 
       {leftOpen && (
-        <aside
-          className="v2-drawer v2-drawer--left"
-          aria-label={t("v2.drawer.left")}
-        >
-          <header>
-            <strong>{t("v2.drawer.workspace")}</strong>
-            <button
-              type="button"
-              aria-label={t("common.close")}
-              onClick={() => setLeftOpen(false)}
-            >
-              <X size={20} />
-            </button>
-          </header>
-          <section>
-            <h2>{t("v2.drawer.projects")}</h2>
-            <button
-              type="button"
-              className="v2-drawer-row"
-              onClick={() => void handleOpenFolder()}
-            >
-              <Files size={18} />
-              {projectName}
-            </button>
-          </section>
-          <section>
-            <h2>{t("v2.drawer.sessions")}</h2>
-            <p>
-              {entries.length > 0
-                ? t("v2.drawer.currentSession")
-                : t("v2.drawer.noSessions")}
-            </p>
-          </section>
-          <section>
-            <h2>{t("v2.drawer.changedFiles")}</h2>
-            {gitStatus?.files.slice(0, 8).map((file) => (
-              <div className="v2-drawer-row" key={file.path}>
-                <FileCode2 size={17} />
-                {file.path}
-              </div>
-            ))}
-          </section>
-        </aside>
+        <V2WorkspaceDrawer
+          projectName={projectName}
+          changedFiles={gitStatus?.files ?? []}
+          hasEntries={entries.length > 0}
+          onClose={() => setLeftOpen(false)}
+          onOpenProject={() => void handleOpenFolder()}
+        />
       )}
 
       {inspectorOpen && hasTeamProjection ? (
