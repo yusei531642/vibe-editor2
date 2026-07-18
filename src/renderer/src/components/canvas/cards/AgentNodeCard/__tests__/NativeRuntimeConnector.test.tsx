@@ -6,6 +6,14 @@ import { NativeRuntimeConnector } from '../NativeRuntimeConnector';
 vi.mock('../../../../../lib/i18n', () => ({
   useT: () => (key: string) => key
 }));
+vi.mock('../../../../../lib/hooks/use-v2-runtime-catalog', () => ({
+  useV2RuntimeCatalog: () => ({
+    loading: false, error: null,
+    models: [{
+      id: 'claude-fable-5', label: 'Fable', supportedEfforts: ['high'], defaultEffort: 'high'
+    }]
+  })
+}));
 
 const runtime = vi.hoisted(() => ({
   dispose: vi.fn().mockResolvedValue(undefined),
@@ -96,5 +104,28 @@ describe('NativeRuntimeConnector', () => {
     await waitFor(() => expect(runtime.reconnectClaude).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(runtime.spawnTurn).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole('button', { name: 'v2.team.card.reconnect' })).not.toBeInTheDocument();
+  });
+
+  it('未指定の既定 model/effort を card と backend request に同期する', async () => {
+    const setCardPayload = vi.fn();
+    render(
+      <NativeRuntimeConnector
+        cardId="card-1"
+        payload={payload({ runtimeModel: undefined, runtimeEffort: undefined })}
+        initialMessage="最初の指示"
+        onStatus={vi.fn()}
+        setCardPayload={setCardPayload}
+      />
+    );
+
+    await waitFor(() => expect(runtime.reconnectClaude).toHaveBeenCalledWith(expect.objectContaining({
+      model: 'claude-fable-5', effort: 'high'
+    })));
+    expect(runtime.spawnTurn).toHaveBeenCalledWith(expect.objectContaining({
+      model: 'claude-fable-5', effort: 'high'
+    }));
+    expect(setCardPayload).toHaveBeenCalledWith({
+      runtimeModel: 'claude-fable-5', runtimeEffort: 'high'
+    });
   });
 });

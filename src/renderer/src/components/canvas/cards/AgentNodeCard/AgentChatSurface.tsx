@@ -1,4 +1,4 @@
-import { useMemo, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, type KeyboardEvent } from 'react';
 import {
   ArrowUp,
   ExternalLink,
@@ -83,6 +83,13 @@ export function AgentChatSurface(props: AgentChatSurfaceProps): JSX.Element {
   const unavailable = Boolean(agent.endpoint && !agent.endpoint.live);
   const canSubmit = Boolean(instruction.trim()) && busyAction === null && !unavailable;
   const canInterrupt = running && !instruction.trim() && busyAction === null && !unavailable;
+  useEffect(() => {
+    if (!payload || !modelValue) return;
+    const patch: Partial<AgentPayload> = {};
+    if (!payload.runtimeModel) patch.runtimeModel = modelValue;
+    if (!payload.runtimeEffort && effortValue) patch.runtimeEffort = effortValue;
+    if (Object.keys(patch).length > 0) props.onRuntimePatch(patch);
+  }, [effortValue, modelValue, payload, props.onRuntimePatch]);
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
     if (event.nativeEvent.isComposing || event.keyCode === 229) return;
     if (event.key === 'Enter' && !event.shiftKey) {

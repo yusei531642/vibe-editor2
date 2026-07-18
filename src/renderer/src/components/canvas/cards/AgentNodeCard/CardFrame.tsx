@@ -466,6 +466,7 @@ function AgentNodeCardImpl({
             systemPrompt={instructions}
             initialMessage={payload.initialMessage}
             onStatus={setStatus}
+            setCardPayload={(patch) => setCardPayload(id, patch)}
           />
         ) : (
           <TerminalOverlay
