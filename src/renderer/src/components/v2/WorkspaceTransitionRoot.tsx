@@ -7,6 +7,7 @@ import {
   type CSSProperties
 } from 'react';
 import { MessagesSquare, Network } from 'lucide-react';
+import { useStoreWithEqualityFn } from 'zustand/traditional';
 import { V2Shell } from './V2Shell';
 import { TeamWorkspaceScene } from './TeamWorkspaceScene';
 import { TeamProjectionProvider } from './TeamProjectionProvider';
@@ -23,7 +24,11 @@ import {
 } from '../../stores/ui';
 import { useSettingsValue } from '../../lib/settings-context';
 import type { Team } from '../../../../types/shared';
-import { agentPayloadOf, useCanvasStore } from '../../stores/canvas';
+import {
+  agentPayloadOf,
+  useCanvasStore,
+  type CanvasState
+} from '../../stores/canvas';
 import { V2_REQUEST_TEAM_SCENE_EVENT } from '../../lib/v2-runtime-controls';
 
 const SCENE_DURATION_MS = 500;
@@ -73,6 +78,25 @@ function frameStyle(frame: FlipFrame): CSSProperties {
   };
 }
 
+function selectCanvasTeams(state: CanvasState): Team[] {
+  const byId = new Map<string, Team>();
+  for (const node of state.nodes) {
+    const payload = agentPayloadOf(node.data);
+    if (!payload?.teamId) continue;
+    byId.set(payload.teamId, {
+      id: payload.teamId,
+      name: payload.teamName || payload.teamId
+    });
+  }
+  return [...byId.values()];
+}
+
+function sameTeams(left: Team[], right: Team[]): boolean {
+  return left.length === right.length && left.every((team, index) =>
+    team.id === right[index]?.id && team.name === right[index]?.name
+  );
+}
+
 function WorkspaceScene({
   scene,
   active,
@@ -106,24 +130,12 @@ function EnabledWorkspaceTransitionRoot({
 }: WorkspaceTransitionRootProps): JSX.Element {
   const t = useT();
   const { teams } = useTeam();
-  const canvasNodes = useCanvasStore((state) => state.nodes);
+  const canvasTeams = useStoreWithEqualityFn(useCanvasStore, selectCanvasTeams, sameTeams);
   const reducedMotion = useReducedMotion(motionPreference);
   const persistedScene = useUiStore((state) => state.workspaceScene);
   const setPersistedScene = useUiStore((state) => state.setWorkspaceScene);
   const workspaceTeamId = useUiStore((state) => state.workspaceTeamId);
   const setWorkspaceTeamId = useUiStore((state) => state.setWorkspaceTeamId);
-  const canvasTeams = useMemo(() => {
-    const byId = new Map<string, Team>();
-    for (const node of canvasNodes) {
-      const payload = agentPayloadOf(node.data);
-      if (!payload?.teamId) continue;
-      byId.set(payload.teamId, {
-        id: payload.teamId,
-        name: payload.teamName || payload.teamId
-      });
-    }
-    return [...byId.values()];
-  }, [canvasNodes]);
   const availableTeams = useMemo(() => {
     const byId = new Map<string, Team>();
     for (const team of [...teams, ...canvasTeams]) byId.set(team.id, team);

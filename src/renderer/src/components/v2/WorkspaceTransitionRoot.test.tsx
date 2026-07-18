@@ -7,6 +7,7 @@ import { V2_REQUEST_TEAM_SCENE_EVENT } from '../../lib/v2-runtime-controls';
 import { WorkspaceTransitionRoot } from './WorkspaceTransitionRoot';
 
 const shellLifecycle = vi.hoisted(() => ({ mounts: 0, unmounts: 0 }));
+const teamSceneLifecycle = vi.hoisted(() => ({ renders: 0 }));
 const teamContext = vi.hoisted(() => ({
   teams: [{ id: 'team-1', name: 'Issue 25 Team' }] as Array<{ id: string; name: string }>
 }));
@@ -55,7 +56,10 @@ vi.mock('./V2Shell', () => ({
 }));
 
 vi.mock('./TeamWorkspaceScene', () => ({
-  TeamWorkspaceScene: () => <div data-workspace-leader="">Leader</div>
+  TeamWorkspaceScene: () => {
+    teamSceneLifecycle.renders += 1;
+    return <div data-workspace-leader="">Leader</div>;
+  }
 }));
 
 describe('WorkspaceTransitionRoot', () => {
@@ -65,6 +69,7 @@ describe('WorkspaceTransitionRoot', () => {
     useCanvasStore.setState({ nodes: [], edges: [] });
     shellLifecycle.mounts = 0;
     shellLifecycle.unmounts = 0;
+    teamSceneLifecycle.renders = 0;
     teamContext.teams = [{ id: 'team-1', name: 'Issue 25 Team' }];
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
       this: HTMLElement
@@ -171,6 +176,31 @@ describe('WorkspaceTransitionRoot', () => {
     expect(container.querySelector('.workspace-scene--focus')).not.toHaveAttribute('inert');
     expect(container.querySelector('.workspace-scene--focus')).not.toHaveAttribute('aria-hidden');
     expect(container.querySelector('.workspace-scene--team')).toHaveAttribute('inert');
+  });
+
+  it('カードdragでteam所属が不変ならscene treeを再レンダーしない', () => {
+    teamContext.teams = [];
+    useCanvasStore.setState({
+      nodes: [{
+        id: 'leader',
+        type: 'card',
+        position: { x: 0, y: 0 },
+        data: {
+          cardType: 'agent',
+          title: 'Leader',
+          payload: { agent: 'claude', teamId: 'team-canvas', teamName: 'Canvas Team' }
+        }
+      }],
+      edges: []
+    });
+    render(<WorkspaceTransitionRoot />);
+    const renders = teamSceneLifecycle.renders;
+
+    act(() => useCanvasStore.setState((state) => ({
+      nodes: state.nodes.map((node) => ({ ...node, position: { x: 120, y: 80 } }))
+    })));
+
+    expect(teamSceneLifecycle.renders).toBe(renders);
   });
 
   it('reduced motionではFLIP移動を作らずcross-fade時間で完了する', () => {
