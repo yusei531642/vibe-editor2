@@ -2,9 +2,9 @@
 
 use super::client::{ClientEvent, ClientEventSink, SidecarClient, SidecarLaunchConfig};
 use crate::agent_runtime::{
-    capabilities_for, AgentRuntimeAdapter, BackendKind, RuntimeAdapterError,
-    RuntimeApprovalResponseRequest, RuntimeCapability, RuntimeDeliveryRequest, RuntimeEventPayload,
-    RuntimeProvider, RuntimeSessionForkRequest, RuntimeSessionResumeRequest,
+    capabilities_for, ensure_runtime_permission_not_escalated, AgentRuntimeAdapter, BackendKind,
+    RuntimeAdapterError, RuntimeApprovalResponseRequest, RuntimeCapability, RuntimeDeliveryRequest,
+    RuntimeEventPayload, RuntimeProvider, RuntimeSessionForkRequest, RuntimeSessionResumeRequest,
     RuntimeSessionSpawnRequest, RuntimeSteerRequest, RuntimeTurnSpawnRequest,
 };
 use serde_json::{json, Value};
@@ -167,6 +167,10 @@ impl AgentRuntimeAdapter for ClaudeAgentRuntimeAdapter {
                 true,
             ));
         }
+        ensure_runtime_permission_not_escalated(
+            self.permission.as_deref(),
+            request.permission.as_deref(),
+        )?;
         self.submitted_input(
             "turn",
             &request.input,
