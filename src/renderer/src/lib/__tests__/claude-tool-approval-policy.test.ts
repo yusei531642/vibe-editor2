@@ -6,9 +6,6 @@ describe('shouldAutoAllowTool', () => {
   it.each([
     'team_info',
     'team_read',
-    'team_status',
-    'team_report',
-    'team_update_task',
     'team_get_tasks',
     'team_list_role_profiles',
     'team_diagnostics'
@@ -20,6 +17,9 @@ describe('shouldAutoAllowTool', () => {
     'team_recruit',
     'team_dismiss',
     'team_send',
+    'team_status',
+    'team_report',
+    'team_update_task',
     'team_assign_task',
     'team_lock_files',
     'team_unlock_files'
