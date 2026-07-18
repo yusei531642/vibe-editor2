@@ -78,4 +78,27 @@ describe('AgentChatSurface keyboard submit', () => {
       runtimeModel: 'claude-fable-5', runtimeEffort: 'high'
     }));
   });
+
+  it('PTY payload には catalog の既定 model/effort を同期しない', async () => {
+    catalog.models = [{
+      id: 'claude-fable-5', label: 'Fable', supportedEfforts: ['high'], defaultEffort: 'high'
+    }];
+    const onRuntimePatch = vi.fn();
+    render(<AgentChatSurface
+      agent={agent()}
+      payload={{ runtimeProvider: 'pty' }}
+      instruction=""
+      busyAction={null}
+      confirmingDismiss={false}
+      onInstructionChange={vi.fn()}
+      onRuntimePatch={onRuntimePatch}
+      onSubmit={vi.fn()}
+      onAction={vi.fn()}
+      onInspect={vi.fn()}
+      onConfirmingDismissChange={vi.fn()}
+      t={(key) => key}
+    />);
+
+    await waitFor(() => expect(onRuntimePatch).not.toHaveBeenCalled());
+  });
 });
