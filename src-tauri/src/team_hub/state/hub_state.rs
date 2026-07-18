@@ -244,14 +244,9 @@ impl EnginePolicy {
     /// 違反が無ければ `Ok(())`。
     pub fn validate(&self, engine: &str) -> Result<(), String> {
         match (self.kind, engine) {
-            (EnginePolicyKind::ClaudeOnly, "codex") => Err(
-                "team engine policy is ClaudeOnly, cannot recruit with engine='codex'".to_string(),
-            ),
-            (EnginePolicyKind::CodexOnly, "claude") => Err(
-                "team engine policy is CodexOnly, cannot recruit with engine='claude' \
-                 (this prevents accidental Claude recruitment into a Codex-only team)"
-                    .to_string(),
-            ),
+            (EnginePolicyKind::ClaudeOnly, "codex") => Err("team engine policy is ClaudeOnly, cannot recruit with engine='codex'".to_string()),
+            (EnginePolicyKind::CodexOnly, "claude") => Err("team engine policy is CodexOnly, cannot recruit with engine='claude' \
+                 (this prevents accidental Claude recruitment into a Codex-only team)".to_string()),
             _ => Ok(()),
         }
     }
@@ -621,7 +616,8 @@ impl TeamHub {
                     let token = token.clone();
                     tokio::spawn(async move {
                         let _permit = permit;
-                        if let Err(e) = crate::team_hub::handle_client(hub2, connected, token).await
+                        if let Err(e) =
+                            crate::team_hub::handle_client(hub2, connected, token).await
                         {
                             tracing::debug!("teamhub client error: {e:#}");
                         }
