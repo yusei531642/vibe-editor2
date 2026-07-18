@@ -32,6 +32,7 @@ pub struct CodexRuntimeAdapter {
     cwd: Option<String>,
     model: Option<String>,
     permission: Option<String>,
+    permission_locked: bool,
     state: Arc<SessionState>,
     disposed: AtomicBool,
 }
@@ -42,6 +43,7 @@ impl CodexRuntimeAdapter {
         cwd: Option<String>,
         model: Option<String>,
         permission: Option<String>,
+        permission_locked: bool,
         sink: CodexAdapterEventSink,
     ) -> Result<Self, RuntimeAdapterError> {
         let state = Arc::new(SessionState::default());
@@ -56,6 +58,7 @@ impl CodexRuntimeAdapter {
             cwd,
             model,
             permission,
+            permission_locked,
             state,
             disposed: AtomicBool::new(false),
         })
@@ -67,6 +70,7 @@ impl CodexRuntimeAdapter {
         cwd: Option<String>,
         model: Option<String>,
         permission: Option<String>,
+        permission_locked: bool,
         sink: CodexAdapterEventSink,
     ) -> Result<Self, RuntimeAdapterError> {
         let state = Arc::new(SessionState::default());
@@ -81,6 +85,7 @@ impl CodexRuntimeAdapter {
             cwd,
             model,
             permission,
+            permission_locked,
             state,
             disposed: AtomicBool::new(false),
         })
@@ -228,6 +233,7 @@ impl AgentRuntimeAdapter for CodexRuntimeAdapter {
             ));
         }
         ensure_runtime_permission_not_escalated(
+            self.permission_locked,
             self.permission.as_deref(),
             request.permission.as_deref(),
         )?;

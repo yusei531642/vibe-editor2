@@ -208,10 +208,17 @@ fn adapter_and_manager(
     let cwd = Some("/tmp/project".to_string());
     let adapter = Arc::new(
         match fixture.client_stream.take() {
-            Some(stream) => CodexRuntimeAdapter::connect_stream(stream, cwd, None, None, sink),
-            None => {
-                CodexRuntimeAdapter::connect(fixture.socket_path.clone(), cwd, None, None, sink)
+            Some(stream) => {
+                CodexRuntimeAdapter::connect_stream(stream, cwd, None, None, false, sink)
             }
+            None => CodexRuntimeAdapter::connect(
+                fixture.socket_path.clone(),
+                cwd,
+                None,
+                None,
+                false,
+                sink,
+            ),
         }
         .expect("connect adapter"),
     );
@@ -400,8 +407,10 @@ async fn crash_and_protocol_mismatch_are_explicit_failures() {
     let mut fixture = spawn_fixture(FixtureMode::VersionMismatch);
     let sink = Arc::new(|_: CodexAdapterEvent| {});
     let connection = match fixture.client_stream.take() {
-        Some(stream) => CodexRuntimeAdapter::connect_stream(stream, None, None, None, sink),
-        None => CodexRuntimeAdapter::connect(fixture.socket_path.clone(), None, None, None, sink),
+        Some(stream) => CodexRuntimeAdapter::connect_stream(stream, None, None, None, false, sink),
+        None => {
+            CodexRuntimeAdapter::connect(fixture.socket_path.clone(), None, None, None, false, sink)
+        }
     };
     let error = match connection {
         Ok(_) => panic!("version mismatch must fail"),
