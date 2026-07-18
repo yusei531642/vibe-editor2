@@ -39,6 +39,7 @@ export function NativeRuntimeConnector({
     ?? resolvedModelOption?.defaultEffort
     ?? resolvedModelOption?.supportedEfforts[0]
     ?? null;
+  const waitingForInitialCatalog = !payload.runtimeModel && catalog.loading;
   const endpointId = useMemo(
     () => (payload.agentId ? `native-${payload.agentId}` : null),
     [payload.agentId]
@@ -74,7 +75,7 @@ export function NativeRuntimeConnector({
   useEffect(() => {
     if (!endpointId || !payload.agentId || !payload.teamId) return;
     if (!isNativeRuntimeProvider(provider)) return;
-    if (!payload.runtimeModel && catalog.loading) return;
+    if (waitingForInitialCatalog) return;
     let disposed = false;
     let registered = false;
     let unsubscribe: (() => void) | null = null;
@@ -147,13 +148,13 @@ export function NativeRuntimeConnector({
     };
   }, [
     cardId,
-    catalog.loading,
     endpointId,
     payload.agentId,
     payload.teamId,
     provider,
     retryNonce,
-    runtimeIdentity
+    runtimeIdentity,
+    waitingForInitialCatalog
   ]);
 
   return failure ? (
