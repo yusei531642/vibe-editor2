@@ -154,4 +154,28 @@ describe('useV2RuntimeSession', () => {
     expect(result.current.running).toBe(false);
     expect(result.current.pendingApproval).toBeNull();
   });
+
+  it('endpoint 終了後の次回送信で binding を再登録する', async () => {
+    const { result } = renderHook(() => useV2RuntimeSession({
+      onDelta: vi.fn(), onComplete: vi.fn(), onError: vi.fn()
+    }));
+    await act(async () => {
+      await result.current.send({
+        input: 'first', engine: 'claude', model: 'fable', effort: 'high', permission: 'workspace'
+      });
+    });
+    expect(registerClaudeEndpoint).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      onEvent?.(envelope({ type: 'lifecycle', state: 'failed', detail: 'sidecar crashed' }, 1));
+    });
+
+    await act(async () => {
+      await result.current.send({
+        input: 'retry', engine: 'claude', model: 'fable', effort: 'high', permission: 'workspace'
+      });
+    });
+    expect(registerClaudeEndpoint).toHaveBeenCalledTimes(2);
+    expect(spawnTurn).toHaveBeenLastCalledWith(expect.objectContaining({ input: 'retry' }));
+  });
 });
