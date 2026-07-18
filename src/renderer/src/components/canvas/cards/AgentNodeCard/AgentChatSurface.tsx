@@ -71,7 +71,7 @@ function AgentMessages({ agent, payload, t }: Pick<AgentChatSurfaceProps, 'agent
 }
 
 export function AgentChatSurface(props: AgentChatSurfaceProps): JSX.Element {
-  const { agent, payload, busyAction, instruction, t } = props;
+  const { agent, payload, busyAction, instruction, onRuntimePatch, t } = props;
   const engine = payload?.agent ?? 'claude';
   const catalog = useV2RuntimeCatalog(engine, Boolean(payload?.runtimeProvider));
   const modelValue = payload?.runtimeModel ?? catalog.models[0]?.id ?? '';
@@ -88,8 +88,8 @@ export function AgentChatSurface(props: AgentChatSurfaceProps): JSX.Element {
     const patch: Partial<AgentPayload> = {};
     if (!payload.runtimeModel) patch.runtimeModel = modelValue;
     if (!payload.runtimeEffort && effortValue) patch.runtimeEffort = effortValue;
-    if (Object.keys(patch).length > 0) props.onRuntimePatch(patch);
-  }, [effortValue, modelValue, payload, props.onRuntimePatch]);
+    if (Object.keys(patch).length > 0) onRuntimePatch(patch);
+  }, [effortValue, modelValue, onRuntimePatch, payload]);
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
     if (event.nativeEvent.isComposing || event.keyCode === 229) return;
     if (event.key === 'Enter' && !event.shiftKey) {
