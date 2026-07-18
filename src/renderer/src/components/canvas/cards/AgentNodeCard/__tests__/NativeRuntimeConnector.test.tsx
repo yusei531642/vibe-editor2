@@ -6,13 +6,15 @@ import { NativeRuntimeConnector } from '../NativeRuntimeConnector';
 vi.mock('../../../../../lib/i18n', () => ({
   useT: () => (key: string) => key
 }));
+const catalog = vi.hoisted(() => ({
+  loading: false,
+  error: null as string | null,
+  models: [{
+    id: 'claude-fable-5', label: 'Fable', supportedEfforts: ['high'], defaultEffort: 'high'
+  }]
+}));
 vi.mock('../../../../../lib/hooks/use-v2-runtime-catalog', () => ({
-  useV2RuntimeCatalog: () => ({
-    loading: false, error: null,
-    models: [{
-      id: 'claude-fable-5', label: 'Fable', supportedEfforts: ['high'], defaultEffort: 'high'
-    }]
-  })
+  useV2RuntimeCatalog: () => catalog
 }));
 
 const runtime = vi.hoisted(() => ({
@@ -45,6 +47,11 @@ describe('NativeRuntimeConnector', () => {
       ...currentApi,
       agentRuntime: { ...currentApi.agentRuntime, ...runtime }
     } as typeof window.api;
+    catalog.loading = false;
+    catalog.error = null;
+    catalog.models = [{
+      id: 'claude-fable-5', label: 'Fable', supportedEfforts: ['high'], defaultEffort: 'high'
+    }];
     for (const mock of Object.values(runtime)) mock.mockClear();
   });
 
@@ -153,5 +160,37 @@ describe('NativeRuntimeConnector', () => {
     expect(setCardPayload).toHaveBeenCalledWith({
       runtimeModel: 'claude-fable-5', runtimeEffort: 'high'
     });
+  });
+
+  it('非同期 catalog 解決前は native endpoint を登録しない', async () => {
+    catalog.models = [];
+    const pendingPayload = payload({ runtimeModel: undefined, runtimeEffort: undefined });
+    const view = render(
+      <NativeRuntimeConnector
+        cardId="card-1"
+        payload={pendingPayload}
+        initialMessage="最初の指示"
+        onStatus={vi.fn()}
+      />
+    );
+    await Promise.resolve();
+    expect(runtime.reconnectClaude).not.toHaveBeenCalled();
+
+    catalog.models = [{
+      id: 'claude-fable-5', label: 'Fable', supportedEfforts: ['high'], defaultEffort: 'high'
+    }];
+    view.rerender(
+      <NativeRuntimeConnector
+        cardId="card-1"
+        payload={pendingPayload}
+        initialMessage="最初の指示"
+        onStatus={vi.fn()}
+      />
+    );
+
+    await waitFor(() => expect(runtime.reconnectClaude).toHaveBeenCalledTimes(1));
+    expect(runtime.reconnectClaude).toHaveBeenCalledWith(expect.objectContaining({
+      model: 'claude-fable-5', effort: 'high'
+    }));
   });
 });

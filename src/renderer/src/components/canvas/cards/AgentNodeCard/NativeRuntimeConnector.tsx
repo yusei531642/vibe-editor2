@@ -39,7 +39,9 @@ export function NativeRuntimeConnector({
     ?? resolvedModelOption?.defaultEffort
     ?? resolvedModelOption?.supportedEfforts[0]
     ?? null;
-  const waitingForInitialCatalog = !payload.runtimeModel && catalog.loading;
+  const waitingForInitialCatalog = (
+    !payload.runtimeModel && catalog.models.length === 0 && !catalog.error
+  );
   const endpointId = useMemo(
     () => (payload.agentId ? `native-${payload.agentId}` : null),
     [payload.agentId]
