@@ -1,6 +1,7 @@
 import readline from 'node:readline';
 import { randomUUID } from 'node:crypto';
 import { query } from '@anthropic-ai/claude-agent-sdk';
+import { shouldAutoAllowTool } from './tool-approval-policy.mjs';
 
 const PROTOCOL = 'vibe-claude-agent';
 const VERSION = 1;
@@ -59,11 +60,10 @@ function approvalReason(toolName, options) {
   return safeText(options.title || options.description || options.decisionReason || `${toolName} requires approval`);
 }
 
-function canUseTool(toolName, input, options) {
-  // This namespace is only injected after Rust validates the team/agent binding,
-  // and TeamHub performs its own role and scope checks. Keep team orchestration
-  // seamless while preserving approval prompts for filesystem/shell tools.
-  if (toolName.startsWith('mcp__vibe-team2__')) {
+function canUseTool(toolName, input, options, permission = state.permission) {
+  // Binding and role checks constrain TeamHub scope. Workspace permission still
+  // requires user approval for process lifecycle, task injection, and locks.
+  if (shouldAutoAllowTool(toolName, permission)) {
     return Promise.resolve({ behavior: 'allow', updatedInput: input });
   }
   const requestId = options.requestId || options.toolUseID || randomUUID();
@@ -199,7 +199,8 @@ function queryOptions(abortController, runtimeOptions = {}) {
   const permission = runtimeOptions.permission || state.permission;
   const options = {
     abortController,
-    canUseTool,
+    canUseTool: (toolName, input, callbackOptions) =>
+      canUseTool(toolName, input, callbackOptions, permission),
     cwd: state.cwd || undefined,
     hooks: hooks(),
     includeHookEvents: true,
