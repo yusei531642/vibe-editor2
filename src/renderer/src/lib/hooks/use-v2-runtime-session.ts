@@ -192,16 +192,19 @@ export function useV2RuntimeSession(callbacks: RuntimeCallbacks): {
   ): Promise<void> => {
     const approval = pendingApproval;
     if (!approval) return;
-    await window.api.agentRuntime.respondApproval({
-      endpointId: approval.endpointId,
-      requestId: approval.requestId,
-      decision
-    });
-    setPendingApproval((current) => (
-      current?.endpointId === approval.endpointId && current.requestId === approval.requestId
-        ? null
-        : current
-    ));
+    try {
+      await window.api.agentRuntime.respondApproval({
+        endpointId: approval.endpointId,
+        requestId: approval.requestId,
+        decision
+      });
+    } finally {
+      setPendingApproval((current) => (
+        current?.endpointId === approval.endpointId && current.requestId === approval.requestId
+          ? null
+          : current
+      ));
+    }
   }, [pendingApproval]);
 
   useEffect(() => () => {

@@ -18,6 +18,7 @@ import { useT } from "../../lib/i18n";
 import { useV2RuntimeCatalog } from "../../lib/hooks/use-v2-runtime-catalog";
 import { useV2RuntimeSession } from "../../lib/hooks/use-v2-runtime-session";
 import { requestsVisibleTeam, V2_REQUEST_TEAM_SCENE_EVENT } from "../../lib/v2-runtime-controls";
+import { reportV2RuntimeActionError } from "../../lib/v2-runtime-action";
 import { useCanvasStore } from "../../stores/canvas";
 import { useUiStore } from "../../stores/ui";
 import { launchV2Team } from "../../lib/v2-team-launch";
@@ -262,9 +263,7 @@ export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Ele
 
   const stopRun = useCallback(() => {
     setTeamStarting(false);
-    void runtime.stop().catch((error) => {
-      onRuntimeError(error instanceof Error ? error.message : String(error), engine);
-    });
+    void reportV2RuntimeActionError(runtime.stop(), engine, onRuntimeError);
   }, [engine, onRuntimeError, runtime]);
 
   const startNewTask = useCallback(() => {
@@ -409,7 +408,9 @@ export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Ele
           entries={entries}
           running={running}
           pendingApproval={runtime.pendingApproval}
-          onApproval={(decision) => void runtime.respondApproval(decision)}
+          onApproval={(decision) => {
+            void reportV2RuntimeActionError(runtime.respondApproval(decision), engine, onRuntimeError);
+          }}
         />
       )}
 
