@@ -80,16 +80,17 @@ export function AgentChatSurface(props: AgentChatSurfaceProps): JSX.Element {
   const model = catalog.models.find((option) => option.id === modelValue) ?? catalog.models[0];
   const efforts = model?.supportedEfforts ?? (payload?.runtimeEffort ? [payload.runtimeEffort] : []);
   const effortValue = payload?.runtimeEffort ?? model?.defaultEffort ?? efforts[0] ?? '';
-  const permission = payload?.runtimePermission ?? 'workspace';
+  const permission = nativeRuntime ? 'workspace' : (payload?.runtimePermission ?? 'workspace');
   const running = agent.status === 'running' || agent.status === 'spawning';
   const unavailable = Boolean(agent.endpoint && !agent.endpoint.live);
   const canSubmit = Boolean(instruction.trim()) && busyAction === null && !unavailable;
   const canInterrupt = running && !instruction.trim() && busyAction === null && !unavailable;
   useEffect(() => {
-    if (!payload || !nativeRuntime || !modelValue) return;
+    if (!payload || !nativeRuntime) return;
     const patch: Partial<AgentPayload> = {};
-    if (!payload.runtimeModel) patch.runtimeModel = modelValue;
-    if (!payload.runtimeEffort && effortValue) patch.runtimeEffort = effortValue;
+    if (!payload.runtimeModel && modelValue) patch.runtimeModel = modelValue;
+    if (!payload.runtimeEffort && modelValue && effortValue) patch.runtimeEffort = effortValue;
+    if (payload.runtimePermission === 'full') patch.runtimePermission = 'workspace';
     if (Object.keys(patch).length > 0) onRuntimePatch(patch);
   }, [effortValue, modelValue, nativeRuntime, onRuntimePatch, payload]);
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
@@ -147,7 +148,7 @@ export function AgentChatSurface(props: AgentChatSurfaceProps): JSX.Element {
             </select>
             <select
               value={permission}
-              disabled={running}
+              disabled={running || nativeRuntime}
               onChange={(event) => props.onRuntimePatch({ runtimePermission: event.target.value as RuntimePermission })}
               aria-label={t('v2.composer.permission')}
             >

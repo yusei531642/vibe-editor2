@@ -92,30 +92,22 @@ describe('NativeRuntimeConnector', () => {
     expect(runtime.dispose).not.toHaveBeenCalled();
   });
 
-  it('permission 変更時は endpoint だけ再登録して初期指示を再送しない', async () => {
-    const onStatus = vi.fn();
-    const view = render(
-      <NativeRuntimeConnector
-        cardId="card-1"
-        payload={payload()}
-        initialMessage="最初の指示"
-        onStatus={onStatus}
-      />
-    );
-    await waitFor(() => expect(runtime.spawnTurn).toHaveBeenCalledTimes(1));
-
-    view.rerender(
+  it('Team endpoint の full 指定を workspace に制限する', async () => {
+    render(
       <NativeRuntimeConnector
         cardId="card-1"
         payload={payload({ runtimePermission: 'full' })}
         initialMessage="最初の指示"
-        onStatus={onStatus}
+        onStatus={vi.fn()}
       />
     );
-
-    await waitFor(() => expect(runtime.reconnectClaude).toHaveBeenCalledTimes(2));
-    expect(runtime.reconnectClaude).toHaveBeenLastCalledWith(expect.objectContaining({ permission: 'full' }));
-    expect(runtime.spawnTurn).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(runtime.spawnTurn).toHaveBeenCalledTimes(1));
+    expect(runtime.reconnectClaude).toHaveBeenCalledWith(expect.objectContaining({
+      permission: 'workspace'
+    }));
+    expect(runtime.spawnTurn).toHaveBeenCalledWith(expect.objectContaining({
+      permission: 'workspace'
+    }));
   });
 
   it('native 登録失敗後も GUI から再接続できる', async () => {

@@ -78,6 +78,22 @@ fn runtime_options_are_bounded_and_permissions_are_closed() {
 }
 
 #[test]
+fn team_runtime_permission_is_capped_by_backend_policy() {
+    assert_eq!(
+        super::registration::effective_runtime_permission(true, Some("full".to_string())),
+        Some("workspace".to_string())
+    );
+    assert_eq!(
+        super::registration::effective_runtime_permission(true, None),
+        Some("workspace".to_string())
+    );
+    assert_eq!(
+        super::registration::effective_runtime_permission(false, Some("full".to_string())),
+        Some("full".to_string())
+    );
+}
+
+#[test]
 #[cfg(unix)]
 fn codex_catalog_keeps_advertised_model_and_efforts() {
     let models = parse_codex_model_catalog(&json!({
