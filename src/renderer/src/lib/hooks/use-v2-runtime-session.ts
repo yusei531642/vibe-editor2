@@ -71,6 +71,7 @@ export function useV2RuntimeSession(callbacks: RuntimeCallbacks): {
       case 'error':
         callbacksRef.current.onError(event.payload.message, engine);
         setRunning(false);
+        setPendingApproval(null);
         break;
       case 'lifecycle':
         if (event.payload.state === 'failed' || event.payload.state === 'exited') {
