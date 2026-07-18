@@ -10,6 +10,7 @@ import {
 import type { RuntimePermission } from '../../../../../../types/agent-runtime';
 import { useV2RuntimeCatalog } from '../../../../lib/hooks/use-v2-runtime-catalog';
 import type { TeamAgentProjection } from '../../../../lib/team-projection';
+import { isNativeRuntimeProvider } from './NativeRuntimeConnector';
 import type { AgentPayload } from './types';
 
 type TFn = (key: string, params?: Record<string, string | number>) => string;
@@ -73,7 +74,8 @@ function AgentMessages({ agent, payload, t }: Pick<AgentChatSurfaceProps, 'agent
 export function AgentChatSurface(props: AgentChatSurfaceProps): JSX.Element {
   const { agent, payload, busyAction, instruction, onRuntimePatch, t } = props;
   const engine = payload?.agent ?? 'claude';
-  const catalog = useV2RuntimeCatalog(engine, Boolean(payload?.runtimeProvider));
+  const nativeRuntime = isNativeRuntimeProvider(payload?.runtimeProvider);
+  const catalog = useV2RuntimeCatalog(engine, nativeRuntime);
   const modelValue = payload?.runtimeModel ?? catalog.models[0]?.id ?? '';
   const model = catalog.models.find((option) => option.id === modelValue) ?? catalog.models[0];
   const efforts = model?.supportedEfforts ?? (payload?.runtimeEffort ? [payload.runtimeEffort] : []);
@@ -84,12 +86,12 @@ export function AgentChatSurface(props: AgentChatSurfaceProps): JSX.Element {
   const canSubmit = Boolean(instruction.trim()) && busyAction === null && !unavailable;
   const canInterrupt = running && !instruction.trim() && busyAction === null && !unavailable;
   useEffect(() => {
-    if (!payload || !modelValue) return;
+    if (!payload || !nativeRuntime || !modelValue) return;
     const patch: Partial<AgentPayload> = {};
     if (!payload.runtimeModel) patch.runtimeModel = modelValue;
     if (!payload.runtimeEffort && effortValue) patch.runtimeEffort = effortValue;
     if (Object.keys(patch).length > 0) onRuntimePatch(patch);
-  }, [effortValue, modelValue, onRuntimePatch, payload]);
+  }, [effortValue, modelValue, nativeRuntime, onRuntimePatch, payload]);
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
     if (event.nativeEvent.isComposing || event.keyCode === 229) return;
     if (event.key === 'Enter' && !event.shiftKey) {
