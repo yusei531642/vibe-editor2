@@ -50,6 +50,7 @@ pub(super) async fn register_codex_endpoint(
     let endpoint_id = request.endpoint_id.clone();
     let model = request.model.clone();
     let permission = request.permission.clone();
+    let permission_locked = runtime_team_agent.is_some();
     // codex 実行コマンドは settings.json (Rust 正本) から解決し、renderer 入力を使わない。
     let codex_command = crate::commands::settings::settings_load()
         .await
@@ -77,7 +78,7 @@ pub(super) async fn register_codex_endpoint(
         endpoint_id.clone(),
     );
     let adapter_result = run_blocking(move || {
-        CodexRuntimeAdapter::connect(socket_path, cwd, model, permission, sink)
+        CodexRuntimeAdapter::connect(socket_path, cwd, model, permission, permission_locked, sink)
     })
     .await?;
     let adapter = Arc::new(adapter_result.map_err(|error| {
@@ -252,6 +253,7 @@ pub(super) async fn register_claude_endpoint(
                 model,
                 effort,
                 permission,
+                permission_locked: authorized_team_identity.is_some(),
                 mcp_servers,
             },
             sink,

@@ -80,10 +80,11 @@ impl std::fmt::Display for RuntimeAdapterError {
 impl std::error::Error for RuntimeAdapterError {}
 
 pub(crate) fn ensure_runtime_permission_not_escalated(
+    permission_locked: bool,
     configured: Option<&str>,
     requested: Option<&str>,
 ) -> Result<(), RuntimeAdapterError> {
-    if requested == Some("full") && configured != Some("full") {
+    if permission_locked && requested == Some("full") && configured != Some("full") {
         return Err(RuntimeAdapterError::new(
             "runtime_permission_escalation",
             "turn permission cannot exceed the endpoint permission",
@@ -161,10 +162,17 @@ mod tests {
 
     #[test]
     fn turn_permission_cannot_escalate_endpoint_permission() {
-        assert!(ensure_runtime_permission_not_escalated(Some("workspace"), Some("full")).is_err());
-        assert!(ensure_runtime_permission_not_escalated(None, Some("full")).is_err());
-        assert!(ensure_runtime_permission_not_escalated(Some("full"), Some("full")).is_ok());
-        assert!(ensure_runtime_permission_not_escalated(Some("full"), Some("workspace")).is_ok());
-        assert!(ensure_runtime_permission_not_escalated(Some("workspace"), None).is_ok());
+        assert!(
+            ensure_runtime_permission_not_escalated(true, Some("workspace"), Some("full")).is_err()
+        );
+        assert!(ensure_runtime_permission_not_escalated(true, None, Some("full")).is_err());
+        assert!(ensure_runtime_permission_not_escalated(true, Some("full"), Some("full")).is_ok());
+        assert!(
+            ensure_runtime_permission_not_escalated(true, Some("full"), Some("workspace")).is_ok()
+        );
+        assert!(ensure_runtime_permission_not_escalated(true, Some("workspace"), None).is_ok());
+        assert!(
+            ensure_runtime_permission_not_escalated(false, Some("workspace"), Some("full")).is_ok()
+        );
     }
 }

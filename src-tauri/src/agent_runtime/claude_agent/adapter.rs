@@ -27,6 +27,7 @@ pub struct ClaudeAgentRuntimeConfig {
     pub model: Option<String>,
     pub effort: Option<String>,
     pub permission: Option<String>,
+    pub permission_locked: bool,
     pub mcp_servers: Option<Value>,
 }
 
@@ -37,6 +38,7 @@ pub struct ClaudeAgentRuntimeAdapter {
     model: Option<String>,
     effort: Option<String>,
     permission: Option<String>,
+    permission_locked: bool,
     mcp_servers: Option<Value>,
     session_id: Arc<RwLock<Option<String>>>,
     disposed: AtomicBool,
@@ -66,6 +68,7 @@ impl ClaudeAgentRuntimeAdapter {
             model: runtime.model,
             effort: runtime.effort,
             permission: runtime.permission,
+            permission_locked: runtime.permission_locked,
             mcp_servers: runtime.mcp_servers,
             session_id,
             disposed: AtomicBool::new(false),
@@ -168,6 +171,7 @@ impl AgentRuntimeAdapter for ClaudeAgentRuntimeAdapter {
             ));
         }
         ensure_runtime_permission_not_escalated(
+            self.permission_locked,
             self.permission.as_deref(),
             request.permission.as_deref(),
         )?;
