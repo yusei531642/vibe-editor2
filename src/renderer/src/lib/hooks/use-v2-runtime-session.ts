@@ -179,9 +179,12 @@ export function useV2RuntimeSession(callbacks: RuntimeCallbacks): {
       setRunning(false);
       return;
     }
-    await window.api.agentRuntime.interrupt(binding.endpointId);
-    setRunning(false);
-    setPendingApproval(null);
+    try {
+      await window.api.agentRuntime.interrupt(binding.endpointId);
+    } finally {
+      setRunning(false);
+      setPendingApproval(null);
+    }
   }, []);
 
   const respondApproval = useCallback(async (
