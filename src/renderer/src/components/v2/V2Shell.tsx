@@ -408,9 +408,8 @@ export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Ele
           entries={entries}
           running={running}
           pendingApproval={runtime.pendingApproval}
-          onApproval={(decision) => {
-            void reportV2RuntimeActionError(runtime.respondApproval(decision), engine, onRuntimeError);
-          }}
+          onApproval={(decision) => void reportV2RuntimeActionError(
+            runtime.respondApproval(decision), engine, onRuntimeError)}
         />
       )}
 
