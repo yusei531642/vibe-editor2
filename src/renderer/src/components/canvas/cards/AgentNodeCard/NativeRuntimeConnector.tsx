@@ -57,12 +57,12 @@ export function NativeRuntimeConnector({
   const runtimeOptionsRef = useRef({
     model: resolvedModel,
     effort: resolvedEffort,
-    permission: payload.runtimePermission ?? 'workspace'
+    permission: 'workspace' as const
   });
   runtimeOptionsRef.current = {
     model: resolvedModel,
     effort: resolvedEffort,
-    permission: payload.runtimePermission ?? 'workspace'
+    permission: 'workspace'
   };
   const bootstrappedIdentityRef = useRef<string | null>(null);
 
@@ -154,7 +154,6 @@ export function NativeRuntimeConnector({
     cardId,
     endpointId,
     payload.agentId,
-    payload.runtimePermission,
     payload.teamId,
     provider,
     retryNonce,

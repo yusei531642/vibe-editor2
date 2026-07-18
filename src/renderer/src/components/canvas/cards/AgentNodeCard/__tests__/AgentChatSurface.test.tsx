@@ -101,4 +101,33 @@ describe('AgentChatSurface keyboard submit', () => {
 
     await waitFor(() => expect(onRuntimePatch).not.toHaveBeenCalled());
   });
+
+  it('native Team の full permission を workspace 表示へ戻す', async () => {
+    catalog.models = [{
+      id: 'claude-fable-5', label: 'Fable', supportedEfforts: ['high'], defaultEffort: 'high'
+    }];
+    const onRuntimePatch = vi.fn();
+    render(<AgentChatSurface
+      agent={agent()}
+      payload={{
+        teamId: 'team-1', agentId: 'worker-1', runtimeProvider: 'claude-native',
+        runtimeModel: 'claude-fable-5', runtimeEffort: 'high', runtimePermission: 'full'
+      }}
+      instruction=""
+      busyAction={null}
+      confirmingDismiss={false}
+      onInstructionChange={vi.fn()}
+      onRuntimePatch={onRuntimePatch}
+      onSubmit={vi.fn()}
+      onAction={vi.fn()}
+      onInspect={vi.fn()}
+      onConfirmingDismissChange={vi.fn()}
+      t={(key) => key}
+    />);
+
+    await waitFor(() => expect(onRuntimePatch).toHaveBeenCalledWith({
+      runtimePermission: 'workspace'
+    }));
+    expect(screen.getByRole('combobox', { name: 'v2.composer.permission' })).toBeDisabled();
+  });
 });

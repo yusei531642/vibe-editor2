@@ -5,6 +5,19 @@ use crate::agent_runtime::claude_agent::{
 #[cfg(unix)]
 use crate::agent_runtime::codex::CodexRuntimeAdapter;
 
+const TEAM_RUNTIME_PERMISSION: &str = "workspace";
+
+pub(super) fn effective_runtime_permission(
+    team_bound: bool,
+    requested: Option<String>,
+) -> Option<String> {
+    if team_bound {
+        Some(TEAM_RUNTIME_PERMISSION.to_string())
+    } else {
+        requested
+    }
+}
+
 #[cfg(unix)]
 pub(super) async fn register_codex_endpoint(
     app: &AppHandle,
@@ -49,8 +62,10 @@ pub(super) async fn register_codex_endpoint(
     }
     let endpoint_id = request.endpoint_id.clone();
     let model = request.model.clone();
-    let permission = request.permission.clone();
     let permission_locked = runtime_team_agent.is_some();
+    // Team endpoint は renderer の自己申告で full に昇格できないよう backend で
+    // workspace を上限にする。turn 側の昇格ガードだけでは登録時の申告を防げない。
+    let permission = effective_runtime_permission(permission_locked, request.permission.clone());
     // codex 実行コマンドは settings.json (Rust 正本) から解決し、renderer 入力を使わない。
     let codex_command = crate::commands::settings::settings_load()
         .await
@@ -206,6 +221,10 @@ pub(super) async fn register_claude_endpoint(
     validate_runtime_option("model", model.as_deref())?;
     validate_runtime_option("effort", effort.as_deref())?;
     validate_runtime_permission(permission.as_deref())?;
+    let permission_locked = authorized_team_identity.is_some();
+    // Claude も Codex と同じ backend policy を正本にし、Team endpoint の初回登録・
+    // 再接続を renderer 指定の full permission から保護する。
+    let permission = effective_runtime_permission(permission_locked, permission);
     let resume_session = match &session {
         ClaudeSessionAction::Resume { session_id } | ClaudeSessionAction::Fork { session_id } => {
             crate::commands::validation::validate_id_segment("session_id", session_id)?;
@@ -253,7 +272,7 @@ pub(super) async fn register_claude_endpoint(
                 model,
                 effort,
                 permission,
-                permission_locked: authorized_team_identity.is_some(),
+                permission_locked,
                 mcp_servers,
             },
             sink,

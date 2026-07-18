@@ -3,6 +3,7 @@ import { useT } from '../../../../lib/i18n';
 import type { AgentPayload } from './types';
 import { useTeamProjection } from '../../../v2/TeamProjectionProvider';
 import { AgentChatSurface } from './AgentChatSurface';
+import { isNativeRuntimeProvider } from './NativeRuntimeConnector';
 
 export function AgentCardRuntime({
   agentId,
@@ -39,7 +40,9 @@ export function AgentCardRuntime({
           submit: true,
           model: payload?.runtimeModel ?? null,
           effort: payload?.runtimeEffort ?? null,
-          permission: payload?.runtimePermission ?? 'workspace'
+          permission: isNativeRuntimeProvider(payload?.runtimeProvider)
+            ? 'workspace'
+            : (payload?.runtimePermission ?? 'workspace')
         });
       } else {
         await dispatchAgentAction(agentId, action, instruction);
