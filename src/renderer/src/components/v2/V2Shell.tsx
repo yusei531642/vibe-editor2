@@ -238,19 +238,19 @@ export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Ele
   }, [effort, engine, launchTeam, model, onRuntimeError, permission, prompt, running, runtime]);
 
   const stopRun = useCallback(() => {
-    setTeamStarting(false);
+    if (teamStarting) return;
     void reportV2RuntimeActionError(runtime.stop(), engine, onRuntimeError);
-  }, [engine, onRuntimeError, runtime]);
+  }, [engine, onRuntimeError, runtime, teamStarting]);
 
   const startNewTask = useCallback(() => {
+    if (teamStarting) return;
     void runtime.reset();
     setEntries([]);
     setPrompt("");
-    setTeamStarting(false);
     setHasStarted(false);
     activeAgentEntryIdRef.current = null;
     window.dispatchEvent(new Event("vibe-editor2:focus-composer"));
-  }, [runtime]);
+  }, [runtime, teamStarting]);
 
   useEffect(() => {
     if (!shortcutsEnabled) return;
@@ -305,7 +305,7 @@ export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Ele
         <button
           type="button"
           aria-label={t("v2.shell.newTask")}
-          onClick={startNewTask}
+          onClick={startNewTask} disabled={teamStarting}
         >
           <SquarePen size={20} strokeWidth={1.65} />
         </button>
