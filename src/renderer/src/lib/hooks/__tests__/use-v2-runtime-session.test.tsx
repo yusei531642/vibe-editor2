@@ -226,4 +226,22 @@ describe('useV2RuntimeSession', () => {
     });
     expect(result.current.pendingApproval).toBeNull();
   });
+
+  it('permission 変更時は endpoint を再登録する', async () => {
+    const { result } = renderHook(() => useV2RuntimeSession({
+      onDelta: vi.fn(), onComplete: vi.fn(), onError: vi.fn()
+    }));
+    await act(async () => {
+      await result.current.send({
+        input: 'workspace turn', engine: 'claude', model: 'fable', effort: 'high', permission: 'workspace'
+      });
+      await result.current.send({
+        input: 'full turn', engine: 'claude', model: 'fable', effort: 'high', permission: 'full'
+      });
+    });
+
+    expect(registerClaudeEndpoint).toHaveBeenCalledTimes(2);
+    expect(registerClaudeEndpoint).toHaveBeenLastCalledWith(expect.objectContaining({ permission: 'full' }));
+    expect(dispose).toHaveBeenCalledTimes(1);
+  });
 });
