@@ -109,6 +109,9 @@ describe('useV2RuntimeSession', () => {
       }, 1));
     });
     expect(result.current.pendingApproval?.requestId).toBe('approval-a');
+    expect(result.current.pendingApproval).toMatchObject({
+      command: 'npm test', cwd: null
+    });
 
     let response: Promise<void>;
     act(() => {
