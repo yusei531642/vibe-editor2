@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { RuntimeProvider } from '../../../../../../types/agent-runtime';
+import { useT } from '../../../../lib/i18n';
 import { useRuntimeStore } from '../../../../stores/runtime';
 import type { TerminalRuntimeStatus } from '../../../../lib/terminal-status';
 import type { AgentPayload } from './types';
@@ -23,6 +24,9 @@ export function NativeRuntimeConnector({
   initialMessage?: string;
   onStatus: (status: TerminalRuntimeStatus | null) => void;
 }): JSX.Element | null {
+  const t = useT();
+  const [failure, setFailure] = useState<string | null>(null);
+  const [retryNonce, setRetryNonce] = useState(0);
   const provider = payload.runtimeProvider;
   const endpointId = useMemo(
     () => (payload.agentId ? `native-${payload.agentId}` : null),
@@ -55,6 +59,7 @@ export function NativeRuntimeConnector({
     let registered = false;
     let unsubscribe: (() => void) | null = null;
     const start = async (): Promise<void> => {
+      setFailure(null);
       onStatusRef.current({ kind: 'starting', command: provider });
       unsubscribe = await window.api.agentRuntime.onEventReady(
         endpointId,
@@ -111,6 +116,7 @@ export function NativeRuntimeConnector({
     void start().catch((error) => {
       if (disposed) return;
       const message = error instanceof Error ? error.message : String(error);
+      setFailure(message);
       onStatusRef.current({ kind: 'spawn_failed', command: provider, error: message });
       if (registered) void window.api.agentRuntime.dispose(endpointId).catch(() => undefined);
     });
@@ -125,8 +131,18 @@ export function NativeRuntimeConnector({
     payload.agentId,
     payload.teamId,
     provider,
+    retryNonce,
     runtimeIdentity
   ]);
 
-  return null;
+  return failure ? (
+    <button
+      type="button"
+      className="team-chat-runtime-retry"
+      title={failure}
+      onClick={() => setRetryNonce((current) => current + 1)}
+    >
+      {t('v2.team.card.reconnect')}
+    </button>
+  ) : null;
 }
