@@ -26,6 +26,8 @@ export const jaV2: Dict = {
   'v2.composer.permission': '権限',
   'v2.permission.workspace': 'ワークスペース',
   'v2.permission.full': 'フルアクセス',
+  'v2.permission.agent': '代理で承認',
+  'v2.permission.ask': '承認を求める',
   'v2.composer.engine': 'エンジン',
   'v2.composer.model': 'モデル',
   'v2.composer.modelLoading': 'モデル読込中',

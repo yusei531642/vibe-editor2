@@ -3,6 +3,28 @@ import { APP_SETTINGS_SCHEMA_VERSION, DEFAULT_SETTINGS } from '../../../../types
 import { migrateSettings } from '../settings-migrate';
 
 describe('migrateSettings', () => {
+  it('v15以前の会話権限を代理承認へ移行する', () => {
+    const migrated = migrateSettings({
+      schemaVersion: 15,
+      language: 'ja',
+      theme: 'claude-light'
+    });
+
+    expect(migrated.v2PermissionMode).toBe('agent');
+    expect(migrated.schemaVersion).toBe(APP_SETTINGS_SCHEMA_VERSION);
+  });
+
+  it('有効な会話権限を維持し、未知値は既定値へ戻す', () => {
+    expect(migrateSettings({
+      schemaVersion: APP_SETTINGS_SCHEMA_VERSION,
+      v2PermissionMode: 'ask'
+    }).v2PermissionMode).toBe('ask');
+    expect(migrateSettings({
+      schemaVersion: APP_SETTINGS_SCHEMA_VERSION,
+      v2PermissionMode: 'unsafe'
+    }).v2PermissionMode).toBe(DEFAULT_SETTINGS.v2PermissionMode);
+  });
+
   it('adds the default status mascot variant for older settings', () => {
     const migrated = migrateSettings({
       schemaVersion: 8,

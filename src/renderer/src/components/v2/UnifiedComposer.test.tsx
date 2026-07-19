@@ -15,6 +15,10 @@ vi.mock("../../lib/i18n", () => ({
         "v2.composer.attach": "ファイルを添付",
         "v2.composer.createGoal": "ゴールを作成",
         "v2.composer.createTeam": "チームを作成",
+        "v2.composer.permission": "権限",
+        "v2.permission.full": "フルアクセス",
+        "v2.permission.agent": "代理で承認",
+        "v2.permission.ask": "承認を求める",
         "v2.composer.cancelMode": "作成モードを解除",
         "v2.composer.clearGoal": "現在のゴールを解除",
       })[key] ?? key,
@@ -30,6 +34,7 @@ function renderComposer(
   const onAttachFile = vi.fn();
   const onIntentChange = vi.fn();
   const onRemoveAttachment = vi.fn();
+  const onPermissionChange = vi.fn();
   const result = render(
     <UnifiedComposer
       branch="main"
@@ -45,7 +50,7 @@ function renderComposer(
       }]}
       effort="high"
       efforts={["low", "high"]}
-      permission="workspace"
+      permission="agent"
       projectName="vibe-editor2"
       prompt={prompt}
       running={false}
@@ -55,7 +60,7 @@ function renderComposer(
       onEngineChange={vi.fn()}
       onModelChange={vi.fn()}
       onEffortChange={vi.fn()}
-      onPermissionChange={vi.fn()}
+      onPermissionChange={onPermissionChange}
       onProjectClick={vi.fn()}
       onPromptChange={onPromptChange}
       onAttachFile={onAttachFile}
@@ -66,7 +71,15 @@ function renderComposer(
       onStop={vi.fn()}
     />,
   );
-  return { ...result, onSubmit, onPromptChange, onAttachFile, onIntentChange, onRemoveAttachment };
+  return {
+    ...result,
+    onSubmit,
+    onPromptChange,
+    onAttachFile,
+    onIntentChange,
+    onRemoveAttachment,
+    onPermissionChange,
+  };
 }
 
 describe("UnifiedComposer", () => {
@@ -135,5 +148,17 @@ describe("UnifiedComposer", () => {
     expect(screen.getByRole("menuitem", { name: "ゴールを作成" })).toHaveFocus();
     fireEvent.keyDown(document.activeElement as HTMLElement, { key: "Escape" });
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("会話権限を3モードから選べる", () => {
+    const { onPermissionChange } = renderComposer();
+    const permission = screen.getByRole("combobox", { name: "権限" });
+    expect(permission).toHaveValue("agent");
+    expect(screen.getByRole("option", { name: "フルアクセス" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "代理で承認" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "承認を求める" })).toBeInTheDocument();
+
+    fireEvent.change(permission, { target: { value: "ask" } });
+    expect(onPermissionChange).toHaveBeenCalledWith("ask");
   });
 });

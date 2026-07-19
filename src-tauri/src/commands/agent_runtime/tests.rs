@@ -73,6 +73,7 @@ fn runtime_options_are_bounded_and_permissions_are_closed() {
     assert!(validate_runtime_option("model", Some("bad\nmodel")).is_err());
     assert!(validate_runtime_option("effort", Some(&"x".repeat(257))).is_err());
     assert!(validate_runtime_permission(Some("workspace")).is_ok());
+    assert!(validate_runtime_permission(Some("ask")).is_ok());
     assert!(validate_runtime_permission(Some("full")).is_ok());
     assert!(validate_runtime_permission(Some("bypass")).is_err());
 }

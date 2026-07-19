@@ -383,6 +383,10 @@ fn apply_thread_permission(params: &mut Value, permission: Option<&str>) {
             params["sandbox"] = Value::String("workspace-write".to_string());
             params["approvalPolicy"] = Value::String("on-request".to_string());
         }
+        Some("ask") => {
+            params["sandbox"] = Value::String("workspace-write".to_string());
+            params["approvalPolicy"] = Value::String("untrusted".to_string());
+        }
         _ => {}
     }
 }
@@ -397,6 +401,10 @@ fn apply_turn_permission(params: &mut Value, permission: Option<&str>) {
             params["sandboxPolicy"] = json!({ "type": "workspaceWrite" });
             params["approvalPolicy"] = Value::String("on-request".to_string());
         }
+        Some("ask") => {
+            params["sandboxPolicy"] = json!({ "type": "workspaceWrite" });
+            params["approvalPolicy"] = Value::String("untrusted".to_string());
+        }
         _ => {}
     }
 }
@@ -408,4 +416,23 @@ fn read_lock<T>(lock: &RwLock<T>) -> std::sync::RwLockReadGuard<'_, T> {
 fn write_lock<T>(lock: &RwLock<T>) -> std::sync::RwLockWriteGuard<'_, T> {
     lock.write()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+#[cfg(test)]
+mod permission_tests {
+    use super::{apply_thread_permission, apply_turn_permission};
+    use serde_json::json;
+
+    #[test]
+    fn ask_mode_uses_workspace_sandbox_and_untrusted_approvals() {
+        let mut thread = json!({});
+        apply_thread_permission(&mut thread, Some("ask"));
+        assert_eq!(thread["sandbox"], "workspace-write");
+        assert_eq!(thread["approvalPolicy"], "untrusted");
+
+        let mut turn = json!({});
+        apply_turn_permission(&mut turn, Some("ask"));
+        assert_eq!(turn["sandboxPolicy"], json!({ "type": "workspaceWrite" }));
+        assert_eq!(turn["approvalPolicy"], "untrusted");
+    }
 }

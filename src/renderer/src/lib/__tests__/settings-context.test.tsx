@@ -123,6 +123,23 @@ describe('settings-context', () => {
     expect(api.settings.save.mock.calls[0][0]).toMatchObject({ editorFontSize: 18 });
   });
 
+  it('会話 permission mode を即時反映して settings.json 保存へ渡す', async () => {
+    const api = installApi({ v2PermissionMode: 'agent' });
+    const { result } = renderHook(() => useSettings(), { wrapper: Wrapper });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    api.settings.save.mockClear();
+    await act(async () => {
+      await result.current.update({ v2PermissionMode: 'ask' });
+    });
+
+    expect(result.current.settings.v2PermissionMode).toBe('ask');
+    await waitFor(() => expect(api.settings.save).toHaveBeenCalledTimes(1), {
+      timeout: 1500
+    });
+    expect(api.settings.save.mock.calls[0][0]).toMatchObject({ v2PermissionMode: 'ask' });
+  });
+
   it('language の更新をクラッシュ復帰用キャッシュと html lang に同期する', async () => {
     const api = installApi({ language: 'ja' });
     const { result } = renderHook(() => useSettings(), { wrapper: Wrapper });

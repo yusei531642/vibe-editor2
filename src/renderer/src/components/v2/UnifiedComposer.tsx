@@ -19,9 +19,10 @@ import type {
   V2ComposerIntent,
 } from "../../lib/v2-composer-actions";
 import type { RuntimeModelOption } from "../../../../types/agent-runtime";
+import type { V2PermissionMode } from "../../../../types/shared";
 
 export type V2Engine = "claude" | "codex";
-export type V2Permission = "workspace" | "full";
+export type V2Permission = V2PermissionMode;
 
 interface UnifiedComposerProps {
   branch: string;
@@ -285,8 +286,9 @@ export function UnifiedComposer({
               }
               aria-label={t("v2.composer.permission")}
             >
-              <option value="workspace">{t("v2.permission.workspace")}</option>
               <option value="full">{t("v2.permission.full")}</option>
+              <option value="agent">{t("v2.permission.agent")}</option>
+              <option value="ask">{t("v2.permission.ask")}</option>
             </select>
           </label>
         </div>

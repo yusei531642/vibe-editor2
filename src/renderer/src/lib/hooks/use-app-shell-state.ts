@@ -37,6 +37,7 @@ export type AppShellSettings = Pick<
   | 'density'
   | 'agentRuntimeBackend'
   | 'teamSceneV2'
+  | 'v2PermissionMode'
   | 'statusMascotVariant'
   | 'statusMascotCustomPath'
   | 'notepad'
@@ -68,6 +69,7 @@ export function useAppShellState(): AppShellSettings {
     density: useSettingsValue('density'),
     agentRuntimeBackend: useSettingsValue('agentRuntimeBackend'),
     teamSceneV2: useSettingsValue('teamSceneV2'),
+    v2PermissionMode: useSettingsValue('v2PermissionMode'),
     statusMascotVariant: useSettingsValue('statusMascotVariant'),
     statusMascotCustomPath: useSettingsValue('statusMascotCustomPath'),
     notepad: useSettingsValue('notepad'),
