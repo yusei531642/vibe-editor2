@@ -275,7 +275,6 @@ export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Ele
     setAttachments([]);
     setComposerIntent("message");
     setActiveGoal(null);
-    setTeamStarting(false);
     setHasStarted(false);
     activeAgentEntryIdRef.current = null;
     window.dispatchEvent(new Event("vibe-editor2:focus-composer"));
