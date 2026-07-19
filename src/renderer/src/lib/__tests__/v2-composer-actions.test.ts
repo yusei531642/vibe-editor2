@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { attachmentName, buildV2RuntimeInput } from '../v2-composer-actions';
+import { attachmentName, buildV2RuntimeInput, prepareV2RuntimeInput } from '../v2-composer-actions';
 
 describe('v2 composer actions', () => {
   it('WindowsとUnixのパスから表示名を取り出す', () => {
@@ -42,5 +42,16 @@ describe('v2 composer actions', () => {
       activeGoal: null,
       attachments: [],
     })).toContain('Create a team');
+  });
+
+  it('/team directiveを除去し、単独なら空依頼を起動しない', () => {
+    expect(prepareV2RuntimeInput({
+      text: '/team workerを採用して', intent: 'message', activeGoal: null, attachments: [],
+    })).toMatchObject({
+      runtimeInput: 'workerを採用して', slashTeamOnly: false, visibleTeamRequested: true,
+    });
+    expect(prepareV2RuntimeInput({
+      text: '/team', intent: 'message', activeGoal: null, attachments: [],
+    })).toMatchObject({ runtimeInput: '', slashTeamOnly: true, visibleTeamRequested: true });
   });
 });

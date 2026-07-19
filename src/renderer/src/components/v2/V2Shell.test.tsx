@@ -127,4 +127,30 @@ describe('V2Shell Team launch controls', () => {
       permission: 'ask'
     })));
   });
+
+  it('/team directiveを除去してLeaderへ依頼本文だけを渡す', async () => {
+    harness.launchTeam.mockResolvedValueOnce('team-1');
+    render(<V2Shell shortcutsEnabled={false} />);
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'prompt' }), {
+      target: { value: '/team workerを1名採用して' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'submit' }));
+
+    await waitFor(() => expect(harness.launchTeam).toHaveBeenCalledWith(expect.objectContaining({
+      initialMessage: 'workerを1名採用して'
+    })));
+  });
+
+  it('/team単独は空依頼を起動せずTeam作成モードへ切り替える', () => {
+    render(<V2Shell shortcutsEnabled={false} />);
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'prompt' }), {
+      target: { value: '/team' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'submit' }));
+
+    expect(harness.launchTeam).not.toHaveBeenCalled();
+    expect(screen.getByRole('textbox', { name: 'prompt' })).toHaveValue('');
+  });
 });
