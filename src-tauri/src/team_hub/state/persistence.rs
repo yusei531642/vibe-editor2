@@ -47,6 +47,16 @@ impl TeamHub {
             }
         }
         let is_new_team = !s.teams.contains_key(team_id);
+        let initial_leader_agent_id = is_new_team
+            .then(|| {
+                members.iter().find_map(|(agent_id, role)| {
+                    (!agent_id.trim().is_empty()
+                        && agent_id.ends_with(team_id)
+                        && role.eq_ignore_ascii_case("leader"))
+                    .then(|| agent_id.clone())
+                })
+            })
+            .flatten();
         s.active_teams.insert(team_id.to_string());
         // Issue #800: Canvas spawn 由来の初代 member (leader / worker) は
         // `team_recruit` / `team_create_leader` の recruit grant 経路を通らないため、
@@ -121,6 +131,9 @@ impl TeamHub {
             if persisted.human_gate.blocked {
                 team.human_gate = persisted.human_gate;
             }
+        }
+        if is_new_team && team.active_leader_agent_id.is_none() {
+            team.active_leader_agent_id = initial_leader_agent_id;
         }
         drop(s);
         // Issue #1071: tasks/reports と同じ restore 経路で message 列/既読/next_message_id を復元 (lock 再取得のため drop 後)。

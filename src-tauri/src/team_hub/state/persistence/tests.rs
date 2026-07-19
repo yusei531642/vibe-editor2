@@ -42,6 +42,16 @@ mod register_team_binding_seed_tests {
                 .await,
             "seeded worker should pass handshake without a recruit grant"
         );
+        assert_eq!(
+            hub.state
+                .lock()
+                .await
+                .teams
+                .get(team_id)
+                .and_then(|team| team.active_leader_agent_id.as_deref()),
+            Some("leader-0-team-800"),
+            "new Canvas team should activate its initial scoped leader"
+        );
     }
 
     /// PR #805 review: `team_id` を suffix に持たない (= 別 team / 不正な) agent_id は
@@ -69,6 +79,32 @@ mod register_team_binding_seed_tests {
             !hub.resolve_pending_recruit("worker-9-team-other", team_id, "programmer")
                 .await,
             "team scope 外の agent_id は seed されず handshake は通らない"
+        );
+    }
+
+    #[tokio::test]
+    async fn register_team_does_not_reactivate_leader_for_existing_team() {
+        let hub = make_hub();
+        let team_id = "team-existing";
+        let members = [("leader-0-team-existing".to_string(), "leader".to_string())];
+        hub.register_team(team_id, "Existing", None, &members)
+            .await
+            .unwrap();
+        hub.set_active_leader(team_id, None).await;
+
+        hub.register_team(team_id, "Existing", None, &members)
+            .await
+            .unwrap();
+
+        assert!(
+            hub.state
+                .lock()
+                .await
+                .teams
+                .get(team_id)
+                .and_then(|team| team.active_leader_agent_id.as_ref())
+                .is_none(),
+            "existing team handoff state must not be overwritten"
         );
     }
 
