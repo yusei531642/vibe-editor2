@@ -17,6 +17,7 @@ import { useProject, useTeam } from "../../lib/app-state-context";
 import { useT } from "../../lib/i18n";
 import { useV2RuntimeCatalog } from "../../lib/hooks/use-v2-runtime-catalog";
 import { useV2RuntimeSession } from "../../lib/hooks/use-v2-runtime-session";
+import { useV2PermissionSetting } from "../../lib/hooks/use-v2-permission-setting";
 import { requestsVisibleTeam, V2_REQUEST_TEAM_SCENE_EVENT } from "../../lib/v2-runtime-controls";
 import { reportV2RuntimeActionError } from "../../lib/v2-runtime-action";
 import { useCanvasStore } from "../../stores/canvas";
@@ -24,7 +25,7 @@ import { useUiStore } from "../../stores/ui";
 import { launchV2Team } from "../../lib/v2-team-launch";
 import { attachmentName, buildV2RuntimeInput, type V2ComposerAttachment, type V2ComposerIntent } from "../../lib/v2-composer-actions";
 import { V2Timeline, type V2TimelineEntry } from "./V2Timeline";
-import { UnifiedComposer, type V2Engine, type V2Permission } from "./UnifiedComposer";
+import { UnifiedComposer, type V2Engine } from "./UnifiedComposer";
 import { TeamInspector } from "./TeamInspector";
 import { V2WorkspaceDrawer } from "./V2WorkspaceDrawer";
 import { useTeamProjection } from "./TeamProjectionProvider";
@@ -63,15 +64,14 @@ const QUICK_ACTIONS = [
 export interface V2ShellProps {
   shortcutsEnabled?: boolean;
 }
-
 export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Element {
   const t = useT();
   const { projectRoot, handleOpenFolder, gitStatus } = useProject();
   const { claudeCheck, runClaudeCheck } = useTeam();
+  const { permission, runtimePermission, setPermission } = useV2PermissionSetting();
   const [engine, setEngine] = useState<V2Engine>("claude");
   const [model, setModel] = useState("");
   const [effort, setEffort] = useState("");
-  const [permission, setPermission] = useState<V2Permission>("workspace");
   const [prompt, setPrompt] = useState("");
   const [composerIntent, setComposerIntent] = useState<V2ComposerIntent>("message");
   const [attachments, setAttachments] = useState<V2ComposerAttachment[]>([]);
@@ -203,7 +203,7 @@ export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Ele
       engine,
       model,
       effort,
-      permission,
+      permission: runtimePermission,
       setupTeamMcp: window.api.app.setupTeamMcp,
       addCard,
       selectTeam: setWorkspaceTeamId,
@@ -211,7 +211,7 @@ export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Ele
         window.dispatchEvent(new Event(V2_REQUEST_TEAM_SCENE_EVENT));
       })
     });
-  }, [addCard, effort, engine, model, permission, projectRoot, runtime, setWorkspaceTeamId, t]);
+  }, [addCard, effort, engine, model, projectRoot, runtime, runtimePermission, setWorkspaceTeamId, t]);
 
   const attachFile = useCallback(async (): Promise<void> => {
     try {
@@ -258,8 +258,8 @@ export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Ele
       }).finally(() => setTeamStarting(false));
       return;
     }
-    void runtime.send({ input: runtimeInput, engine, model, effort, permission }).catch(() => undefined);
-  }, [activeGoal, attachments, composerIntent, effort, engine, launchTeam, model, onRuntimeError, permission, prompt, running, runtime, t]);
+    void runtime.send({ input: runtimeInput, engine, model, effort, permission: runtimePermission }).catch(() => undefined);
+  }, [activeGoal, attachments, composerIntent, effort, engine, launchTeam, model, onRuntimeError, prompt, running, runtime, runtimePermission, t]);
 
   const stopRun = useCallback(() => {
     if (teamStarting) return;

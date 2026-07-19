@@ -1,6 +1,6 @@
 // main/preload/renderer で共有する型定義
 import type { FileLockConflictSnapshot } from './generated/team-events';
-import type { AgentRuntimeBackend } from './agent-runtime';
+import type { AgentRuntimeBackend, V2PermissionMode } from './agent-runtime';
 export type { TeamMemberCommand, TeamMemberCommandRequest, TeamMemberCommandResult, TeamProjectionSnapshot, TeamProjectionSnapshotRequest, TeamRuntimeEndpointSnapshot, TeamRuntimeEventCursor } from './team-projection';
 export type { MergeCandidateSnapshot, MergeCandidateStatus, MergeConflictSnapshot, WorktreeAssignmentSnapshot, WorktreeCommand, WorktreeCommandRequest, WorktreeCommandResult, WorktreeManagerSnapshot, WorktreeSnapshotRequest } from './worktree';
 export type { TerminalWriteOutcome, TerminalWriteResult } from './terminal-write';
@@ -13,9 +13,7 @@ export type ThemeName =
   | 'glass';
 
 export type Density = 'compact' | 'normal' | 'comfortable';
-
 export type Language = 'ja' | 'en';
-
 export type StatusMascotVariant = 'vibe' | 'spark' | 'mono' | 'coder' | 'custom';
 
 /**
@@ -38,9 +36,9 @@ export interface DialogFileFilter {
  * skillInjection) を追加し v13。すべて additive-optional なので migration block は不要だが、
  * 旧 build (#641 save-guard) が新フィールドを silent drop しないよう版数を上げる。
  * Issue #21 で `agentRuntimeBackend` / `teamSceneV2` を追加し v14。同じく additive だが
- * 旧 build の silent drop を防ぐため bump する。Issue #49 で V2 runtime/Team 経路を完成扱いにして `teamSceneV2` を既定有効化し v15。
+ * 旧 build の silent drop を防ぐため bump する。Issue #49 で V2 runtime/Team 経路を完成扱いにして `teamSceneV2` を既定有効化し v15。Issue #72 で V2 会話権限を追加し v16。
  */
-export const APP_SETTINGS_SCHEMA_VERSION = 15;
+export const APP_SETTINGS_SCHEMA_VERSION = 16;
 
 // Issue #21: agent runtime backend / capability 診断の型は agent-runtime.ts に集約。
 export type * from './agent-runtime';
@@ -276,6 +274,7 @@ export interface AppSettings {
   density: Density;
   agentRuntimeBackend: AgentRuntimeBackend;
   teamSceneV2: boolean;
+  v2PermissionMode: V2PermissionMode;
   /** ステータスバー左側に表示するキャラクターの見た目 */
   statusMascotVariant?: StatusMascotVariant;
   /**
@@ -710,6 +709,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   density: 'normal',
   agentRuntimeBackend: 'pty',
   teamSceneV2: true,
+  v2PermissionMode: 'agent',
   statusMascotVariant: 'vibe',
   claudeCommand: 'claude',
   claudeArgs: '',

@@ -26,6 +26,8 @@ export const enV2: Dict = {
   'v2.composer.permission': 'Permission',
   'v2.permission.workspace': 'Workspace',
   'v2.permission.full': 'Full access',
+  'v2.permission.agent': 'Agent decides',
+  'v2.permission.ask': 'Ask for approval',
   'v2.composer.engine': 'Engine',
   'v2.composer.model': 'Model',
   'v2.composer.modelLoading': 'Loading models',

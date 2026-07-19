@@ -84,6 +84,8 @@ async fn legacy_v2_json_loads_and_default_fills_missing_fields() {
     assert_eq!(loaded.theme, "dark");
     assert_eq!(loaded.claude_cwd, "/home/user/proj");
     assert_eq!(loaded.recent_projects, vec!["/home/user/proj".to_string()]);
+    assert!(loaded.terminal_force_utf8);
+    assert_eq!(loaded.v2_permission_mode, "agent");
     // missing optional は None / default
     assert!(loaded.has_completed_onboarding.is_none());
     assert!(loaded.custom_agents.is_none());

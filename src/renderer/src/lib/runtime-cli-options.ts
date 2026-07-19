@@ -28,5 +28,8 @@ export function appendRuntimeCliOptions(
   } else if (permission === 'workspace' && engine === 'codex') {
     if (!args.includes('--sandbox')) args.push('--sandbox', 'workspace-write');
     if (!args.includes('--ask-for-approval')) args.push('--ask-for-approval', 'on-request');
+  } else if (permission === 'ask' && engine === 'codex') {
+    if (!args.includes('--sandbox')) args.push('--sandbox', 'workspace-write');
+    if (!args.includes('--ask-for-approval')) args.push('--ask-for-approval', 'untrusted');
   }
 }

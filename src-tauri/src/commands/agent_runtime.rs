@@ -194,9 +194,9 @@ fn validate_runtime_option(name: &str, value: Option<&str>) -> CommandResult<()>
 }
 
 fn validate_runtime_permission(permission: Option<&str>) -> CommandResult<()> {
-    if permission.is_some_and(|value| !matches!(value, "workspace" | "full")) {
+    if permission.is_some_and(|value| !matches!(value, "workspace" | "ask" | "full")) {
         return Err(CommandError::validation(
-            "permission must be workspace or full",
+            "permission must be workspace, ask, or full",
         ));
     }
     Ok(())

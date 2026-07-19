@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error The production sidecar is intentionally plain ESM for Node execution.
-import { shouldAutoAllowTool } from '../../../../../src-sidecars/claude-agent/tool-approval-policy.mjs';
+import { claudePermissionMode, shouldAutoAllowTool } from '../../../../../src-sidecars/claude-agent/tool-approval-policy.mjs';
 
 describe('shouldAutoAllowTool', () => {
   it.each([
@@ -33,5 +33,15 @@ describe('shouldAutoAllowTool', () => {
 
   it('Team 以外のツールを名前空間だけで許可しない', () => {
     expect(shouldAutoAllowTool('Bash', 'full')).toBe(false);
+  });
+
+  it('3つの会話権限を Claude SDK permissionMode へ変換する', () => {
+    expect(claudePermissionMode('full')).toBe('bypassPermissions');
+    expect(claudePermissionMode('workspace')).toBe('acceptEdits');
+    expect(claudePermissionMode('ask')).toBe('default');
+  });
+
+  it('ask では Team の読み取りツールも自動許可しない', () => {
+    expect(shouldAutoAllowTool('mcp__vibe-team2__team_info', 'ask')).toBe(false);
   });
 });

@@ -25,7 +25,8 @@ use crate::commands::error::{CommandError, CommandResult};
 /// 新フィールド silent drop を防ぐよう版数を上げる。
 /// Issue #21 で runtime backend / teamSceneV2 を追加し v14。
 /// Issue #49 で V2 runtime / Team scene を既定有効化し v15。
-pub const SETTINGS_SCHEMA_VERSION: u32 = 15;
+/// Issue #72 で V2 会話 permission mode の永続化を追加し v16。
+pub const SETTINGS_SCHEMA_VERSION: u32 = 16;
 
 /// `~/.vibe-editor2/team-state/*.json` (TeamHub orchestration state) の現行 schema version。
 /// Issue #470 で導入。

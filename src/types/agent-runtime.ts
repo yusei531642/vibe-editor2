@@ -8,7 +8,14 @@
 export type AgentRuntimeBackend = 'auto' | 'native' | 'pty';
 export type RuntimeProvider = 'codex-native' | 'claude-native' | 'pty' | 'api';
 export type RuntimeEngine = 'claude' | 'codex';
-export type RuntimePermission = 'workspace' | 'full';
+export type V2PermissionMode = 'full' | 'agent' | 'ask';
+/**
+ * Native runtime の実効権限。
+ * - workspace: workspace 制約下で runtime が必要時に承認を要求
+ * - ask: workspace 制約下で保守的に承認を要求
+ * - full: sandbox / approval を無効化した明示的なフルアクセス
+ */
+export type RuntimePermission = 'workspace' | 'ask' | 'full';
 
 export interface RuntimeModelOption {
   id: string;

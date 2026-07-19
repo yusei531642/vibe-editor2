@@ -1,7 +1,7 @@
 import readline from 'node:readline';
 import { randomUUID } from 'node:crypto';
 import { query } from '@anthropic-ai/claude-agent-sdk';
-import { shouldAutoAllowTool } from './tool-approval-policy.mjs';
+import { claudePermissionMode, shouldAutoAllowTool } from './tool-approval-policy.mjs';
 
 const PROTOCOL = 'vibe-claude-agent';
 const VERSION = 1;
@@ -205,7 +205,7 @@ function queryOptions(abortController, runtimeOptions = {}) {
     hooks: hooks(),
     includeHookEvents: true,
     includePartialMessages: true,
-    permissionMode: permission === 'full' ? 'bypassPermissions' : 'default',
+    permissionMode: claudePermissionMode(permission),
     settingSources: ['user', 'project', 'local'],
     systemPrompt: state.systemPrompt
       ? { type: 'preset', preset: 'claude_code', append: state.systemPrompt }
