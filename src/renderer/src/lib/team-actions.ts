@@ -49,9 +49,12 @@ export async function respondAndResolveTeamApproval(
   decision: RuntimeApprovalDecision,
   resolve: (endpointId: string, requestId: string) => void
 ): Promise<void> {
-  await api.team.memberCommand({
-    teamId,
-    command: { action: 'respondApproval', agentId, requestId, decision }
-  });
-  resolve(endpointId, requestId);
+  try {
+    await api.team.memberCommand({
+      teamId,
+      command: { action: 'respondApproval', agentId, requestId, decision }
+    });
+  } finally {
+    resolve(endpointId, requestId);
+  }
 }
