@@ -18,18 +18,17 @@ import { useT } from "../../lib/i18n";
 import { useV2RuntimeCatalog } from "../../lib/hooks/use-v2-runtime-catalog";
 import { useV2RuntimeSession } from "../../lib/hooks/use-v2-runtime-session";
 import { useV2PermissionSetting } from "../../lib/hooks/use-v2-permission-setting";
-import { requestsVisibleTeam, V2_REQUEST_TEAM_SCENE_EVENT } from "../../lib/v2-runtime-controls";
+import { V2_REQUEST_TEAM_SCENE_EVENT } from "../../lib/v2-runtime-controls";
 import { reportV2RuntimeActionError } from "../../lib/v2-runtime-action";
 import { useCanvasStore } from "../../stores/canvas";
 import { useUiStore } from "../../stores/ui";
 import { launchV2Team } from "../../lib/v2-team-launch";
-import { attachmentName, buildV2RuntimeInput, type V2ComposerAttachment, type V2ComposerIntent } from "../../lib/v2-composer-actions";
+import { attachmentName, prepareV2RuntimeInput, type V2ComposerAttachment, type V2ComposerIntent } from "../../lib/v2-composer-actions";
 import { V2Timeline, type V2TimelineEntry } from "./V2Timeline";
 import { UnifiedComposer, type V2Engine } from "./UnifiedComposer";
 import { TeamInspector } from "./TeamInspector";
 import { V2WorkspaceDrawer } from "./V2WorkspaceDrawer";
 import { useTeamProjection } from "./TeamProjectionProvider";
-
 const QUICK_ACTIONS = [
   {
     key: "explore",
@@ -230,12 +229,14 @@ export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Ele
     const text = prompt.trim();
     if ((!text && attachments.length === 0) || running) return;
     if ((composerIntent === "goal" || composerIntent === "team") && !text) return;
-    const runtimeInput = buildV2RuntimeInput({
-      text,
-      intent: composerIntent,
-      attachments,
-      activeGoal,
-    });
+    const prepared = prepareV2RuntimeInput({ text, intent: composerIntent, attachments, activeGoal });
+    if (prepared.slashTeamOnly) {
+      setPrompt("");
+      setComposerIntent("team");
+      window.dispatchEvent(new Event("vibe-editor2:focus-composer"));
+      return;
+    }
+    const { runtimeInput, visibleTeamRequested } = prepared;
     const entry: V2TimelineEntry = {
       id: crypto.randomUUID(),
       role: "user",
@@ -251,7 +252,7 @@ export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Ele
     setComposerIntent("message");
     setHasStarted(true);
     activeAgentEntryIdRef.current = null;
-    if (composerIntent === "team" || requestsVisibleTeam(text)) {
+    if (composerIntent === "team" || visibleTeamRequested) {
       setTeamStarting(true);
       void launchTeam(runtimeInput).catch((error) => {
         onRuntimeError(error instanceof Error ? error.message : String(error), engine);
@@ -305,7 +306,6 @@ export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Ele
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [setInspectorOpen, shortcutsEnabled, stopRun]);
-
   return (
     <main className={`v2-shell${hasStarted ? " v2-shell--session" : ""}`}>
       <div className="v2-drag-region" data-tauri-drag-region />

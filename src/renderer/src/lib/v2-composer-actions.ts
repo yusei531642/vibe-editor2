@@ -1,3 +1,5 @@
+import { normalizeVisibleTeamRequest, requestsVisibleTeam } from './v2-runtime-controls';
+
 export type V2ComposerIntent = 'message' | 'goal' | 'team';
 
 export interface V2ComposerAttachment {
@@ -10,6 +12,12 @@ export interface BuildV2RuntimeInputRequest {
   intent: V2ComposerIntent;
   attachments: V2ComposerAttachment[];
   activeGoal: string | null;
+}
+
+export interface PreparedV2RuntimeInput {
+  runtimeInput: string;
+  slashTeamOnly: boolean;
+  visibleTeamRequested: boolean;
 }
 
 export function attachmentName(path: string): string {
@@ -45,4 +53,19 @@ export function buildV2RuntimeInput({
     return 'Continue the current task using the attached context.';
   }
   return sections.join('\n\n');
+}
+
+export function prepareV2RuntimeInput(
+  request: BuildV2RuntimeInputRequest,
+): PreparedV2RuntimeInput {
+  const visibleTeamRequested = requestsVisibleTeam(request.text);
+  const text = visibleTeamRequested
+    ? normalizeVisibleTeamRequest(request.text)
+    : request.text;
+  const slashTeamOnly = visibleTeamRequested && !text;
+  return {
+    runtimeInput: slashTeamOnly ? '' : buildV2RuntimeInput({ ...request, text }),
+    slashTeamOnly,
+    visibleTeamRequested,
+  };
 }

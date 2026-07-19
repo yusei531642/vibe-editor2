@@ -7,6 +7,8 @@ import type {
 export const V2_REQUEST_TEAM_SCENE_EVENT = 'vibe-editor2:request-team-scene';
 
 const TEAM_NOUN = /(?:チーム|team)/iu;
+const SLASH_TEAM_DIRECTIVE = /^\/team(?:\s+|$)/iu;
+const RAW_SLASH_TEAM_DIRECTIVE = /^[\/／][tｔ][eｅ][aａ][mｍ](?:\s+|$)/iu;
 const LEADING_TEAM_DIRECTIVE = /^(?:(?:この|その)\s*)?(?:チーム|team)\s*で(?!は|の)/iu;
 const TEAM_ACTION =
   /(?:で(?:や|進|作|実装|調査|レビュー)|を(?:作|組|編成|立ち上げ)|として|体制|協力|分担|並列|parallel|collaborat|work\s+together|worker|ワーカー|agents?)/iu;
@@ -14,8 +16,16 @@ const TEAM_ACTION =
 /** 明示的な Team 要求だけを起動扱いにする。「team の説明」等は通常会話のまま。 */
 export function requestsVisibleTeam(input: string): boolean {
   const normalized = input.normalize('NFKC').trim();
-  return LEADING_TEAM_DIRECTIVE.test(normalized)
+  return SLASH_TEAM_DIRECTIVE.test(normalized)
+    || LEADING_TEAM_DIRECTIVE.test(normalized)
     || (TEAM_NOUN.test(normalized) && TEAM_ACTION.test(normalized));
+}
+
+/** UI専用の `/team` directive をruntimeへ渡さず、依頼本文だけを返す。 */
+export function normalizeVisibleTeamRequest(input: string): string {
+  const trimmed = input.trim();
+  if (!SLASH_TEAM_DIRECTIVE.test(trimmed.normalize('NFKC'))) return trimmed;
+  return trimmed.replace(RAW_SLASH_TEAM_DIRECTIVE, '').trimStart();
 }
 
 export function defaultRuntimeModel(catalog: RuntimeModelCatalog): RuntimeModelOption | null {
