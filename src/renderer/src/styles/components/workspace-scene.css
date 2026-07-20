@@ -268,12 +268,14 @@
   to { transform: rotate(360deg); }
 }
 
-/* デモの worker-emerge: blur の中から実体化する入場 */
+/* デモの worker-emerge: blur の中から実体化する入場。終端は blur(0) ではなく
+   none にする (fill-mode: both で filter が残ると stacking context / 合成レイヤ
+   昇格が永続するため、PR #80 三次レビュー)。 */
 @keyframes workspace-worker-enter {
   0% { opacity: 0; transform: translateY(38px) scale(0.94); filter: blur(11px); }
   28% { opacity: 0.35; }
   68% { opacity: 1; filter: blur(0); }
-  100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+  100% { opacity: 1; transform: translateY(0) scale(1); filter: none; }
 }
 
 @keyframes workspace-worker-exit {

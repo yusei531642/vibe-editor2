@@ -159,7 +159,10 @@
   0% { opacity: 0; transform: translateY(38px) scale(0.94); filter: blur(11px); }
   28% { opacity: 0.35; }
   68% { opacity: 1; filter: blur(0); }
-  100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+  /* 終端は blur(0) ではなく none にする。fill-mode: both で filter が残ると
+     stacking context / 合成レイヤ昇格が永続し、zoom 時の文字滲みや
+     position: fixed 子の containing block ずれを生む (PR #80 三次レビュー)。 */
+  100% { opacity: 1; transform: translateY(0) scale(1); filter: none; }
 }
 
 @keyframes team-chat-node-shadow {
