@@ -422,8 +422,6 @@ export const jaShell: Dict = {
     '過去の会話履歴が見つからず {count} 件のタブを新規会話で再起動しました',
   'terminalTabs.saveFailed':
     'ターミナルタブの保存に失敗しました: {error}',
-
-
   // ---------- Status ----------
   'status.noProject': 'プロジェクトが選択されていません',
 
@@ -438,60 +436,4 @@ export const jaShell: Dict = {
   'bootstrap.renderError.body':
     '真っ黒な画面にならないよう停止しました。再読み込みで復帰できます。',
   'bootstrap.renderError.reload': '再読み込み',
-
-
-  // ---------- vibe-editor 2 GUI ----------
-  'v2.composer.aria': 'エージェントへの指示',
-  'v2.composer.context': '実行コンテキスト',
-  'v2.composer.locationAria': '実行場所 ローカル',
-  'v2.composer.local': 'ローカル',
-  'v2.composer.branchAria': 'ブランチ {branch}',
-  'v2.composer.placeholder': '何でもできます',
-  'v2.composer.inputAria': '指示を入力',
-  'v2.composer.attach': 'ファイルを添付',
-  'v2.composer.permission': '権限',
-  'v2.permission.workspace': 'ワークスペース',
-  'v2.permission.full': 'フルアクセス',
-  'v2.composer.engine': 'エンジン',
-  'v2.composer.voice': '音声で入力',
-  'v2.composer.stop': '実行を停止',
-  'v2.composer.send': '送信',
-  'v2.quick.explore.label': 'コードを探索して理解する',
-  'v2.quick.explore.prompt':
-    'このコードベースを探索し、構造、主要なデータフロー、改善余地を説明してください。',
-  'v2.quick.build.label': '新しい機能、アプリ、ツールを作成',
-  'v2.quick.build.prompt': '次の要件を満たす新しい機能を設計して実装してください：',
-  'v2.quick.review.label': 'コードをレビューして変更を提案',
-  'v2.quick.review.prompt':
-    '現在の変更をレビューし、重要度順に問題点と具体的な修正案を提示してください。',
-  'v2.quick.fix.label': '問題やエラーを修正',
-  'v2.quick.fix.prompt': '次の問題を再現し、根本原因を特定して修正してください：',
-  'v2.project.select': 'プロジェクトを選択',
-  'v2.runtime.fakeReady':
-    '{engine} Runtimeを接続する準備ができました。非PTYアダプターは次の実装WaveでこのTimelineへ接続されます。',
-  'v2.shell.views': 'ワークスペース表示',
-  'v2.shell.navigation': 'タスクナビゲーション',
-  'v2.shell.back': '前の画面へ戻る',
-  'v2.shell.forward': '次の画面へ進む',
-  'v2.shell.newTask': '新しいタスク',
-  'v2.drawer.left': 'プロジェクトとセッション',
-  'v2.drawer.inspector': 'Inspector',
-  'v2.runtime.setupTitle': 'Claude Codeをセットアップ',
-  'v2.runtime.missing': 'Claude CLIが見つかりません。',
-  'v2.runtime.redetect': '再検出',
-  'v2.home.question': ' で何を作りましょうか？',
-  'v2.timeline.you': 'あなた',
-  'v2.timeline.running': '実行中',
-  'v2.timeline.exploring': '探索中',
-  'v2.drawer.workspace': 'ワークスペース',
-  'v2.drawer.projects': 'プロジェクト',
-  'v2.drawer.sessions': 'セッション',
-  'v2.drawer.currentSession': '現在のセッション',
-  'v2.drawer.noSessions': 'セッションはまだありません',
-  'v2.drawer.changedFiles': '変更ファイル',
-  'v2.inspector.results': '実行結果',
-  'v2.inspector.resultsEmpty':
-    'テストや変更が発生すると、ここに意味単位で集約されます。',
-  'v2.inspector.openTerminal': 'Compatibility Terminalを開く',
-
 };

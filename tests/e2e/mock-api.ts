@@ -130,7 +130,31 @@ export async function installMockApi(
         memberCommand: async () => ({ action: 'respondApproval', affectedAgentIds: ['leader-e2e'] })
       },
       agentRuntime: {
+        modelCatalog: async (engine: 'claude' | 'codex') => ({
+          engine,
+          models: [{
+            id: engine === 'claude' ? 'claude-sonnet-4-6' : 'gpt-5.4',
+            label: engine === 'claude' ? 'Sonnet 4.6' : 'GPT-5.4',
+            description: 'E2E mock model',
+            isDefault: true,
+            defaultEffort: 'high',
+            supportedEfforts: ['low', 'medium', 'high']
+          }]
+        }),
         onEventReady: async () => () => undefined,
+        registerClaudeEndpoint: async (request: { endpointId: string }) => ({
+          endpointId: request.endpointId,
+          sessionId: 'session-e2e'
+        }),
+        registerCodexEndpoint: async (request: { endpointId: string }) => ({
+          endpointId: request.endpointId,
+          threadId: 'thread-e2e'
+        }),
+        spawnTurn: async (request: { endpointId: string }) => ({
+          endpointId: request.endpointId
+        }),
+        interrupt: async (endpointId: string) => ({ endpointId }),
+        dispose: async (endpointId: string) => ({ endpointId }),
         reconnectCodex: async () => ({ endpointId: 'native-leader', threadId: 'thread-e2e' }),
         respondApproval: async () => ({ endpointId: 'native-leader' })
       },

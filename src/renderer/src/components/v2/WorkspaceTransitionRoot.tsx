@@ -1,11 +1,13 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties
 } from 'react';
 import { MessagesSquare, Network } from 'lucide-react';
+import { useStoreWithEqualityFn } from 'zustand/traditional';
 import { V2Shell } from './V2Shell';
 import { TeamWorkspaceScene } from './TeamWorkspaceScene';
 import { TeamProjectionProvider } from './TeamProjectionProvider';
@@ -22,6 +24,12 @@ import {
 } from '../../stores/ui';
 import { useSettingsValue } from '../../lib/settings-context';
 import type { Team } from '../../../../types/shared';
+import {
+  agentPayloadOf,
+  useCanvasStore,
+  type CanvasState
+} from '../../stores/canvas';
+import { V2_REQUEST_TEAM_SCENE_EVENT } from '../../lib/v2-runtime-controls';
 
 const SCENE_DURATION_MS = 500;
 const REDUCED_SCENE_DURATION_MS = 120;
@@ -70,6 +78,25 @@ function frameStyle(frame: FlipFrame): CSSProperties {
   };
 }
 
+function selectCanvasTeams(state: CanvasState): Team[] {
+  const byId = new Map<string, Team>();
+  for (const node of state.nodes) {
+    const payload = agentPayloadOf(node.data);
+    if (!payload?.teamId) continue;
+    byId.set(payload.teamId, {
+      id: payload.teamId,
+      name: payload.teamName || payload.teamId
+    });
+  }
+  return [...byId.values()];
+}
+
+function sameTeams(left: Team[], right: Team[]): boolean {
+  return left.length === right.length && left.every((team, index) =>
+    team.id === right[index]?.id && team.name === right[index]?.name
+  );
+}
+
 function WorkspaceScene({
   scene,
   active,
@@ -103,11 +130,21 @@ function EnabledWorkspaceTransitionRoot({
 }: WorkspaceTransitionRootProps): JSX.Element {
   const t = useT();
   const { teams } = useTeam();
+  const canvasTeams = useStoreWithEqualityFn(useCanvasStore, selectCanvasTeams, sameTeams);
   const reducedMotion = useReducedMotion(motionPreference);
   const persistedScene = useUiStore((state) => state.workspaceScene);
   const setPersistedScene = useUiStore((state) => state.setWorkspaceScene);
-  const hasTeamSession = forceTeamSession ?? teams.length > 0;
-  const team: Team = teams[0] ?? { id: 'pending-team', name: t('v2.team.defaultName') };
+  const workspaceTeamId = useUiStore((state) => state.workspaceTeamId);
+  const setWorkspaceTeamId = useUiStore((state) => state.setWorkspaceTeamId);
+  const availableTeams = useMemo(() => {
+    const byId = new Map<string, Team>();
+    for (const team of [...teams, ...canvasTeams]) byId.set(team.id, team);
+    return [...byId.values()];
+  }, [canvasTeams, teams]);
+  const hasTeamSession = forceTeamSession ?? availableTeams.length > 0;
+  const team: Team = availableTeams.find((candidate) => candidate.id === workspaceTeamId)
+    ?? availableTeams[0]
+    ?? { id: 'pending-team', name: t('v2.team.defaultName') };
   const desiredScene = hasTeamSession ? persistedScene : 'focus';
   const [committedScene, setCommittedScene] = useState<WorkspaceSceneName>(desiredScene);
   const [transitioning, setTransitioning] = useState(false);
@@ -137,12 +174,14 @@ function EnabledWorkspaceTransitionRoot({
   useEffect(() => {
     if (hasTeamSession) {
       sawTeamSessionRef.current = true;
+      if (workspaceTeamId !== team.id) setWorkspaceTeamId(team.id);
       return;
     }
     if (sawTeamSessionRef.current && persistedScene !== 'focus') {
       setPersistedScene('focus');
     }
-  }, [hasTeamSession, persistedScene, setPersistedScene]);
+    if (workspaceTeamId !== null) setWorkspaceTeamId(null);
+  }, [hasTeamSession, persistedScene, setPersistedScene, setWorkspaceTeamId, team.id, workspaceTeamId]);
 
   const measure = useCallback((scene: WorkspaceSceneName): DOMRect | null => {
     const root = scene === 'focus' ? focusRef.current : teamRef.current;
@@ -230,6 +269,12 @@ function EnabledWorkspaceTransitionRoot({
       }, duration);
     }, [clearTransitionTimer, hasTeamSession, measure, reducedMotion, returnFocus, setPersistedScene]
   );
+
+  useEffect(() => {
+    const openTeamScene = (): void => requestScene('team');
+    window.addEventListener(V2_REQUEST_TEAM_SCENE_EVENT, openTeamScene);
+    return () => window.removeEventListener(V2_REQUEST_TEAM_SCENE_EVENT, openTeamScene);
+  }, [requestScene]);
 
   const focusInactive = !transitioning && committedScene !== 'focus';
   const teamInactive = !transitioning && committedScene !== 'team';

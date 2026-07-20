@@ -1,5 +1,5 @@
 :root {
-  --workspace-scene-duration: 500ms;
+  --workspace-scene-duration: 280ms;
   --workspace-scene-crossfade-duration: 120ms;
   --workspace-scene-ease: cubic-bezier(0.4, 0, 0.2, 1);
   --workspace-worker-duration: 280ms;
@@ -93,9 +93,23 @@
   transform-origin: top left;
   border: 1px solid color-mix(in srgb, var(--accent, #d97757) 54%, transparent);
   border-radius: 12px;
-  background: color-mix(in srgb, var(--surface-panel) 28%, transparent);
+  background:
+    linear-gradient(to bottom, color-mix(in srgb, var(--surface-elev) 92%, transparent) 0 44px, transparent 44px),
+    color-mix(in srgb, var(--surface-panel) 88%, transparent);
   animation: workspace-flip var(--workspace-scene-duration) var(--workspace-scene-ease) both;
 }
+
+.workspace-flip-frame::before,
+.workspace-flip-frame::after {
+  content: '';
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  border-radius: 9.6px;
+}
+.workspace-flip-frame::before { top: 58px; height: 34%; border-width: 0 0 0 2px; border-radius: 0; }
+.workspace-flip-frame::after { bottom: 14px; height: 23%; background: color-mix(in srgb, var(--surface-panel) 82%, transparent); }
 
 @keyframes workspace-flip {
   from {

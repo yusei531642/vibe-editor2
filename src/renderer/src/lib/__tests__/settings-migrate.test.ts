@@ -3,6 +3,28 @@ import { APP_SETTINGS_SCHEMA_VERSION, DEFAULT_SETTINGS } from '../../../../types
 import { migrateSettings } from '../settings-migrate';
 
 describe('migrateSettings', () => {
+  it('v15以前の会話権限を代理承認へ移行する', () => {
+    const migrated = migrateSettings({
+      schemaVersion: 15,
+      language: 'ja',
+      theme: 'claude-light'
+    });
+
+    expect(migrated.v2PermissionMode).toBe('agent');
+    expect(migrated.schemaVersion).toBe(APP_SETTINGS_SCHEMA_VERSION);
+  });
+
+  it('有効な会話権限を維持し、未知値は既定値へ戻す', () => {
+    expect(migrateSettings({
+      schemaVersion: APP_SETTINGS_SCHEMA_VERSION,
+      v2PermissionMode: 'ask'
+    }).v2PermissionMode).toBe('ask');
+    expect(migrateSettings({
+      schemaVersion: APP_SETTINGS_SCHEMA_VERSION,
+      v2PermissionMode: 'unsafe'
+    }).v2PermissionMode).toBe(DEFAULT_SETTINGS.v2PermissionMode);
+  });
+
   it('adds the default status mascot variant for older settings', () => {
     const migrated = migrateSettings({
       schemaVersion: 8,
@@ -278,8 +300,8 @@ describe('migrateSettings', () => {
     });
   });
 
-  describe('v13 → v14 runtime guardrails (Issue #21)', () => {
-    it('旧設定に PTY backend と無効な Team Scene v2 を補完する', () => {
+  describe('v13 → v15 runtime guardrails (Issue #21 / #49)', () => {
+    it('旧設定に PTY backend と正式有効化した Team Scene v2 を補完する', () => {
       const migrated = migrateSettings({
         schemaVersion: 13,
         language: 'ja',
@@ -287,7 +309,7 @@ describe('migrateSettings', () => {
       });
 
       expect(migrated.agentRuntimeBackend).toBe('pty');
-      expect(migrated.teamSceneV2).toBe(false);
+      expect(migrated.teamSceneV2).toBe(true);
       expect(migrated.schemaVersion).toBe(APP_SETTINGS_SCHEMA_VERSION);
     });
 
@@ -314,6 +336,17 @@ describe('migrateSettings', () => {
       });
 
       expect(migrated.agentRuntimeBackend).toBe('pty');
+      expect(migrated.teamSceneV2).toBe(true);
+    });
+
+    it('v15 で明示的に無効化した値は維持する', () => {
+      const migrated = migrateSettings({
+        schemaVersion: APP_SETTINGS_SCHEMA_VERSION,
+        language: 'ja',
+        theme: 'claude-light',
+        teamSceneV2: false
+      });
+
       expect(migrated.teamSceneV2).toBe(false);
     });
   });

@@ -1,5 +1,5 @@
 use crate::agent_runtime::claude_agent::{
-    ClaudeAdapterEvent, ClaudeAgentRuntimeAdapter, SidecarLaunchConfig,
+    ClaudeAdapterEvent, ClaudeAgentRuntimeAdapter, ClaudeAgentRuntimeConfig, SidecarLaunchConfig,
 };
 use crate::agent_runtime::{
     AgentRuntimeAdapter, BackendKind, RuntimeAdapterError, RuntimeCapability, RuntimeManager,
@@ -68,8 +68,10 @@ fn claude_reviewer(manager: Arc<RuntimeManager>) -> Arc<ClaudeAgentRuntimeAdapte
                 secret_values: Vec::new(),
                 response_timeout: Duration::from_secs(2),
             },
-            None,
-            Some("Review the leader output".to_string()),
+            ClaudeAgentRuntimeConfig {
+                system_prompt: Some("Review the leader output".to_string()),
+                ..Default::default()
+            },
             sink,
         )
         .expect("Claude fixture connects"),

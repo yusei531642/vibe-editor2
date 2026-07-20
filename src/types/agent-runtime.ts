@@ -7,6 +7,29 @@
 
 export type AgentRuntimeBackend = 'auto' | 'native' | 'pty';
 export type RuntimeProvider = 'codex-native' | 'claude-native' | 'pty' | 'api';
+export type RuntimeEngine = 'claude' | 'codex';
+export type V2PermissionMode = 'full' | 'agent' | 'ask';
+/**
+ * Native runtime の実効権限。
+ * - workspace: workspace 制約下で runtime が必要時に承認を要求
+ * - ask: workspace 制約下で保守的に承認を要求
+ * - full: sandbox / approval を無効化した明示的なフルアクセス
+ */
+export type RuntimePermission = 'workspace' | 'ask' | 'full';
+
+export interface RuntimeModelOption {
+  id: string;
+  label: string;
+  description: string;
+  isDefault: boolean;
+  defaultEffort: string;
+  supportedEfforts: string[];
+}
+
+export interface RuntimeModelCatalog {
+  engine: RuntimeEngine;
+  models: RuntimeModelOption[];
+}
 
 export type AgentRuntimeCapability =
   | 'ptyExecution'
@@ -53,6 +76,9 @@ export interface RuntimeTurnRequest {
   endpointId: string;
   input: string;
   submit: boolean;
+  model?: string | null;
+  effort?: string | null;
+  permission?: RuntimePermission | null;
 }
 
 export type CodexThreadAction =
@@ -70,6 +96,8 @@ export interface RegisterCodexRuntimeEndpointRequest {
   teamId?: string | null;
   agentId?: string | null;
   cwd?: string | null;
+  model?: string | null;
+  permission?: RuntimePermission | null;
   thread: CodexThreadAction;
 }
 
@@ -83,6 +111,9 @@ export interface RegisterClaudeRuntimeEndpointRequest {
   teamId?: string | null;
   agentId?: string | null;
   systemPrompt?: string | null;
+  model?: string | null;
+  effort?: string | null;
+  permission?: RuntimePermission | null;
   session: ClaudeSessionAction;
 }
 

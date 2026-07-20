@@ -16,7 +16,8 @@ vi.mock('../../../../v2/TeamProjectionProvider', () => ({
     projection: {
       agents: [{
         agentId: 'agent-1', status: 'running', task: { description: 'Implement cards' },
-        latestTool: { toolName: 'apply_patch', status: 'completed' }, latestDiff: null, latestUsage: null
+        latestTool: { toolName: 'apply_patch', status: 'completed' }, latestDiff: null, latestUsage: null,
+        runtime: { completedMessages: ['Cards implemented'], currentMessage: '' }
       }]
     },
     dispatchAgentAction: harness.dispatch,
@@ -51,5 +52,11 @@ describe('AgentCardRuntime actions', () => {
     render(<AgentCardRuntime agentId="agent-1" />);
     fireEvent.click(screen.getByRole('button', { name: 'v2.team.card.inspect' }));
     expect(harness.inspect).toHaveBeenCalledWith('agent-1');
+  });
+
+  it('renders the initial instruction and native response as a mini conversation', () => {
+    render(<AgentCardRuntime agentId="agent-1" payload={{ initialMessage: 'Build the cards' }} />);
+    expect(screen.getByText('Build the cards')).toBeInTheDocument();
+    expect(screen.getByText('Cards implemented')).toBeInTheDocument();
   });
 });

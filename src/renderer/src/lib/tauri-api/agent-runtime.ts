@@ -5,6 +5,8 @@ import { subscribeEventReady } from '../subscribe-event';
 import type {
   AgentRuntimeBackend,
   AgentRuntimeDiagnostics,
+  RuntimeEngine,
+  RuntimeModelCatalog,
   ClaudeRuntimeEndpointResult,
   CodexRuntimeEndpointResult,
   RegisterCodexRuntimeEndpointRequest,
@@ -20,6 +22,9 @@ import type {
 export const agentRuntime = {
   diagnostics: (backend: AgentRuntimeBackend): Promise<AgentRuntimeDiagnostics> =>
     invokeCommand('agent_runtime_diagnostics', { backend }),
+
+  modelCatalog: (engine: RuntimeEngine): Promise<RuntimeModelCatalog> =>
+    invokeCommand('agent_runtime_model_catalog', { engine }),
 
   registerPtyEndpoint: (
     request: RegisterPtyRuntimeEndpointRequest

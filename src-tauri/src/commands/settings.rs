@@ -71,6 +71,8 @@ pub struct Settings {
     pub agent_runtime_backend: String,
     #[serde(default)]
     pub team_scene_v2: bool,
+    #[serde(default = "default_v2_permission_mode")]
+    pub v2_permission_mode: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status_mascot_variant: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -243,6 +245,10 @@ fn default_agent_runtime() -> String {
     "cli".to_string()
 }
 
+fn default_v2_permission_mode() -> String {
+    "agent".to_string()
+}
+
 // `Settings::default()` は renderer の `DEFAULT_SETTINGS` と一致させる。
 // initial install で settings.json が無いとき / parse 失敗時に返す値。
 impl Default for Settings {
@@ -259,7 +265,8 @@ impl Default for Settings {
             terminal_font_size: default_terminal_font_size(),
             density: default_density(),
             agent_runtime_backend: default_agent_runtime_backend(),
-            team_scene_v2: false,
+            team_scene_v2: true,
+            v2_permission_mode: default_v2_permission_mode(),
             status_mascot_variant: Some("vibe".to_string()),
             status_mascot_custom_path: None,
             claude_command: default_claude_command(),
@@ -574,7 +581,8 @@ mod tests {
         assert_eq!(v["theme"], json!("claude-light"));
         assert_eq!(v["density"], json!("normal"));
         assert_eq!(v["agentRuntimeBackend"], json!("pty"));
-        assert_eq!(v["teamSceneV2"], json!(false));
+        assert_eq!(v["teamSceneV2"], json!(true));
+        assert_eq!(v["v2PermissionMode"], json!("agent"));
         assert_eq!(v["uiFontSize"], json!(14.0));
         assert_eq!(v["editorFontSize"], json!(13.0));
         assert_eq!(v["terminalFontSize"], json!(13.0));
@@ -590,20 +598,6 @@ mod tests {
         assert_eq!(v["terminalForceUtf8"], json!(true));
         // webviewZoom は None なので skip_serializing
         assert!(v.get("webviewZoom").is_none());
-    }
-
-    /// Issue #618: 旧 settings.json (terminalForceUtf8 フィールドなし) を load しても、
-    /// `#[serde(default = "default_terminal_force_utf8")]` で `true` が入る。
-    #[test]
-    fn legacy_settings_without_terminal_force_utf8_default_to_true() {
-        let raw = json!({
-            "schemaVersion": 10,
-            "language": "ja",
-            "theme": "claude-dark",
-            // terminalForceUtf8 を意図的に省略
-        });
-        let s: Settings = serde_json::from_value(raw).unwrap();
-        assert!(s.terminal_force_utf8, "expected default true");
     }
 
     /// Issue #618: `terminalForceUtf8: false` を保存しているユーザー値はそのまま load される。

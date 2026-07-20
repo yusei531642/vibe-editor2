@@ -3,9 +3,10 @@
 use super::client::{ClientEvent, ClientEventSink, ClientHandle};
 use super::convert;
 use crate::agent_runtime::{
-    AgentRuntimeAdapter, BackendKind, RuntimeAdapterError, RuntimeApprovalResponseRequest,
-    RuntimeCapability, RuntimeEventPayload, RuntimeSessionForkRequest, RuntimeSessionResumeRequest,
-    RuntimeSessionSpawnRequest, RuntimeSteerRequest, RuntimeTurnSpawnRequest,
+    ensure_runtime_permission_not_escalated, AgentRuntimeAdapter, BackendKind, RuntimeAdapterError,
+    RuntimeApprovalResponseRequest, RuntimeCapability, RuntimeEventPayload,
+    RuntimeSessionForkRequest, RuntimeSessionResumeRequest, RuntimeSessionSpawnRequest,
+    RuntimeSteerRequest, RuntimeTurnSpawnRequest,
 };
 use serde_json::{json, Value};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -29,6 +30,9 @@ struct SessionState {
 pub struct CodexRuntimeAdapter {
     client: Mutex<Option<Arc<ClientHandle>>>,
     cwd: Option<String>,
+    model: Option<String>,
+    permission: Option<String>,
+    permission_locked: bool,
     state: Arc<SessionState>,
     disposed: AtomicBool,
 }
@@ -37,6 +41,9 @@ impl CodexRuntimeAdapter {
     pub fn connect(
         socket_path: String,
         cwd: Option<String>,
+        model: Option<String>,
+        permission: Option<String>,
+        permission_locked: bool,
         sink: CodexAdapterEventSink,
     ) -> Result<Self, RuntimeAdapterError> {
         let state = Arc::new(SessionState::default());
@@ -49,6 +56,9 @@ impl CodexRuntimeAdapter {
         Ok(Self {
             client: Mutex::new(Some(client)),
             cwd,
+            model,
+            permission,
+            permission_locked,
             state,
             disposed: AtomicBool::new(false),
         })
@@ -58,6 +68,9 @@ impl CodexRuntimeAdapter {
     pub fn connect_stream(
         stream: tokio::net::UnixStream,
         cwd: Option<String>,
+        model: Option<String>,
+        permission: Option<String>,
+        permission_locked: bool,
         sink: CodexAdapterEventSink,
     ) -> Result<Self, RuntimeAdapterError> {
         let state = Arc::new(SessionState::default());
@@ -70,6 +83,9 @@ impl CodexRuntimeAdapter {
         Ok(Self {
             client: Mutex::new(Some(client)),
             cwd,
+            model,
+            permission,
+            permission_locked,
             state,
             disposed: AtomicBool::new(false),
         })
@@ -134,12 +150,23 @@ impl CodexRuntimeAdapter {
             })
     }
 
-    fn start_turn(&self, input: &str) -> Result<(), RuntimeAdapterError> {
+    fn start_turn(
+        &self,
+        input: &str,
+        model: Option<&str>,
+        effort: Option<&str>,
+        permission: Option<&str>,
+    ) -> Result<(), RuntimeAdapterError> {
         let thread_id = self.require_thread_id()?;
-        let result = self.client()?.request(
-            "turn/start",
-            json!({ "threadId": thread_id, "input": [text_input(input)] }),
-        )?;
+        let mut params = json!({ "threadId": thread_id, "input": [text_input(input)] });
+        if let Some(model) = model {
+            params["model"] = Value::String(model.to_string());
+        }
+        if let Some(effort) = effort {
+            params["effort"] = Value::String(effort.to_string());
+        }
+        apply_turn_permission(&mut params, permission.or(self.permission.as_deref()));
+        let result = self.client()?.request("turn/start", params)?;
         if let Some(turn_id) = convert::turn_id(&result) {
             *write_lock(&self.state.active_turn_id) = Some(turn_id);
         }
@@ -172,6 +199,10 @@ impl AgentRuntimeAdapter for CodexRuntimeAdapter {
         if let Some(cwd) = &self.cwd {
             params["cwd"] = Value::String(cwd.clone());
         }
+        if let Some(model) = &self.model {
+            params["model"] = Value::String(model.clone());
+        }
+        apply_thread_permission(&mut params, self.permission.as_deref());
         let result = self.client()?.request("thread/start", params)?;
         self.set_thread_from_result(&result)
     }
@@ -201,15 +232,25 @@ impl AgentRuntimeAdapter for CodexRuntimeAdapter {
                 true,
             ));
         }
-        self.start_turn(&request.input)
+        ensure_runtime_permission_not_escalated(
+            self.permission_locked,
+            self.permission.as_deref(),
+            request.permission.as_deref(),
+        )?;
+        self.start_turn(
+            &request.input,
+            request.model.as_deref(),
+            request.effort.as_deref(),
+            request.permission.as_deref(),
+        )
     }
 
     fn write(&self, data: &str) -> Result<(), RuntimeAdapterError> {
-        self.start_turn(data)
+        self.start_turn(data, None, None, None)
     }
 
     fn inject(&self, data: &str) -> Result<(), RuntimeAdapterError> {
-        self.start_turn(data)
+        self.start_turn(data, None, None, None)
     }
 
     fn steer(&self, request: &RuntimeSteerRequest) -> Result<(), RuntimeAdapterError> {
@@ -332,6 +373,42 @@ fn text_input(text: &str) -> Value {
     json!({ "type": "text", "text": text, "text_elements": [] })
 }
 
+fn apply_thread_permission(params: &mut Value, permission: Option<&str>) {
+    match permission {
+        Some("full") => {
+            params["sandbox"] = Value::String("danger-full-access".to_string());
+            params["approvalPolicy"] = Value::String("never".to_string());
+        }
+        Some("workspace") => {
+            params["sandbox"] = Value::String("workspace-write".to_string());
+            params["approvalPolicy"] = Value::String("on-request".to_string());
+        }
+        Some("ask") => {
+            params["sandbox"] = Value::String("workspace-write".to_string());
+            params["approvalPolicy"] = Value::String("untrusted".to_string());
+        }
+        _ => {}
+    }
+}
+
+fn apply_turn_permission(params: &mut Value, permission: Option<&str>) {
+    match permission {
+        Some("full") => {
+            params["sandboxPolicy"] = json!({ "type": "dangerFullAccess" });
+            params["approvalPolicy"] = Value::String("never".to_string());
+        }
+        Some("workspace") => {
+            params["sandboxPolicy"] = json!({ "type": "workspaceWrite" });
+            params["approvalPolicy"] = Value::String("on-request".to_string());
+        }
+        Some("ask") => {
+            params["sandboxPolicy"] = json!({ "type": "workspaceWrite" });
+            params["approvalPolicy"] = Value::String("untrusted".to_string());
+        }
+        _ => {}
+    }
+}
+
 fn read_lock<T>(lock: &RwLock<T>) -> std::sync::RwLockReadGuard<'_, T> {
     lock.read().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
@@ -339,4 +416,23 @@ fn read_lock<T>(lock: &RwLock<T>) -> std::sync::RwLockReadGuard<'_, T> {
 fn write_lock<T>(lock: &RwLock<T>) -> std::sync::RwLockWriteGuard<'_, T> {
     lock.write()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+#[cfg(test)]
+mod permission_tests {
+    use super::{apply_thread_permission, apply_turn_permission};
+    use serde_json::json;
+
+    #[test]
+    fn ask_mode_uses_workspace_sandbox_and_untrusted_approvals() {
+        let mut thread = json!({});
+        apply_thread_permission(&mut thread, Some("ask"));
+        assert_eq!(thread["sandbox"], "workspace-write");
+        assert_eq!(thread["approvalPolicy"], "untrusted");
+
+        let mut turn = json!({});
+        apply_turn_permission(&mut turn, Some("ask"));
+        assert_eq!(turn["sandboxPolicy"], json!({ "type": "workspaceWrite" }));
+        assert_eq!(turn["approvalPolicy"], "untrusted");
+    }
 }

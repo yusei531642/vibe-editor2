@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { RuntimeProvider } from '../../../../../../types/agent-runtime';
+import { useV2RuntimeCatalog } from '../../../../lib/hooks/use-v2-runtime-catalog';
+import { useT } from '../../../../lib/i18n';
 import { useRuntimeStore } from '../../../../stores/runtime';
 import type { TerminalRuntimeStatus } from '../../../../lib/terminal-status';
 import type { AgentPayload } from './types';
@@ -15,33 +17,73 @@ export function NativeRuntimeConnector({
   payload,
   systemPrompt,
   initialMessage,
-  setCardPayload,
-  onStatus
+  onStatus,
+  setCardPayload
 }: {
   cardId: string;
   payload: AgentPayload;
   systemPrompt?: string;
   initialMessage?: string;
-  setCardPayload: (id: string, patch: Record<string, unknown>) => void;
   onStatus: (status: TerminalRuntimeStatus | null) => void;
+  setCardPayload?: (patch: Partial<AgentPayload>) => void;
 }): JSX.Element | null {
+  const t = useT();
+  const [failure, setFailure] = useState<string | null>(null);
+  const [retryNonce, setRetryNonce] = useState(0);
   const provider = payload.runtimeProvider;
+  const engine = provider === 'codex-native' ? 'codex' : 'claude';
+  const catalog = useV2RuntimeCatalog(engine, isNativeRuntimeProvider(provider));
+  const resolvedModel = payload.runtimeModel ?? catalog.models[0]?.id ?? null;
+  const resolvedModelOption = catalog.models.find((option) => option.id === resolvedModel);
+  const resolvedEffort = payload.runtimeEffort
+    ?? resolvedModelOption?.defaultEffort
+    ?? resolvedModelOption?.supportedEfforts[0]
+    ?? null;
+  const waitingForInitialCatalog = (
+    !payload.runtimeModel && catalog.models.length === 0 && !catalog.error
+  );
   const endpointId = useMemo(
     () => (payload.agentId ? `native-${payload.agentId}` : null),
     [payload.agentId]
   );
+  const runtimeIdentity = `${cardId}:${provider ?? ''}:${payload.teamId ?? ''}:${payload.agentId ?? ''}`;
   // Team membership updates regenerate the prompt. They must not dispose an active session.
   const systemPromptRef = useRef(systemPrompt);
   systemPromptRef.current = systemPrompt;
+  const initialMessageRef = useRef(initialMessage);
+  initialMessageRef.current = initialMessage;
+  const onStatusRef = useRef(onStatus);
+  onStatusRef.current = onStatus;
+  const runtimeOptionsRef = useRef({
+    model: resolvedModel,
+    effort: resolvedEffort,
+    permission: 'workspace' as const
+  });
+  runtimeOptionsRef.current = {
+    model: resolvedModel,
+    effort: resolvedEffort,
+    permission: 'workspace'
+  };
+  const bootstrappedIdentityRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!resolvedModel) return;
+    const patch: Partial<AgentPayload> = {};
+    if (!payload.runtimeModel) patch.runtimeModel = resolvedModel;
+    if (!payload.runtimeEffort && resolvedEffort) patch.runtimeEffort = resolvedEffort;
+    if (Object.keys(patch).length > 0) setCardPayload?.(patch);
+  }, [payload.runtimeEffort, payload.runtimeModel, resolvedEffort, resolvedModel, setCardPayload]);
 
   useEffect(() => {
     if (!endpointId || !payload.agentId || !payload.teamId) return;
     if (!isNativeRuntimeProvider(provider)) return;
+    if (waitingForInitialCatalog) return;
     let disposed = false;
     let registered = false;
     let unsubscribe: (() => void) | null = null;
     const start = async (): Promise<void> => {
-      onStatus({ kind: 'starting', command: provider });
+      setFailure(null);
+      onStatusRef.current({ kind: 'starting', command: provider });
       unsubscribe = await window.api.agentRuntime.onEventReady(
         endpointId,
         useRuntimeStore.getState().projectEvent
@@ -50,12 +92,16 @@ export function NativeRuntimeConnector({
         unsubscribe();
         return;
       }
+      const runtimeOptions = runtimeOptionsRef.current;
       if (provider === 'claude-native') {
         await window.api.agentRuntime.reconnectClaude({
           endpointId,
           teamId: payload.teamId,
           agentId: payload.agentId,
           systemPrompt: systemPromptRef.current ?? null,
+          model: runtimeOptions.model,
+          effort: runtimeOptions.effort,
+          permission: runtimeOptions.permission,
           session: { mode: 'start' }
         });
       } else {
@@ -64,6 +110,8 @@ export function NativeRuntimeConnector({
           teamId: payload.teamId,
           agentId: payload.agentId,
           cwd: null,
+          model: runtimeOptions.model,
+          permission: runtimeOptions.permission,
           thread: { mode: 'start' }
         });
       }
@@ -72,27 +120,29 @@ export function NativeRuntimeConnector({
         await window.api.agentRuntime.dispose(endpointId);
         return;
       }
-      const bootstrap = initialMessage?.trim() ||
+      if (bootstrappedIdentityRef.current === runtimeIdentity) {
+        onStatusRef.current({ kind: 'running', command: provider });
+        return;
+      }
+      const bootstrap = initialMessageRef.current?.trim() ||
         (provider === 'codex-native' ? systemPromptRef.current?.trim() : '') ||
         'Start your assigned team role and read pending TeamHub messages.';
       await window.api.agentRuntime.spawnTurn({
         endpointId,
         input: bootstrap,
-        submit: true
+        submit: true,
+        model: runtimeOptions.model,
+        effort: runtimeOptions.effort,
+        permission: runtimeOptions.permission
       });
-      onStatus({ kind: 'running', command: provider });
+      bootstrappedIdentityRef.current = runtimeIdentity;
+      onStatusRef.current({ kind: 'running', command: provider });
     };
     void start().catch((error) => {
       if (disposed) return;
       const message = error instanceof Error ? error.message : String(error);
-      onStatus({ kind: 'spawn_failed', command: provider, error: message });
-      const fallbackFrom = provider as Extract<
-        RuntimeProvider,
-        'codex-native' | 'claude-native'
-      >;
-      // Runtime availability can change after Rust policy selection. Preserve the failure
-      // explicitly on the card while activating the compatibility PTY path.
-      setCardPayload(cardId, { runtimeProvider: 'pty', fallbackFrom });
+      setFailure(message);
+      onStatusRef.current({ kind: 'spawn_failed', command: provider, error: message });
       if (registered) void window.api.agentRuntime.dispose(endpointId).catch(() => undefined);
     });
     return () => {
@@ -103,18 +153,22 @@ export function NativeRuntimeConnector({
   }, [
     cardId,
     endpointId,
-    initialMessage,
-    onStatus,
     payload.agentId,
     payload.teamId,
     provider,
-    setCardPayload
+    retryNonce,
+    runtimeIdentity,
+    waitingForInitialCatalog
   ]);
 
-  if (!isNativeRuntimeProvider(provider)) return null;
-  return (
-    <div className="canvas-agent-native-runtime" data-provider={provider} role="status">
-      {provider === 'claude-native' ? 'Claude native runtime' : 'Codex native runtime'}
-    </div>
-  );
+  return failure ? (
+    <button
+      type="button"
+      className="team-chat-runtime-retry"
+      title={failure}
+      onClick={() => setRetryNonce((current) => current + 1)}
+    >
+      {t('v2.team.card.reconnect')}
+    </button>
+  ) : null;
 }

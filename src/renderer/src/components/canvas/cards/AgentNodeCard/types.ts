@@ -11,6 +11,7 @@ import type {
   TeamOrganizationMeta,
   WaitPolicy
 } from '../../../../../../types/shared';
+import type { RuntimePermission } from '../../../../../../types/agent-runtime';
 
 export interface AgentPayload {
   /** 挙動系統 (engine)。識別子ではない。custom CLI も claude/codex いずれかの engine 上で動く。 */
@@ -19,6 +20,10 @@ export interface AgentPayload {
   runtimeProvider?: 'codex-native' | 'claude-native' | 'pty' | 'api';
   /** native 不可で PTY fallback した場合の本来の provider。 */
   fallbackFrom?: 'codex-native' | 'claude-native' | null;
+  /** V2 composer で選択した native runtime の session/turn 設定。 */
+  runtimeModel?: string;
+  runtimeEffort?: string;
+  runtimePermission?: RuntimePermission;
   /** Issue #1113: custom agent の settings.customAgents id。名前/アイコン/色/skill 解決に使う。 */
   agentConfigId?: string;
   /** 新スキーマ: ロール識別子。未設定時は legacy `role` をフォールバックとして読む。 */
@@ -50,6 +55,8 @@ export interface AgentPayload {
   waitPolicy?: WaitPolicy;
   /** Issue #359: handoff から新セッションを起動するときに初手で送るプロンプト。 */
   initialMessage?: string;
+  /** Canvas mini chat から直接送ったユーザー指示。再起動後も会話に表示する。 */
+  chatUserMessages?: string[];
   /** Issue #370: 複数組織同時運用時の所属表示・履歴復元用情報。 */
   organization?: TeamOrganizationMeta;
   /** Issue #359: 本文はファイル保存し、payload には最新 handoff 参照だけ残す。 */

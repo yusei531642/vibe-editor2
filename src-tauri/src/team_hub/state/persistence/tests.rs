@@ -42,6 +42,16 @@ mod register_team_binding_seed_tests {
                 .await,
             "seeded worker should pass handshake without a recruit grant"
         );
+        assert_eq!(
+            hub.state
+                .lock()
+                .await
+                .teams
+                .get(team_id)
+                .and_then(|team| team.active_leader_agent_id.as_deref()),
+            Some("leader-0-team-800"),
+            "new Canvas team should activate its initial scoped leader"
+        );
     }
 
     /// PR #805 review: `team_id` を suffix に持たない (= 別 team / 不正な) agent_id は
@@ -73,6 +83,32 @@ mod register_team_binding_seed_tests {
     }
 
     #[tokio::test]
+    async fn register_team_does_not_reactivate_leader_for_existing_team() {
+        let hub = make_hub();
+        let team_id = "team-existing";
+        let members = [("leader-0-team-existing".to_string(), "leader".to_string())];
+        hub.register_team(team_id, "Existing", None, &members)
+            .await
+            .unwrap();
+        hub.set_active_leader(team_id, None).await;
+
+        hub.register_team(team_id, "Existing", None, &members)
+            .await
+            .unwrap();
+
+        assert!(
+            hub.state
+                .lock()
+                .await
+                .teams
+                .get(team_id)
+                .and_then(|team| team.active_leader_agent_id.as_ref())
+                .is_none(),
+            "existing team handoff state must not be overwritten"
+        );
+    }
+
+    #[tokio::test]
     async fn team_id_cannot_be_rebound_or_cleared_from_another_project() {
         let hub = make_hub();
         let owner = tempfile::tempdir().unwrap();
@@ -99,7 +135,10 @@ mod register_team_binding_seed_tests {
 
         {
             let state = hub.state.lock().await;
-            let team = state.teams.get(team_id).expect("owner team remains registered");
+            let team = state
+                .teams
+                .get(team_id)
+                .expect("owner team remains registered");
             assert_eq!(team.project_root.as_deref(), Some(owner_root.as_str()));
             assert_eq!(team.name, "Owner");
             assert!(team.active_leader_agent_id.is_none());

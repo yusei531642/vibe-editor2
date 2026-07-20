@@ -262,6 +262,8 @@ function applyPayload(
           truncatedCount: projection.truncatedCount + capped.truncated
         };
       }
+    case 'turnComplete':
+      return base;
   }
 }
 

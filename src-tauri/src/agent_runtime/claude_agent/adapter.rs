@@ -2,10 +2,10 @@
 
 use super::client::{ClientEvent, ClientEventSink, SidecarClient, SidecarLaunchConfig};
 use crate::agent_runtime::{
-    capabilities_for, AgentRuntimeAdapter, BackendKind, RuntimeAdapterError,
-    RuntimeApprovalResponseRequest, RuntimeCapability, RuntimeEventPayload, RuntimeProvider,
-    RuntimeSessionForkRequest, RuntimeSessionResumeRequest, RuntimeSessionSpawnRequest,
-    RuntimeSteerRequest, RuntimeTurnSpawnRequest,
+    capabilities_for, ensure_runtime_permission_not_escalated, AgentRuntimeAdapter, BackendKind,
+    RuntimeAdapterError, RuntimeApprovalResponseRequest, RuntimeCapability, RuntimeDeliveryRequest,
+    RuntimeEventPayload, RuntimeProvider, RuntimeSessionForkRequest, RuntimeSessionResumeRequest,
+    RuntimeSessionSpawnRequest, RuntimeSteerRequest, RuntimeTurnSpawnRequest,
 };
 use serde_json::{json, Value};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -20,10 +20,26 @@ pub enum ClaudeAdapterEvent {
 
 pub type ClaudeAdapterEventSink = Arc<dyn Fn(ClaudeAdapterEvent) + Send + Sync>;
 
+#[derive(Default)]
+pub struct ClaudeAgentRuntimeConfig {
+    pub cwd: Option<String>,
+    pub system_prompt: Option<String>,
+    pub model: Option<String>,
+    pub effort: Option<String>,
+    pub permission: Option<String>,
+    pub permission_locked: bool,
+    pub mcp_servers: Option<Value>,
+}
+
 pub struct ClaudeAgentRuntimeAdapter {
     client: Arc<SidecarClient>,
     cwd: Option<String>,
     system_prompt: Option<String>,
+    model: Option<String>,
+    effort: Option<String>,
+    permission: Option<String>,
+    permission_locked: bool,
+    mcp_servers: Option<Value>,
     session_id: Arc<RwLock<Option<String>>>,
     disposed: AtomicBool,
 }
@@ -31,8 +47,7 @@ pub struct ClaudeAgentRuntimeAdapter {
 impl ClaudeAgentRuntimeAdapter {
     pub fn connect(
         config: SidecarLaunchConfig,
-        cwd: Option<String>,
-        system_prompt: Option<String>,
+        runtime: ClaudeAgentRuntimeConfig,
         sink: ClaudeAdapterEventSink,
     ) -> Result<Self, RuntimeAdapterError> {
         let session_id = Arc::new(RwLock::new(None));
@@ -48,8 +63,13 @@ impl ClaudeAgentRuntimeAdapter {
         let client = Arc::new(SidecarClient::spawn(config, client_sink)?);
         Ok(Self {
             client,
-            cwd,
-            system_prompt,
+            cwd: runtime.cwd,
+            system_prompt: runtime.system_prompt,
+            model: runtime.model,
+            effort: runtime.effort,
+            permission: runtime.permission,
+            permission_locked: runtime.permission_locked,
+            mcp_servers: runtime.mcp_servers,
             session_id,
             disposed: AtomicBool::new(false),
         })
@@ -76,8 +96,23 @@ impl ClaudeAgentRuntimeAdapter {
         }
     }
 
-    fn submitted_input(&self, method: &str, input: &str) -> Result<(), RuntimeAdapterError> {
-        let result = self.request(method, json!({ "input": input }))?;
+    fn submitted_input(
+        &self,
+        method: &str,
+        input: &str,
+        model: Option<&str>,
+        effort: Option<&str>,
+        permission: Option<&str>,
+    ) -> Result<(), RuntimeAdapterError> {
+        let result = self.request(
+            method,
+            json!({
+                "input": input,
+                "model": model.or(self.model.as_deref()),
+                "effort": effort.or(self.effort.as_deref()),
+                "permission": permission.or(self.permission.as_deref()),
+            }),
+        )?;
         self.update_session_id(&result);
         Ok(())
     }
@@ -102,6 +137,10 @@ impl AgentRuntimeAdapter for ClaudeAgentRuntimeAdapter {
                 "endpointId": request.endpoint_id,
                 "cwd": self.cwd,
                 "systemPrompt": self.system_prompt,
+                "model": self.model,
+                "effort": self.effort,
+                "permission": self.permission,
+                "mcpServers": self.mcp_servers,
             }),
         )?;
         self.update_session_id(&result);
@@ -131,19 +170,40 @@ impl AgentRuntimeAdapter for ClaudeAgentRuntimeAdapter {
                 true,
             ));
         }
-        self.submitted_input("turn", &request.input)
+        ensure_runtime_permission_not_escalated(
+            self.permission_locked,
+            self.permission.as_deref(),
+            request.permission.as_deref(),
+        )?;
+        self.submitted_input(
+            "turn",
+            &request.input,
+            request.model.as_deref(),
+            request.effort.as_deref(),
+            request.permission.as_deref(),
+        )
     }
 
     fn write(&self, data: &str) -> Result<(), RuntimeAdapterError> {
-        self.submitted_input("write", data)
+        self.submitted_input("write", data, None, None, None)
     }
 
     fn inject(&self, data: &str) -> Result<(), RuntimeAdapterError> {
-        self.submitted_input("inject", data)
+        self.submitted_input("inject", data, None, None, None)
+    }
+
+    fn deliver_blocking(
+        &self,
+        request: &RuntimeDeliveryRequest,
+    ) -> Result<(), RuntimeAdapterError> {
+        // A recruited worker starts a bootstrap turn as soon as its card mounts. TeamHub can
+        // assign work while that turn is still active, so plain `write` races and is rejected.
+        // `steer` cancels the bootstrap turn first and makes the team message the next turn.
+        self.submitted_input("steer", &request.framed_data(), None, None, None)
     }
 
     fn steer(&self, request: &RuntimeSteerRequest) -> Result<(), RuntimeAdapterError> {
-        self.submitted_input("steer", &request.input)
+        self.submitted_input("steer", &request.input, None, None, None)
     }
 
     fn interrupt(&self) -> Result<(), RuntimeAdapterError> {

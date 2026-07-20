@@ -19,9 +19,8 @@ test('Home → send → recruit lifecycle → approval handling', async ({ page 
 
   await page.getByRole('button', { name: /Open 1 pending approvals/ }).click();
   // Activity feed 側にも同文言の要素があるため Approval Center にスコープする
-  await expect(
-    page.getByLabel('Approval Center').getByText('Run deterministic verification')
-  ).toBeVisible();
-  await page.getByRole('button', { name: 'Accept', exact: true }).click();
+  const approvalCenter = page.getByLabel('Approval Center');
+  await expect(approvalCenter.getByText('Run deterministic verification')).toBeVisible();
+  await approvalCenter.getByRole('button', { name: 'Allow', exact: true }).click();
   await expect(page.getByText('No pending approvals')).toBeVisible();
 });

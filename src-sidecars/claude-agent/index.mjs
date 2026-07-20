@@ -1,6 +1,7 @@
 import readline from 'node:readline';
 import { randomUUID } from 'node:crypto';
 import { query } from '@anthropic-ai/claude-agent-sdk';
+import { claudePermissionMode, shouldAutoAllowTool } from './tool-approval-policy.mjs';
 
 const PROTOCOL = 'vibe-claude-agent';
 const VERSION = 1;
@@ -8,10 +9,15 @@ const state = {
   endpointId: null,
   cwd: null,
   systemPrompt: null,
+  model: null,
+  effort: null,
+  permission: 'workspace',
+  mcpServers: null,
   sessionId: null,
   forkNext: false,
   activeQuery: null,
   activeTask: null,
+  suppressInterruptedResultErrors: false,
   disposed: false,
   approvals: new Map()
 };
@@ -38,11 +44,28 @@ function safeText(value) {
     .slice(0, 16_384);
 }
 
+function requiredMcpServers(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return Object.fromEntries(
+    Object.entries(value).map(([name, config]) => [
+      name,
+      config && typeof config === 'object' && !Array.isArray(config)
+        ? { ...config, alwaysLoad: true }
+        : config
+    ])
+  );
+}
+
 function approvalReason(toolName, options) {
   return safeText(options.title || options.description || options.decisionReason || `${toolName} requires approval`);
 }
 
-function canUseTool(toolName, _input, options) {
+function canUseTool(toolName, input, options, permission = state.permission) {
+  // Binding and role checks constrain TeamHub scope. Workspace permission still
+  // requires user approval for process lifecycle, task injection, and locks.
+  if (shouldAutoAllowTool(toolName, permission)) {
+    return Promise.resolve({ behavior: 'allow', updatedInput: input });
+  }
   const requestId = options.requestId || options.toolUseID || randomUUID();
   event({
     type: 'approvalRequest',
@@ -138,10 +161,20 @@ function projectSdkMessage(message) {
     event({ type: 'session', sessionId: state.sessionId });
   }
   if (message?.type === 'stream_event') emitPartial(message);
+  else if (message?.type === 'system' && message.subtype === 'init' && state.mcpServers) {
+    const configured = new Set(Object.keys(state.mcpServers));
+    const statuses = (message.mcp_servers || [])
+      .filter((server) => configured.has(server.name))
+      .map((server) => `${server.name}:${server.status}`);
+    event({
+      type: 'diagnostic',
+      message: safeText(`required MCP ${statuses.length > 0 ? statuses.join(', ') : 'not reported'}`)
+    });
+  }
   else if (message?.type === 'assistant') emitAssistant(message);
   else if (message?.type === 'result') {
     emitUsage(message);
-    if (message.subtype !== 'success') {
+    if (message.subtype !== 'success' && !state.suppressInterruptedResultErrors) {
       event({
         type: 'error',
         code: 'claude_query_failed',
@@ -162,32 +195,43 @@ function projectSdkMessage(message) {
   }
 }
 
-function queryOptions(abortController) {
+function queryOptions(abortController, runtimeOptions = {}) {
+  const permission = runtimeOptions.permission || state.permission;
   const options = {
     abortController,
-    canUseTool,
+    canUseTool: (toolName, input, callbackOptions) =>
+      canUseTool(toolName, input, callbackOptions, permission),
     cwd: state.cwd || undefined,
     hooks: hooks(),
     includeHookEvents: true,
     includePartialMessages: true,
-    permissionMode: 'default',
+    permissionMode: claudePermissionMode(permission),
     settingSources: ['user', 'project', 'local'],
     systemPrompt: state.systemPrompt
       ? { type: 'preset', preset: 'claude_code', append: state.systemPrompt }
       : { type: 'preset', preset: 'claude_code' }
   };
+  if (permission === 'full') options.allowDangerouslySkipPermissions = true;
+  const model = runtimeOptions.model || state.model;
+  const effort = runtimeOptions.effort || state.effort;
+  if (model) options.model = model;
+  if (effort) options.effort = effort;
   if (state.sessionId) options.resume = state.sessionId;
   if (state.forkNext) options.forkSession = true;
+  if (state.mcpServers && typeof state.mcpServers === 'object') {
+    options.mcpServers = state.mcpServers;
+  }
   if (process.env.VIBE_CLAUDE_COMMAND) {
     options.pathToClaudeCodeExecutable = process.env.VIBE_CLAUDE_COMMAND;
   }
   return options;
 }
 
-async function startTurn(prompt) {
+async function startTurn(prompt, runtimeOptions = {}) {
   if (state.activeTask) throw Object.assign(new Error('A Claude turn is already active'), { recoverable: true });
+  state.suppressInterruptedResultErrors = false;
   const abortController = new AbortController();
-  const activeQuery = query({ prompt, options: queryOptions(abortController) });
+  const activeQuery = query({ prompt, options: queryOptions(abortController, runtimeOptions) });
   state.activeQuery = activeQuery;
   state.forkNext = false;
   state.activeTask = (async () => {
@@ -198,14 +242,17 @@ async function startTurn(prompt) {
         event({ type: 'error', code: 'claude_sdk_error', message: safeText(error?.message || error), recoverable: true });
       }
     } finally {
+      event({ type: 'turnComplete', interrupted: abortController.signal.aborted });
       state.activeQuery = null;
       state.activeTask = null;
+      state.suppressInterruptedResultErrors = false;
     }
   })();
 }
 
 async function interruptActive() {
   if (!state.activeQuery) return;
+  state.suppressInterruptedResultErrors = true;
   await state.activeQuery.interrupt();
 }
 
@@ -216,6 +263,12 @@ async function handle(request) {
       state.endpointId = params.endpointId;
       state.cwd = params.cwd || null;
       state.systemPrompt = params.systemPrompt || null;
+      state.model = params.model || null;
+      state.effort = params.effort || null;
+      state.permission = params.permission || 'workspace';
+      // TeamHub is part of the native team runtime contract. Keep it out of deferred
+      // ToolSearch so a Leader can recruit on the first turn deterministically.
+      state.mcpServers = requiredMcpServers(params.mcpServers);
       response(id, { sessionId: state.sessionId });
       return;
     case 'resume':
@@ -231,13 +284,13 @@ async function handle(request) {
     case 'turn':
     case 'write':
     case 'inject':
-      await startTurn(String(params.input ?? ''));
+      await startTurn(String(params.input ?? ''), params);
       response(id, { accepted: true, sessionId: state.sessionId });
       return;
     case 'steer':
       await interruptActive();
       await state.activeTask?.catch(() => {});
-      await startTurn(String(params.input ?? ''));
+      await startTurn(String(params.input ?? ''), params);
       response(id, { accepted: true });
       return;
     case 'interrupt':

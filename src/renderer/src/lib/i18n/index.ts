@@ -9,6 +9,8 @@ import { enCanvas } from './en-canvas';
 import { enSettings } from './en-settings';
 import { jaWorkspaceScene } from './ja-workspace-scene';
 import { enWorkspaceScene } from './en-workspace-scene';
+import { jaV2 } from './ja-v2';
+import { enV2 } from './en-v2';
 
 /**
  * フラットキー方式の軽量 i18n。
@@ -18,8 +20,8 @@ import { enWorkspaceScene } from './en-workspace-scene';
  * キーは全サブ辞書を通して一意 (重複キーは後勝ち merge で沈黙するため作らない)。
  * 新しいキーは領域の合うサブ辞書ファイルへ追加する。
  */
-const ja: Dict = { ...jaShell, ...jaCanvas, ...jaSettings, ...jaWorkspaceScene };
-const en: Dict = { ...enShell, ...enCanvas, ...enSettings, ...enWorkspaceScene };
+const ja: Dict = { ...jaShell, ...jaCanvas, ...jaSettings, ...jaWorkspaceScene, ...jaV2 };
+const en: Dict = { ...enShell, ...enCanvas, ...enSettings, ...enWorkspaceScene, ...enV2 };
 
 const translations: Record<Language, Dict> = { ja, en };
 

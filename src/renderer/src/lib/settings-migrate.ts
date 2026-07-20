@@ -18,7 +18,8 @@ import {
   type AppSettings,
   type Language,
   type StatusMascotVariant,
-  type ThemeName
+  type ThemeName,
+  type V2PermissionMode
 } from '../../../types/shared';
 import { parseShellArgsStrict } from './parse-args';
 
@@ -309,6 +310,21 @@ export function migrateSettings(raw: unknown): AppSettings {
   }
   if (typeof data.teamSceneV2 !== 'boolean') {
     data.teamSceneV2 = DEFAULT_SETTINGS.teamSceneV2;
+  }
+
+  // --- Version 14 → 15: V2 conversation/runtime/Team scene の正式有効化 (Issue #49) ---
+  // v14 の false は実験 rollout の既定値で、完成版では一度だけ true へ移行する。
+  // v15 以降にユーザーが明示的に false へ戻した場合は次回 load でも尊重される。
+  if (version < 15) {
+    data.teamSceneV2 = true;
+  }
+
+  // --- Version 15 → 16: V2 会話 permission mode の永続化 (Issue #72) ---
+  // 旧 UI の workspace は「runtime が必要時に承認を要求」に相当するため agent へ移行する。
+  // schemaVersion に関係なく未知値を検証し、改竄値を runtime request へ流さない。
+  const validV2PermissionModes: V2PermissionMode[] = ['full', 'agent', 'ask'];
+  if (!validV2PermissionModes.includes(data.v2PermissionMode as V2PermissionMode)) {
+    data.v2PermissionMode = DEFAULT_SETTINGS.v2PermissionMode;
   }
 
   data.schemaVersion = APP_SETTINGS_SCHEMA_VERSION;

@@ -227,7 +227,8 @@ export function useRecruitListener(): void {
         // Issue #732: requester は recruit を呼んだ agent カード。agentPayloadOf で
         // payload (AgentPayload) を取り出し、organization を継承させる
         // (旧 `payload as { organization?: unknown }` の置き換え)。
-        const requesterOrganization = agentPayloadOf(requester.data)?.organization;
+        const requesterPayload = agentPayloadOf(requester.data);
+        const requesterOrganization = requesterPayload?.organization;
         const requesterTeamName = cardTeamName(requester.data) ?? undefined;
         const teamNodes = store.nodes.filter(
           (n) => cardTeamId(n.data) === p.teamId
@@ -273,6 +274,9 @@ export function useRecruitListener(): void {
               agent: p.engine,
               runtimeProvider: p.runtimeProvider,
               fallbackFrom: p.fallbackFrom,
+              runtimeModel: requesterPayload?.runtimeModel,
+              runtimeEffort: requesterPayload?.runtimeEffort,
+              runtimePermission: requesterPayload?.runtimePermission,
               command: customAgent.command || undefined,
               args: customAgent.args ? cliArgs.args : undefined,
               // Issue #1193: custom settingsのraw cwdはauthorityにしない。CardFrameが
@@ -297,6 +301,9 @@ export function useRecruitListener(): void {
               agent: p.engine,
               runtimeProvider: p.runtimeProvider,
               fallbackFrom: p.fallbackFrom,
+              runtimeModel: requesterPayload?.runtimeModel,
+              runtimeEffort: requesterPayload?.runtimeEffort,
+              runtimePermission: requesterPayload?.runtimePermission,
               roleProfileId: p.roleProfileId,
               // 旧コード互換: role 旧フィールドにも書く (一時的)
               role: p.roleProfileId,

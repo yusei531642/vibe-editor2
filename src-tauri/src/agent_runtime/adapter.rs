@@ -13,6 +13,9 @@ pub struct RuntimeSessionSpawnRequest {
 pub struct RuntimeTurnSpawnRequest {
     pub input: String,
     pub submit: bool,
+    pub model: Option<String>,
+    pub effort: Option<String>,
+    pub permission: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -76,6 +79,21 @@ impl std::fmt::Display for RuntimeAdapterError {
 
 impl std::error::Error for RuntimeAdapterError {}
 
+pub(crate) fn ensure_runtime_permission_not_escalated(
+    permission_locked: bool,
+    configured: Option<&str>,
+    requested: Option<&str>,
+) -> Result<(), RuntimeAdapterError> {
+    if permission_locked && requested == Some("full") && configured != Some("full") {
+        return Err(RuntimeAdapterError::new(
+            "runtime_permission_escalation",
+            "turn permission cannot exceed the endpoint permission",
+            false,
+        ));
+    }
+    Ok(())
+}
+
 fn unsupported(operation: &str) -> RuntimeAdapterError {
     RuntimeAdapterError::new(
         "runtime_operation_unsupported",
@@ -136,4 +154,25 @@ pub trait AgentRuntimeAdapter: Send + Sync {
     }
     fn stop(&self) -> Result<(), RuntimeAdapterError>;
     fn dispose(&self) -> Result<(), RuntimeAdapterError>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ensure_runtime_permission_not_escalated;
+
+    #[test]
+    fn turn_permission_cannot_escalate_endpoint_permission() {
+        assert!(
+            ensure_runtime_permission_not_escalated(true, Some("workspace"), Some("full")).is_err()
+        );
+        assert!(ensure_runtime_permission_not_escalated(true, None, Some("full")).is_err());
+        assert!(ensure_runtime_permission_not_escalated(true, Some("full"), Some("full")).is_ok());
+        assert!(
+            ensure_runtime_permission_not_escalated(true, Some("full"), Some("workspace")).is_ok()
+        );
+        assert!(ensure_runtime_permission_not_escalated(true, Some("workspace"), None).is_ok());
+        assert!(
+            ensure_runtime_permission_not_escalated(false, Some("workspace"), Some("full")).is_ok()
+        );
+    }
 }

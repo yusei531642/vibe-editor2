@@ -5,8 +5,6 @@ import {
   ArrowRight,
   Bug,
   CodeXml,
-  FileCode2,
-  Files,
   Hammer,
   PanelLeft,
   PanelRight,
@@ -17,21 +15,20 @@ import {
 } from "lucide-react";
 import { useProject, useTeam } from "../../lib/app-state-context";
 import { useT } from "../../lib/i18n";
-import {
-  UnifiedComposer,
-  type V2Engine,
-  type V2Permission,
-} from "./UnifiedComposer";
+import { useV2RuntimeCatalog } from "../../lib/hooks/use-v2-runtime-catalog";
+import { useV2RuntimeSession } from "../../lib/hooks/use-v2-runtime-session";
+import { useV2PermissionSetting } from "../../lib/hooks/use-v2-permission-setting";
+import { V2_REQUEST_TEAM_SCENE_EVENT } from "../../lib/v2-runtime-controls";
+import { reportV2RuntimeActionError } from "../../lib/v2-runtime-action";
+import { useCanvasStore } from "../../stores/canvas";
+import { useUiStore } from "../../stores/ui";
+import { launchV2Team } from "../../lib/v2-team-launch";
+import { attachmentName, prepareV2RuntimeInput, type V2ComposerAttachment, type V2ComposerIntent } from "../../lib/v2-composer-actions";
+import { V2Timeline, type V2TimelineEntry } from "./V2Timeline";
+import { UnifiedComposer, type V2Engine } from "./UnifiedComposer";
 import { TeamInspector } from "./TeamInspector";
+import { V2WorkspaceDrawer } from "./V2WorkspaceDrawer";
 import { useTeamProjection } from "./TeamProjectionProvider";
-
-interface TimelineEntry {
-  id: string;
-  role: "user" | "agent";
-  text: string;
-  engine: V2Engine;
-}
-
 const QUICK_ACTIONS = [
   {
     key: "explore",
@@ -66,21 +63,23 @@ const QUICK_ACTIONS = [
 export interface V2ShellProps {
   shortcutsEnabled?: boolean;
 }
-
 export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Element {
   const t = useT();
   const { projectRoot, handleOpenFolder, gitStatus } = useProject();
   const { claudeCheck, runClaudeCheck } = useTeam();
+  const { permission, runtimePermission, setPermission } = useV2PermissionSetting();
   const [engine, setEngine] = useState<V2Engine>("claude");
-  const [permission, setPermission] = useState<V2Permission>("workspace");
+  const [model, setModel] = useState("");
+  const [effort, setEffort] = useState("");
   const [prompt, setPrompt] = useState("");
-  const [running, setRunning] = useState(false);
+  const [composerIntent, setComposerIntent] = useState<V2ComposerIntent>("message");
+  const [attachments, setAttachments] = useState<V2ComposerAttachment[]>([]);
+  const [activeGoal, setActiveGoal] = useState<string | null>(null);
+  const [teamStarting, setTeamStarting] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
   const [leftOpen, setLeftOpen] = useState(false);
   const [standaloneInspectorOpen, setStandaloneInspectorOpen] = useState(false);
   const teamProjection = useTeamProjection();
-  // placeholder team でも projection.teamId は埋まるため、実 session の有無は
-  // provider の sessionActive で判定する (PR #36 レビュー)。
   const hasTeamProjection = teamProjection.sessionActive;
   const inspectorOpen = hasTeamProjection
     ? teamProjection.inspectorOpen
@@ -93,31 +92,75 @@ export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Ele
     },
     [hasTeamProjection, inspectorOpen, teamProjection],
   );
-  const [entries, setEntries] = useState<TimelineEntry[]>([]);
+  const [entries, setEntries] = useState<V2TimelineEntry[]>([]);
   const restoredTimelineHydratedRef = useRef(false);
-  // fake runtime (placeholder) の応答 timer。停止/新規タスク/unmount で必ず破棄する。
-  const fakeReplyTimerRef = useRef<number | null>(null);
+  const activeAgentEntryIdRef = useRef<string | null>(null);
+  const addCard = useCanvasStore((state) => state.addCard);
+  const setWorkspaceTeamId = useUiStore((state) => state.setWorkspaceTeamId);
+  const catalog = useV2RuntimeCatalog(engine);
 
-  const cancelFakeReply = useCallback(() => {
-    if (fakeReplyTimerRef.current !== null) {
-      window.clearTimeout(fakeReplyTimerRef.current);
-      fakeReplyTimerRef.current = null;
+  const onRuntimeDelta = useCallback((delta: string, runtimeEngine: V2Engine) => {
+    let entryId = activeAgentEntryIdRef.current;
+    if (!entryId) {
+      entryId = crypto.randomUUID();
+      activeAgentEntryIdRef.current = entryId;
+      const entry: V2TimelineEntry = { id: entryId, role: "agent", text: delta, engine: runtimeEngine };
+      setEntries((current) => [...current, entry]);
+      return;
     }
+    setEntries((current) => current.map((entry) =>
+      entry.id === entryId ? { ...entry, text: entry.text + delta } : entry
+    ));
   }, []);
 
-  const stopRun = useCallback(() => {
-    cancelFakeReply();
-    setRunning(false);
-  }, [cancelFakeReply]);
+  const onRuntimeComplete = useCallback((message: string, runtimeEngine: V2Engine) => {
+    const entryId = activeAgentEntryIdRef.current;
+    if (entryId) {
+      setEntries((current) => current.map((entry) =>
+        entry.id === entryId ? { ...entry, text: message } : entry
+      ));
+    } else {
+      setEntries((current) => [...current, {
+        id: crypto.randomUUID(), role: "agent", text: message, engine: runtimeEngine
+      }]);
+    }
+    activeAgentEntryIdRef.current = null;
+  }, []);
 
-  useEffect(() => cancelFakeReply, [cancelFakeReply]);
+  const onRuntimeError = useCallback((message: string, runtimeEngine: V2Engine) => {
+    activeAgentEntryIdRef.current = null;
+    setEntries((current) => [...current, {
+      id: crypto.randomUUID(), role: "agent", text: message, engine: runtimeEngine
+    }]);
+  }, []);
+
+  const runtime = useV2RuntimeSession({
+    onDelta: onRuntimeDelta,
+    onComplete: onRuntimeComplete,
+    onError: onRuntimeError
+  });
+  const running = runtime.running || teamStarting;
 
   const projectName = useMemo(() => {
     if (!projectRoot) return t("v2.project.select");
     return projectRoot.split(/[\\/]/).filter(Boolean).at(-1) ?? projectRoot;
   }, [projectRoot, t]);
   const branch = gitStatus?.branch || "main";
-  const model = engine === "claude" ? "Fable 5" : "5.6 Sol";
+  const selectedModel = catalog.models.find((candidate) => candidate.id === model)
+    ?? catalog.models[0]
+    ?? null;
+  const efforts = selectedModel?.supportedEfforts ?? [];
+  const modelLabel = (selectedModel?.label ?? model) || "—";
+
+  useEffect(() => {
+    if (catalog.models.length === 0) return;
+    const nextModel = catalog.models.find((candidate) => candidate.id === model)
+      ?? catalog.models[0];
+    if (nextModel.id !== model) setModel(nextModel.id);
+    if (!nextModel.supportedEfforts.includes(effort)) {
+      setEffort(nextModel.defaultEffort || nextModel.supportedEfforts[0] || "");
+    }
+  }, [catalog.models, effort, model]);
 
   useEffect(() => {
     if (restoredTimelineHydratedRef.current || entries.length > 0) return;
@@ -149,45 +192,93 @@ export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Ele
     window.dispatchEvent(new Event("vibe-editor2:focus-composer"));
   };
 
+  const launchTeam = useCallback(async (text: string): Promise<void> => {
+    if (!projectRoot) throw new Error(t("v2.runtime.projectRequired"));
+    await runtime.reset();
+    await launchV2Team({
+      projectRoot,
+      teamName: t("v2.team.defaultName"),
+      initialMessage: text,
+      engine,
+      model,
+      effort,
+      permission: runtimePermission,
+      setupTeamMcp: window.api.app.setupTeamMcp,
+      addCard,
+      selectTeam: setWorkspaceTeamId,
+      requestTeamScene: () => window.requestAnimationFrame(() => {
+        window.dispatchEvent(new Event(V2_REQUEST_TEAM_SCENE_EVENT));
+      })
+    });
+  }, [addCard, effort, engine, model, projectRoot, runtime, runtimePermission, setWorkspaceTeamId, t]);
+
+  const attachFile = useCallback(async (): Promise<void> => {
+    try {
+      const path = await window.api.dialog.openFile(t("v2.composer.attachDialogTitle"));
+      if (!path) return;
+      setAttachments((current) => current.some((attachment) => attachment.path === path)
+        ? current
+        : [...current, { path, name: attachmentName(path) }]);
+    } catch (error) {
+      setHasStarted(true);
+      onRuntimeError(error instanceof Error ? error.message : String(error), engine);
+    }
+  }, [engine, onRuntimeError, t]);
+
   const submit = useCallback(() => {
     const text = prompt.trim();
-    if (!text || running) return;
-    const entry: TimelineEntry = {
+    if ((!text && attachments.length === 0) || running) return;
+    if ((composerIntent === "goal" || composerIntent === "team") && !text) return;
+    const prepared = prepareV2RuntimeInput({ text, intent: composerIntent, attachments, activeGoal });
+    if (prepared.slashTeamOnly) {
+      setPrompt("");
+      setComposerIntent("team");
+      window.dispatchEvent(new Event("vibe-editor2:focus-composer"));
+      return;
+    }
+    const { runtimeInput, visibleTeamRequested } = prepared;
+    const entry: V2TimelineEntry = {
       id: crypto.randomUUID(),
       role: "user",
-      text,
+      text: text || t("v2.composer.attachmentsOnlyMessage"),
       engine,
+      attachments,
+      intent: composerIntent,
     };
     setEntries((current) => [...current, entry]);
+    if (composerIntent === "goal") setActiveGoal(text);
     setPrompt("");
+    setAttachments([]);
+    setComposerIntent("message");
     setHasStarted(true);
-    setRunning(true);
-    cancelFakeReply();
-    fakeReplyTimerRef.current = window.setTimeout(() => {
-      fakeReplyTimerRef.current = null;
-      setEntries((current) => [
-        ...current,
-        {
-          id: crypto.randomUUID(),
-          role: "agent",
-          engine,
-          text: t("v2.runtime.fakeReady", {
-            engine: engine === "claude" ? "Claude" : "Codex",
-          }),
-        },
-      ]);
-      setRunning(false);
-    }, 650);
-  }, [cancelFakeReply, engine, prompt, running, t]);
+    activeAgentEntryIdRef.current = null;
+    if (composerIntent === "team" || visibleTeamRequested) {
+      setTeamStarting(true);
+      void launchTeam(runtimeInput).catch((error) => {
+        onRuntimeError(error instanceof Error ? error.message : String(error), engine);
+      }).finally(() => setTeamStarting(false));
+      return;
+    }
+    void runtime.send({ input: runtimeInput, engine, model, effort, permission: runtimePermission }).catch(() => undefined);
+  }, [activeGoal, attachments, composerIntent, effort, engine, launchTeam, model, onRuntimeError, prompt, running, runtime, runtimePermission, t]);
+
+  const stopRun = useCallback(() => {
+    if (teamStarting) return;
+    void reportV2RuntimeActionError(runtime.stop(), engine, onRuntimeError);
+  }, [engine, onRuntimeError, runtime, teamStarting]);
 
   const startNewTask = useCallback(() => {
-    cancelFakeReply();
+    if (teamStarting) return;
+    void runtime.reset();
     setEntries([]);
     setPrompt("");
-    setRunning(false);
+    setAttachments([]);
+    setComposerIntent("message");
+    setActiveGoal(null);
     setHasStarted(false);
+    activeAgentEntryIdRef.current = null;
     window.dispatchEvent(new Event("vibe-editor2:focus-composer"));
-  }, [cancelFakeReply]);
+  }, [runtime, teamStarting]);
 
   useEffect(() => {
     if (!shortcutsEnabled) return;
@@ -214,7 +305,6 @@ export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Ele
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [setInspectorOpen, shortcutsEnabled, stopRun]);
-
   return (
     <main className={`v2-shell${hasStarted ? " v2-shell--session" : ""}`}>
       <div className="v2-drag-region" data-tauri-drag-region />
@@ -242,7 +332,7 @@ export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Ele
         <button
           type="button"
           aria-label={t("v2.shell.newTask")}
-          onClick={startNewTask}
+          onClick={startNewTask} disabled={teamStarting}
         >
           <SquarePen size={20} strokeWidth={1.65} />
         </button>
@@ -310,47 +400,17 @@ export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Ele
           )}
         </section>
       ) : (
-        <section
-          className="v2-timeline"
-          aria-live="polite"
-          data-workspace-focus-frame=""
-        >
-          <header>
-            <div>
-              <span className={`v2-engine-dot v2-engine-dot--${engine}`} />
-              <strong>{projectName}</strong>
-            </div>
-            <span>
-              {engine === "claude" ? "Claude" : "Codex"} · {model}
-            </span>
-          </header>
-          <div className="v2-timeline__body">
-            {entries.map((entry) => (
-              <article
-                key={entry.id}
-                className={`v2-message v2-message--${entry.role}`}
-              >
-                <span>
-                  {entry.role === "user"
-                    ? t("v2.timeline.you")
-                    : entry.engine === "claude"
-                      ? "Claude"
-                      : "Codex"}
-                </span>
-                <p>{entry.text}</p>
-              </article>
-            ))}
-            {running && (
-              <div
-                className="v2-thinking"
-                aria-label={t("v2.timeline.running")}
-              >
-                <i />
-                {t("v2.timeline.exploring")}
-              </div>
-            )}
-          </div>
-        </section>
+        <V2Timeline
+          projectName={projectName}
+          engine={engine}
+          modelLabel={modelLabel}
+          effort={effort}
+          entries={entries}
+          running={running}
+          pendingApproval={runtime.pendingApproval}
+          onApproval={(decision) => void reportV2RuntimeActionError(
+            runtime.respondApproval(decision), engine, onRuntimeError)}
+        />
       )}
 
       <div className="v2-composer-wrap">
@@ -358,63 +418,45 @@ export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Ele
           branch={branch}
           engine={engine}
           model={model}
+          models={catalog.models}
+          effort={effort}
+          efforts={efforts}
           permission={permission}
           projectName={projectName}
           prompt={prompt}
           running={running}
-          onEngineChange={setEngine}
+          activeGoal={activeGoal}
+          attachments={attachments}
+          intent={composerIntent}
+          onEngineChange={(nextEngine) => {
+            setEngine(nextEngine);
+            setModel("");
+            setEffort("");
+          }}
+          onModelChange={setModel}
+          onEffortChange={setEffort}
           onPermissionChange={setPermission}
           onProjectClick={() => void handleOpenFolder()}
           onPromptChange={setPrompt}
+          onAttachFile={attachFile}
+          onClearGoal={() => setActiveGoal(null)}
+          onIntentChange={setComposerIntent}
+          onRemoveAttachment={(path) => setAttachments((current) =>
+            current.filter((attachment) => attachment.path !== path)
+          )}
           onSubmit={submit}
           onStop={stopRun}
         />
       </div>
 
       {leftOpen && (
-        <aside
-          className="v2-drawer v2-drawer--left"
-          aria-label={t("v2.drawer.left")}
-        >
-          <header>
-            <strong>{t("v2.drawer.workspace")}</strong>
-            <button
-              type="button"
-              aria-label={t("common.close")}
-              onClick={() => setLeftOpen(false)}
-            >
-              <X size={20} />
-            </button>
-          </header>
-          <section>
-            <h2>{t("v2.drawer.projects")}</h2>
-            <button
-              type="button"
-              className="v2-drawer-row"
-              onClick={() => void handleOpenFolder()}
-            >
-              <Files size={18} />
-              {projectName}
-            </button>
-          </section>
-          <section>
-            <h2>{t("v2.drawer.sessions")}</h2>
-            <p>
-              {entries.length > 0
-                ? t("v2.drawer.currentSession")
-                : t("v2.drawer.noSessions")}
-            </p>
-          </section>
-          <section>
-            <h2>{t("v2.drawer.changedFiles")}</h2>
-            {gitStatus?.files.slice(0, 8).map((file) => (
-              <div className="v2-drawer-row" key={file.path}>
-                <FileCode2 size={17} />
-                {file.path}
-              </div>
-            ))}
-          </section>
-        </aside>
+        <V2WorkspaceDrawer
+          projectName={projectName}
+          changedFiles={gitStatus?.files ?? []}
+          hasEntries={entries.length > 0}
+          onClose={() => setLeftOpen(false)}
+          onOpenProject={() => void handleOpenFolder()}
+        />
       )}
 
       {inspectorOpen && hasTeamProjection ? (

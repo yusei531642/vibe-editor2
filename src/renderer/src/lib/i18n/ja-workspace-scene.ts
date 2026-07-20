@@ -24,6 +24,7 @@ export const jaWorkspaceScene: Dict = {
   'v2.team.status.failed': '失敗',
   'v2.team.status.terminated': '終了済み',
   'v2.team.card.runtime': 'エージェント操作',
+  'v2.team.card.you': 'あなた',
   'v2.team.card.noTask': '割り当てタスクなし',
   'v2.team.card.noRuntime': 'ランタイムイベント待ち',
   'v2.team.card.diffReady': '差分を更新しました',

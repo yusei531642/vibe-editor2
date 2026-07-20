@@ -61,7 +61,7 @@ describe('team card action dispatch', () => {
     });
   });
 
-  it('removes approval only after the runtime response succeeds', async () => {
+  it('removes approval after the runtime response succeeds', async () => {
     const api = apiMock();
     const resolve = vi.fn();
     await respondAndResolveTeamApproval(
@@ -86,7 +86,7 @@ describe('team card action dispatch', () => {
     expect(resolve).toHaveBeenCalledWith('native-1', 'approval-1');
   });
 
-  it('keeps approval pending when the runtime response fails', async () => {
+  it('removes a stale approval while preserving the runtime response error', async () => {
     const api = apiMock();
     const resolve = vi.fn();
     vi.mocked(api.team.memberCommand).mockRejectedValueOnce(new Error('transport failed'));
@@ -101,6 +101,6 @@ describe('team card action dispatch', () => {
         resolve
       )
     ).rejects.toThrow('transport failed');
-    expect(resolve).not.toHaveBeenCalled();
+    expect(resolve).toHaveBeenCalledWith('native-1', 'approval-1');
   });
 });

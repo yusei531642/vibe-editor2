@@ -19,6 +19,9 @@ interface UiState {
   /** v2 Team session の Conversation / Canvas 表示。transition 進捗は component local に置く。 */
   workspaceScene: WorkspaceScene;
   setWorkspaceScene: (scene: WorkspaceScene) => void;
+  /** V2 Team scene が表示する Canvas team。自然言語起動時に新しい team を正確に選ぶ。 */
+  workspaceTeamId: string | null;
+  setWorkspaceTeamId: (teamId: string | null) => void;
   /** 共通サイドバーから「設定」を開くためのグローバルフラグ */
   settingsOpen: boolean;
   setSettingsOpen: (open: boolean) => void;
@@ -50,6 +53,8 @@ export const useUiStore = create<UiState>()(
       toggleViewMode: () => set({ viewMode: get().viewMode === 'ide' ? 'canvas' : 'ide' }),
       workspaceScene: 'focus',
       setWorkspaceScene: (scene) => set({ workspaceScene: scene }),
+      workspaceTeamId: null,
+      setWorkspaceTeamId: (teamId) => set({ workspaceTeamId: teamId }),
       settingsOpen: false,
       setSettingsOpen: (open) => set({ settingsOpen: open }),
       paletteOpen: false,
@@ -68,6 +73,7 @@ export const useUiStore = create<UiState>()(
       partialize: (s) => ({
         viewMode: s.viewMode,
         workspaceScene: s.workspaceScene,
+        workspaceTeamId: s.workspaceTeamId,
         sidebarCollapsed: s.sidebarCollapsed
       })
     }

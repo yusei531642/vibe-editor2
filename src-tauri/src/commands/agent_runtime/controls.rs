@@ -11,6 +11,9 @@ pub async fn agent_runtime_spawn_turn(
 ) -> CommandResult<RuntimeEndpointResult> {
     validate_endpoint_id(&request.endpoint_id)?;
     validate_runtime_input(&request.input)?;
+    validate_runtime_option("model", request.model.as_deref())?;
+    validate_runtime_option("effort", request.effort.as_deref())?;
+    validate_runtime_permission(request.permission.as_deref())?;
     let manager = state.runtime_manager.clone();
     let endpoint_id = request.endpoint_id;
     let operation_endpoint = endpoint_id.clone();
@@ -20,6 +23,9 @@ pub async fn agent_runtime_spawn_turn(
             RuntimeTurnSpawnRequest {
                 input: request.input,
                 submit: request.submit,
+                model: request.model,
+                effort: request.effort,
+                permission: request.permission,
             },
         )
     })

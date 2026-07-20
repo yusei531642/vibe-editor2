@@ -56,6 +56,7 @@ import {
 } from '../../../../lib/role-profiles-context';
 import { resolveAgentVisual } from '../../../../lib/agent-visual';
 import { parseShellArgs } from '../../../../lib/parse-args';
+import { appendRuntimeCliOptions } from '../../../../lib/runtime-cli-options';
 import { resolveAgentConfig } from '../../../../lib/agent-resolver';
 import { resolveAgentDescriptor } from '../../../../lib/agent-registry';
 import type { AgentEngine } from '../../../../../../types/shared';
@@ -77,8 +78,7 @@ import { useProject } from '../../../../lib/app-state-context';
 import { AgentCardRuntime } from './AgentCardRuntime';
 import { useTeamProjection } from '../../../v2/TeamProjectionProvider';
 import { isNativeRuntimeProvider, NativeRuntimeConnector } from './NativeRuntimeConnector';
-// Issue #732: `NodeProps` を `Node<CardDataOf<'agent'>>` で具体化することで
-// `data.payload` が `AgentPayload` として読め、`unknown` からの inline cast が不要になる。
+// Issue #732: NodeProps 具体化で data.payload を AgentPayload として読む。
 function AgentNodeCardImpl({
   id,
   data
@@ -229,7 +229,6 @@ function AgentNodeCardImpl({
     if (!isClaude) return null;
     return payload.resumeSessionId ?? crypto.randomUUID();
   }, [isClaude, payload.resumeSessionId]);
-
   const args = useMemo<string[] | undefined>(() => {
     const rawArgs = isClaude
       ? settings.claudeArgs || ''
@@ -237,6 +236,7 @@ function AgentNodeCardImpl({
         ? settings.codexArgs || ''
         : resolved.args;
     const base = parseShellArgs(rawArgs);
+    appendRuntimeCliOptions(base, isCodex ? 'codex' : 'claude', payload.runtimeModel, payload.runtimeEffort, payload.runtimePermission);
     if (isCodex && payload.teamId) {
       const userCodex = settings.codexArgs || '';
       if (!userCodex.includes('disable_paste_burst')) {
@@ -272,8 +272,8 @@ function AgentNodeCardImpl({
     payload.teamId,
     ensuredSessionId,
     payload.resumeSessionId,
-    settings.claudeArgs,
-    settings.codexArgs
+    payload.runtimeEffort, payload.runtimeModel, payload.runtimePermission,
+    settings.claudeArgs, settings.codexArgs
   ]);
 
   // Issue #1125: skill 本文 (prompt-file 注入) と team ロール prompt を結合して instructions とする。
@@ -458,15 +458,15 @@ function AgentNodeCardImpl({
           showToast={showToast}
           t={t}
         />
-        <AgentCardRuntime agentId={payload.agentId} />
+        <AgentCardRuntime agentId={payload.agentId} payload={payload} setCardPayload={(patch) => setCardPayload(id, patch)} />
         {nativeRuntime ? (
           <NativeRuntimeConnector
             cardId={id}
             payload={payload}
             systemPrompt={instructions}
             initialMessage={payload.initialMessage}
-            setCardPayload={setCardPayload}
             onStatus={setStatus}
+            setCardPayload={(patch) => setCardPayload(id, patch)}
           />
         ) : (
           <TerminalOverlay

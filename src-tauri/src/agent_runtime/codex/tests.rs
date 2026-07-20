@@ -116,6 +116,17 @@ async fn serve(
                 .await?;
             }
             (Some("turn/start"), Some(id)) => {
+                let _ = transcript.send(format!(
+                    "turn-options:{}:{}:{}:{}",
+                    message["params"]["model"].as_str().unwrap_or_default(),
+                    message["params"]["effort"].as_str().unwrap_or_default(),
+                    message["params"]["sandboxPolicy"]["type"]
+                        .as_str()
+                        .unwrap_or_default(),
+                    message["params"]["approvalPolicy"]
+                        .as_str()
+                        .unwrap_or_default()
+                ));
                 send(
                     &mut ws,
                     json!({ "id": id, "result": { "turn": { "id": "turn-active" } } }),
@@ -197,8 +208,17 @@ fn adapter_and_manager(
     let cwd = Some("/tmp/project".to_string());
     let adapter = Arc::new(
         match fixture.client_stream.take() {
-            Some(stream) => CodexRuntimeAdapter::connect_stream(stream, cwd, sink),
-            None => CodexRuntimeAdapter::connect(fixture.socket_path.clone(), cwd, sink),
+            Some(stream) => {
+                CodexRuntimeAdapter::connect_stream(stream, cwd, None, None, false, sink)
+            }
+            None => CodexRuntimeAdapter::connect(
+                fixture.socket_path.clone(),
+                cwd,
+                None,
+                None,
+                false,
+                sink,
+            ),
         }
         .expect("connect adapter"),
     );
@@ -260,7 +280,10 @@ async fn projects_turn_steer_and_approval_as_envelopes() {
             "native-events",
             RuntimeTurnSpawnRequest {
                 input: "hello".into(),
-                submit: true
+                submit: true,
+                model: Some("gpt-fixture".into()),
+                effort: Some("high".into()),
+                permission: Some("workspace".into()),
             },
         )
         .result
@@ -325,7 +348,13 @@ async fn projects_turn_steer_and_approval_as_envelopes() {
         .filter(|event| matches!(event.payload, RuntimeEventPayload::ApprovalRequest { .. }))
         .count();
     assert_eq!(approval_requests, 1);
-    for expected in ["steer:turn-active", "approval:accept", "cross-thread-approval:decline", "unknown:-32601"] {
+    for expected in [
+        "turn-options:gpt-fixture:high:workspaceWrite:on-request",
+        "steer:turn-active",
+        "approval:accept",
+        "cross-thread-approval:decline",
+        "unknown:-32601",
+    ] {
         wait_until(|| {
             transcript.extend(fixture.transcript.try_iter());
             transcript.iter().any(|line| line == expected)
@@ -378,8 +407,10 @@ async fn crash_and_protocol_mismatch_are_explicit_failures() {
     let mut fixture = spawn_fixture(FixtureMode::VersionMismatch);
     let sink = Arc::new(|_: CodexAdapterEvent| {});
     let connection = match fixture.client_stream.take() {
-        Some(stream) => CodexRuntimeAdapter::connect_stream(stream, None, sink),
-        None => CodexRuntimeAdapter::connect(fixture.socket_path.clone(), None, sink),
+        Some(stream) => CodexRuntimeAdapter::connect_stream(stream, None, None, None, false, sink),
+        None => {
+            CodexRuntimeAdapter::connect(fixture.socket_path.clone(), None, None, None, false, sink)
+        }
     };
     let error = match connection {
         Ok(_) => panic!("version mismatch must fail"),

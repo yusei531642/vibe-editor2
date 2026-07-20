@@ -12,10 +12,13 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
 
+mod model_catalog;
 mod registration;
+pub use model_catalog::*;
 
 const MAX_RUNTIME_INPUT_BYTES: usize = 64 * 1024;
 const MAX_APPROVAL_REQUEST_ID_BYTES: usize = 256;
+const MAX_RUNTIME_OPTION_BYTES: usize = 256;
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentRuntimeDiagnostics {
@@ -25,6 +28,7 @@ pub struct AgentRuntimeDiagnostics {
     pub capabilities: Vec<RuntimeCapability>,
     pub providers: Vec<RuntimeProviderDeclaration>,
 }
+
 /// Renderer の未保存 draft も診断できるよう backend を引数で受ける。
 /// system detector は Unix で native adapter、Windows で PTY fallback を報告する。
 /// ただし Unix でも `codex` が PATH にない場合は PTY fallback reason を報告する。
@@ -58,6 +62,9 @@ pub struct RuntimeTurnRequest {
     pub endpoint_id: String,
     pub input: String,
     pub submit: bool,
+    pub model: Option<String>,
+    pub effort: Option<String>,
+    pub permission: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -84,6 +91,8 @@ pub struct RegisterCodexEndpointRequest {
     pub team_id: Option<String>,
     pub agent_id: Option<String>,
     pub cwd: Option<String>,
+    pub model: Option<String>,
+    pub permission: Option<String>,
     pub thread: CodexThreadAction,
 }
 
@@ -108,6 +117,9 @@ pub struct RegisterClaudeEndpointRequest {
     pub team_id: Option<String>,
     pub agent_id: Option<String>,
     pub system_prompt: Option<String>,
+    pub model: Option<String>,
+    pub effort: Option<String>,
+    pub permission: Option<String>,
     pub session: ClaudeSessionAction,
 }
 
@@ -169,6 +181,27 @@ fn validate_runtime_input(input: &str) -> CommandResult<()> {
     crate::commands::validation::assert_max_size(input.len(), MAX_RUNTIME_INPUT_BYTES)
 }
 
+fn validate_runtime_option(name: &str, value: Option<&str>) -> CommandResult<()> {
+    if let Some(value) = value {
+        if value.is_empty() || value.chars().any(char::is_control) {
+            return Err(CommandError::validation(format!(
+                "{name} must be non-empty and contain no control characters"
+            )));
+        }
+        crate::commands::validation::assert_max_size(value.len(), MAX_RUNTIME_OPTION_BYTES)?;
+    }
+    Ok(())
+}
+
+fn validate_runtime_permission(permission: Option<&str>) -> CommandResult<()> {
+    if permission.is_some_and(|value| !matches!(value, "workspace" | "ask" | "full")) {
+        return Err(CommandError::validation(
+            "permission must be workspace, ask, or full",
+        ));
+    }
+    Ok(())
+}
+
 fn validate_bounded_no_nul(name: &str, value: &str, max: usize) -> CommandResult<()> {
     if value.contains('\0') {
         return Err(CommandError::validation(format!(
@@ -196,7 +229,9 @@ fn authorize_known_thread(
     known: &std::sync::Mutex<std::collections::HashSet<String>>,
     thread_id: &str,
 ) -> CommandResult<()> {
-    let guard = known.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let guard = known
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     if guard.contains(thread_id) {
         Ok(())
     } else {

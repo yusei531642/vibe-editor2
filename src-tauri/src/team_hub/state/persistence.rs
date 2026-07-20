@@ -46,6 +46,17 @@ impl TeamHub {
                 return Err("team_id is already owned by another project".to_string());
             }
         }
+        let is_new_team = !s.teams.contains_key(team_id);
+        let initial_leader_agent_id = is_new_team
+            .then(|| {
+                members.iter().find_map(|(agent_id, role)| {
+                    (!agent_id.trim().is_empty()
+                        && agent_id.ends_with(team_id)
+                        && role.eq_ignore_ascii_case("leader"))
+                    .then(|| agent_id.clone())
+                })
+            })
+            .flatten();
         s.active_teams.insert(team_id.to_string());
         // Issue #800: Canvas spawn 由来の初代 member (leader / worker) は
         // `team_recruit` / `team_create_leader` の recruit grant 経路を通らないため、
@@ -73,6 +84,10 @@ impl TeamHub {
             }
             // Issue #934: seed は AgentEntry の遷移メソッド経由 (Active 済みは上書きしない)。
             s.seed_role_binding(team_id, agent_id, role);
+            if is_new_team {
+                s.initial_native_admissions
+                    .insert((team_id.to_string(), agent_id.to_string()));
+            }
         }
         let team = s
             .teams
@@ -116,6 +131,9 @@ impl TeamHub {
             if persisted.human_gate.blocked {
                 team.human_gate = persisted.human_gate;
             }
+        }
+        if is_new_team && team.active_leader_agent_id.is_none() {
+            team.active_leader_agent_id = initial_leader_agent_id;
         }
         drop(s);
         // Issue #1071: tasks/reports と同じ restore 経路で message 列/既読/next_message_id を復元 (lock 再取得のため drop 後)。
@@ -201,6 +219,8 @@ impl TeamHub {
 
         // (2) agent ライフサイクル state (role binding / diagnostics / status rate limit) を一括除去。
         s.remove_team_agents(team_id);
+        s.initial_native_admissions
+            .retain(|(tid, _)| tid != team_id);
         s.recruit_lifecycles
             .retain(|_, lifecycle| lifecycle.team_id != team_id);
 
@@ -222,6 +242,8 @@ impl TeamHub {
         s.dynamic_roles.remove(team_id);
         s.recruit_semaphores.remove(team_id);
         s.remove_team_agents(team_id);
+        s.initial_native_admissions
+            .retain(|(tid, _)| tid != team_id);
         s.recruit_lifecycles
             .retain(|_, lifecycle| lifecycle.team_id != team_id);
         s.file_locks.retain(|(tid, _), _| tid != team_id);

@@ -45,10 +45,13 @@ pub fn notification(method: &str, params: &Value) -> Vec<RuntimeEventPayload> {
     }
 
     match method {
-        "thread/started" | "thread/resumed" | "thread/forked" | "turn/started"
-        | "turn/completed" | "turn/interrupted" => vec![RuntimeEventPayload::Diagnostic {
-            message: method.to_string(),
-        }],
+        "turn/completed" => vec![RuntimeEventPayload::TurnComplete { interrupted: false }],
+        "turn/interrupted" => vec![RuntimeEventPayload::TurnComplete { interrupted: true }],
+        "thread/started" | "thread/resumed" | "thread/forked" | "turn/started" => {
+            vec![RuntimeEventPayload::Diagnostic {
+                message: method.to_string(),
+            }]
+        }
         _ => Vec::new(),
     }
 }
