@@ -1833,6 +1833,23 @@
   }
 }
 
+/* アプリ設定経由の reduced motion (`data-reduced-motion` 属性) でも edge の
+   reveal / flow / label アニメを無効化する (PR #80 auto-review の横展開)。 */
+.workspace-transition-root[data-reduced-motion='true'] .canvas-handoff-edge__base {
+  animation: none;
+  stroke-dashoffset: 0;
+}
+
+.workspace-transition-root[data-reduced-motion='true'] .canvas-handoff-edge__flow {
+  animation: none;
+  opacity: 0.9;
+}
+
+.workspace-transition-root[data-reduced-motion='true'] .canvas-handoff-edge__label {
+  animation: none;
+  opacity: 1;
+}
+
 /* stage view modes — when stageView === 'list', the ReactFlow stage is hidden */
 .tc-stage-root[data-view='list'] .react-flow,
 .tc-stage-root[data-view='list'] .tc__leader-glow {

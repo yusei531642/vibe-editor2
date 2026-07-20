@@ -180,3 +180,13 @@
   .team-chat-cursor { animation: none; }
   .workspace-team-scene .react-flow__node-agent::after { display: none; }
 }
+
+/* アプリ設定経由の reduced motion (`data-reduced-motion` 属性) でも OS 設定と
+   同様に emerge / shadow を無効化する (PR #80 auto-review)。 */
+.workspace-transition-root[data-reduced-motion='true'] .workspace-team-scene .react-flow__node-agent .canvas-agent-card {
+  animation: none;
+}
+
+.workspace-transition-root[data-reduced-motion='true'] .workspace-team-scene .react-flow__node-agent::after {
+  display: none;
+}
