@@ -1722,9 +1722,66 @@
     stroke-dashoffset: -100;
   }
 }
-/* HandoffEdge コンポーネントが inline style で参照する keyframes。
-   旧実装では edge instance ごとに <style> を JSX 内で吐いていたため、HMR や
-   pulseEdge のたびに同一定義の <style> ノードが追加されていた。グローバル定義に集約。 */
+/* HandoffEdge の 2 層表現 (Issue #79: team-morph デモ準拠)。
+   色は HandoffEdge.tsx が inline の `--handoff-color` で渡す。
+   base 層は pathLength=1 正規化 + dashoffset で「線が描かれる」reveal、
+   flow 層は px 単位の点線 (cycle 6+8=14px) を -14px ずつ流して seamless loop。 */
+.canvas-handoff-edge__glow,
+.canvas-handoff-edge__base,
+.canvas-handoff-edge__flow {
+  fill: none;
+  pointer-events: none;
+  stroke-linecap: round;
+}
+
+/* glow: CSS filter を使わず太い半透明ストロークで halo を出す静的レイヤ。
+   アニメは有限の fade-in のみで、flow の無限アニメとは分離されている。 */
+.canvas-handoff-edge__glow {
+  stroke: color-mix(in srgb, var(--handoff-color, var(--accent)) 26%, transparent);
+  stroke-width: 6;
+  opacity: 0;
+  animation: handoff-flow-fade 700ms ease-out 620ms forwards;
+}
+
+.canvas-handoff-edge__glow[data-semantic] {
+  stroke-width: 4;
+}
+
+.canvas-handoff-edge__base {
+  stroke: color-mix(in srgb, var(--handoff-color, var(--accent)) 36%, transparent);
+  stroke-width: 2.5;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: handoff-reveal 760ms ease-out both;
+}
+
+.canvas-handoff-edge__base[data-semantic] {
+  stroke-width: 1.75;
+}
+
+.canvas-handoff-edge__flow {
+  stroke: var(--handoff-color, var(--accent));
+  stroke-width: 1.6;
+  stroke-dasharray: 6 8;
+  opacity: 0;
+  animation:
+    handoff-flow-fade 700ms ease-out 620ms forwards,
+    handoff-flow 900ms linear infinite;
+}
+
+.canvas-handoff-edge__flow[data-semantic] {
+  stroke-width: 1.2;
+}
+
+@keyframes handoff-reveal {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes handoff-flow-fade {
+  to { opacity: 1; }
+}
+
 @keyframes handoff-flow {
   to {
     stroke-dashoffset: -14;
@@ -1742,20 +1799,70 @@
   animation: tcEdgeFlow 1.6s linear infinite;
 }
 
-/* HandoffEdge label: 静的レイアウトは CSS、色依存ぶんだけインライン。
+/* HandoffEdge label: デモの message-tag 準拠のニュートラルな浮遊タグ。
+   位置決め transform は HandoffEdge.tsx が inline で与えるため、ここでは
+   opacity だけを遅延 fade in する (transform をアニメすると位置が壊れる)。
    backdrop-filter は Glass CSS contract (`.tc__hud` 以外で禁止) に従い、
    従来通りインライン style 側で適用する。 */
 .canvas-handoff-edge__label {
   position: absolute;
-  padding: 2px 8px;
-  border-radius: 6px;
-  font-size: 10px;
-  max-width: 240px;
+  /* EdgeLabelRenderer はデフォルトで node 層の下に描画される。デモの
+     message-tag 同様タグはカードの上に浮かせる。 */
+  z-index: 12;
+  padding: 6px 10px;
+  border: 1px solid var(--border, rgba(31, 30, 29, 0.13));
+  border-radius: 9.6px;
+  background: color-mix(in srgb, var(--surface-panel, #fff) 94%, transparent);
+  color: var(--fg-muted, #7a7770);
+  font-size: 11px;
+  max-width: 220px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   pointer-events: none;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--ui-font, 'Inter', sans-serif);
+  opacity: 0;
+  animation: handoff-label-show 700ms cubic-bezier(0.22, 0.8, 0.22, 1) 900ms forwards;
+}
+
+@keyframes handoff-label-show {
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas-handoff-edge__base {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+
+  .canvas-handoff-edge__glow,
+  .canvas-handoff-edge__flow {
+    animation: none;
+    opacity: 0.9;
+  }
+
+  .canvas-handoff-edge__label {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/* アプリ設定経由の reduced motion (`data-reduced-motion` 属性) でも edge の
+   reveal / flow / label アニメを無効化する (PR #80 auto-review の横展開)。 */
+.workspace-transition-root[data-reduced-motion='true'] .canvas-handoff-edge__base {
+  animation: none;
+  stroke-dashoffset: 0;
+}
+
+.workspace-transition-root[data-reduced-motion='true'] .canvas-handoff-edge__glow,
+.workspace-transition-root[data-reduced-motion='true'] .canvas-handoff-edge__flow {
+  animation: none;
+  opacity: 0.9;
+}
+
+.workspace-transition-root[data-reduced-motion='true'] .canvas-handoff-edge__label {
+  animation: none;
+  opacity: 1;
 }
 
 /* stage view modes — when stageView === 'list', the ReactFlow stage is hidden */

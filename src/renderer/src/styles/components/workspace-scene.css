@@ -1,9 +1,13 @@
 :root {
-  --workspace-scene-duration: 280ms;
+  /* WorkspaceTransitionRoot.tsx の SCENE_DURATION_MS と同期させること */
+  --workspace-scene-duration: 500ms;
   --workspace-scene-crossfade-duration: 120ms;
-  --workspace-scene-ease: cubic-bezier(0.4, 0, 0.2, 1);
-  --workspace-worker-duration: 280ms;
-  --workspace-worker-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --workspace-scene-ease: cubic-bezier(0.22, 0.8, 0.22, 1);
+  --workspace-canvas-enter-duration: 1350ms;
+  --workspace-canvas-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --workspace-worker-duration: 1180ms;
+  --workspace-worker-exit-duration: 280ms;
+  --workspace-worker-ease: cubic-bezier(0.16, 1, 0.3, 1);
   --workspace-flip-x: 0px;
   --workspace-flip-y: 0px;
   --workspace-flip-scale-x: 1;
@@ -32,11 +36,17 @@
 }
 
 .workspace-scene--focus {
-  transform: translate3d(-4%, 0, 0);
+  transform: translate3d(-2.5%, 0, 0);
 }
 
+/* team scene はスライドではなく「canvas がゆっくり実体化する」入場
+   (scale 1.025 → 1 + 遅れて fade)。 */
 .workspace-scene--team {
-  transform: translate3d(4%, 0, 0);
+  transform: scale(1.025);
+  transform-origin: 50% 42%;
+  transition:
+    transform var(--workspace-canvas-enter-duration) var(--workspace-canvas-ease),
+    opacity 450ms var(--workspace-scene-ease);
 }
 
 .workspace-scene[data-active='true'] {
@@ -44,6 +54,13 @@
   opacity: 1;
   pointer-events: auto;
   transform: translate3d(0, 0, 0);
+}
+
+.workspace-scene--team[data-active='true'] {
+  transform: scale(1);
+  transition:
+    transform var(--workspace-canvas-enter-duration) var(--workspace-canvas-ease),
+    opacity 550ms var(--workspace-scene-ease) 120ms;
 }
 
 .workspace-scene-switcher {
@@ -244,16 +261,21 @@
 }
 
 .workspace-recruit-card[data-exiting='true'] {
-  animation: workspace-worker-exit var(--workspace-worker-duration) var(--workspace-worker-ease) both;
+  animation: workspace-worker-exit var(--workspace-worker-exit-duration) var(--workspace-worker-ease) both;
 }
 
 @keyframes workspace-recruit-spin {
   to { transform: rotate(360deg); }
 }
 
+/* デモの worker-emerge: blur の中から実体化する入場。終端は blur(0) ではなく
+   none にする (fill-mode: both で filter が残ると stacking context / 合成レイヤ
+   昇格が永続するため、PR #80 三次レビュー)。 */
 @keyframes workspace-worker-enter {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
+  0% { opacity: 0; transform: translateY(38px) scale(0.94); filter: blur(11px); }
+  28% { opacity: 0.35; }
+  68% { opacity: 1; filter: blur(0); }
+  100% { opacity: 1; transform: translateY(0) scale(1); filter: none; }
 }
 
 @keyframes workspace-worker-exit {
@@ -261,9 +283,11 @@
   to { opacity: 0; transform: translateY(8px); }
 }
 
-.workspace-transition-root[data-reduced-motion='true'] .workspace-scene {
+.workspace-transition-root[data-reduced-motion='true'] .workspace-scene,
+.workspace-transition-root[data-reduced-motion='true'] .workspace-scene--team[data-active='true'] {
   transform: none;
   transition-duration: var(--workspace-scene-crossfade-duration);
+  transition-delay: 0ms;
 }
 
 .workspace-transition-root[data-reduced-motion='true'] .workspace-recruit-card {
@@ -272,9 +296,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .workspace-scene {
+  .workspace-scene,
+  .workspace-scene--team,
+  .workspace-scene--team[data-active='true'] {
     transform: none;
     transition-duration: var(--workspace-scene-crossfade-duration);
+    transition-delay: 0ms;
   }
 
   .workspace-flip-frame {
