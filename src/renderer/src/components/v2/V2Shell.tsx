@@ -454,8 +454,10 @@ export function V2Shell({ shortcutsEnabled = true }: V2ShellProps = {}): JSX.Ele
           projectName={projectName}
           changedFiles={gitStatus?.files ?? []}
           hasEntries={entries.length > 0}
+          canvasAvailable={hasTeamProjection}
           onClose={() => setLeftOpen(false)}
           onOpenProject={() => void handleOpenFolder()}
+          onNewTask={startNewTask}
         />
       )}
 
