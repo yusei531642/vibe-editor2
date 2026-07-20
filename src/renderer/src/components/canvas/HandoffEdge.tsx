@@ -49,6 +49,15 @@ function HandoffEdgeImpl({
 
   return (
     <>
+      {/* glow は CSS filter ではなく太い半透明ストロークの静的レイヤで表現する。
+          無限 dash アニメを持つ flow 層に filter を同居させると毎フレームの
+          filter 再計算が発生するため (PR #80 二次レビュー)。 */}
+      <path
+        d={path}
+        className="canvas-handoff-edge__glow"
+        data-semantic={semantic}
+        style={colorStyle}
+      />
       <path
         id={id}
         d={path}

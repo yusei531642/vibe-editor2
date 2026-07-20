@@ -1726,11 +1726,25 @@
    色は HandoffEdge.tsx が inline の `--handoff-color` で渡す。
    base 層は pathLength=1 正規化 + dashoffset で「線が描かれる」reveal、
    flow 層は px 単位の点線 (cycle 6+8=14px) を -14px ずつ流して seamless loop。 */
+.canvas-handoff-edge__glow,
 .canvas-handoff-edge__base,
 .canvas-handoff-edge__flow {
   fill: none;
   pointer-events: none;
   stroke-linecap: round;
+}
+
+/* glow: CSS filter を使わず太い半透明ストロークで halo を出す静的レイヤ。
+   アニメは有限の fade-in のみで、flow の無限アニメとは分離されている。 */
+.canvas-handoff-edge__glow {
+  stroke: color-mix(in srgb, var(--handoff-color, var(--accent)) 26%, transparent);
+  stroke-width: 6;
+  opacity: 0;
+  animation: handoff-flow-fade 700ms ease-out 620ms forwards;
+}
+
+.canvas-handoff-edge__glow[data-semantic] {
+  stroke-width: 4;
 }
 
 .canvas-handoff-edge__base {
@@ -1749,7 +1763,6 @@
   stroke: var(--handoff-color, var(--accent));
   stroke-width: 1.6;
   stroke-dasharray: 6 8;
-  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--handoff-color, var(--accent)) 70%, transparent));
   opacity: 0;
   animation:
     handoff-flow-fade 700ms ease-out 620ms forwards,
@@ -1822,6 +1835,7 @@
     stroke-dashoffset: 0;
   }
 
+  .canvas-handoff-edge__glow,
   .canvas-handoff-edge__flow {
     animation: none;
     opacity: 0.9;
@@ -1840,6 +1854,7 @@
   stroke-dashoffset: 0;
 }
 
+.workspace-transition-root[data-reduced-motion='true'] .canvas-handoff-edge__glow,
 .workspace-transition-root[data-reduced-motion='true'] .canvas-handoff-edge__flow {
   animation: none;
   opacity: 0.9;
