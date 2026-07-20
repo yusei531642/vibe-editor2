@@ -3,12 +3,8 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
-  Bug,
-  CodeXml,
-  Hammer,
   PanelLeft,
   PanelRight,
-  SearchCode,
   SquarePen,
   TestTube2,
   X,
@@ -29,36 +25,7 @@ import { UnifiedComposer, type V2Engine } from "./UnifiedComposer";
 import { TeamInspector } from "./TeamInspector";
 import { V2WorkspaceDrawer } from "./V2WorkspaceDrawer";
 import { useTeamProjection } from "./TeamProjectionProvider";
-const QUICK_ACTIONS = [
-  {
-    key: "explore",
-    labelKey: "v2.quick.explore.label",
-    promptKey: "v2.quick.explore.prompt",
-    icon: SearchCode,
-    tone: "blue",
-  },
-  {
-    key: "build",
-    labelKey: "v2.quick.build.label",
-    promptKey: "v2.quick.build.prompt",
-    icon: Hammer,
-    tone: "violet",
-  },
-  {
-    key: "review",
-    labelKey: "v2.quick.review.label",
-    promptKey: "v2.quick.review.prompt",
-    icon: CodeXml,
-    tone: "green",
-  },
-  {
-    key: "fix",
-    labelKey: "v2.quick.fix.label",
-    promptKey: "v2.quick.fix.prompt",
-    icon: Bug,
-    tone: "orange",
-  },
-] as const;
+import { QUICK_ACTIONS } from "./v2-quick-actions";
 
 export interface V2ShellProps {
   shortcutsEnabled?: boolean;
