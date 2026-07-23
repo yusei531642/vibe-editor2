@@ -69,7 +69,7 @@
     "eslint": "^10.5.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "jsdom": "^29.1.1",
-    "playwright": "1.62.0-alpha-1783623505000",
+    "playwright": "1.62.0-alpha-1784109367000",
     "png-to-ico": "^3.0.1",
     "sharp": "^0.35.3",
     "typescript": "^6.0.3",
