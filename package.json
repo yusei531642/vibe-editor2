@@ -36,7 +36,7 @@
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.211",
     "@fontsource-variable/geist": "^5.2.8",
-    "@fontsource-variable/geist-mono": "^5.2.8",
+    "@fontsource-variable/geist-mono": "^5.3.0",
     "@fontsource-variable/inter": "^5.2.8",
     "@fontsource-variable/jetbrains-mono": "^5.2.8",
     "@fontsource-variable/source-serif-4": "^5.2.9",
