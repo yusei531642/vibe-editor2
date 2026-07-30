@@ -155,7 +155,7 @@ jobs:
       # cargo-audit を毎回 source ビルドすると 1-2 分かかり、Swatinem/rust-cache は
       # ~/.cargo/bin を共有しないため再利用も効きにくい。pre-built バイナリを取得する。
       - name: Install cargo-audit
-        uses: taiki-e/install-action@ed67fa35ac944f3a9b33f12c4dd43b6f31a47e20 # v2.83.3
+        uses: taiki-e/install-action@065d6a08a14e61e89fb0a4c10eecdbdef39c7d8e # v2.85.4
         with:
           tool: cargo-audit
 
