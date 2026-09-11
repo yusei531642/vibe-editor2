@@ -71,7 +71,7 @@
     "jsdom": "^29.1.1",
     "playwright": "1.62.0-alpha-1783623505000",
     "png-to-ico": "^3.0.1",
-    "sharp": "^0.35.3",
+    "sharp": "^0.35.4",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.61.1",
     "vite": "^8.1.4",
